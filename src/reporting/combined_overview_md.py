@@ -7,6 +7,9 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from common.severity import SEVERITY_BY_CODE
+from reporting.rkeg_text import build_rkeg_summary_paragraph
+
 report_date = date.today().strftime("%d %b %Y")
 
 
@@ -42,6 +45,7 @@ def _load_csv(path: Path) -> List[Dict[str, str]]:
 
 def _normalise_sev(s: str) -> str:
     return (s or "").strip().upper()
+
 
 def _counts_from_rows(rows: List[Dict[str, str]]) -> SevCounts:
     c = Counter(_normalise_sev(r.get("severity", "")) for r in rows)
@@ -92,15 +96,18 @@ def _counts_from_leave_summary_by_sev(path: Path) -> SevCounts:
 
     return SevCounts(high=counts["HIGH"], medium=counts["MEDIUM"], low=counts["LOW"])
 
+
 def _top_rules_from_rows(rows: List[Dict[str, str]], top_n: int = 3) -> List[Tuple[str, int]]:
     if not rows:
         return []
     c = Counter((r.get("rule_code") or r.get("rule_id") or "UNSPECIFIED").strip() for r in rows)
     return c.most_common(top_n)
 
+
 def _top_rules(path: Path, top_n: int = 3) -> List[Tuple[str, int]]:
     rows = _load_csv(path)
     return _top_rules_from_rows(rows, top_n=top_n)
+
 
 def _load_deduped_lsl_rows() -> List[Dict[str, str]]:
     """
@@ -139,6 +146,7 @@ def _load_deduped_lsl_rows() -> List[Dict[str, str]]:
         deduped.append(r)
 
     return deduped
+
 
 def _extract_dates_from_csv(path: Path) -> List[date]:
     """
@@ -207,6 +215,7 @@ def _format_review_period(start: date | None, end: date | None) -> str:
 
     return f"{start:%d %b %Y} to {end:%d %b %Y}"
 
+
 def generate_combined_exposure_overview(
     organisation_name: str = "Organisation not specified",
     prepared_as_at: str | None = None,
@@ -238,6 +247,22 @@ def generate_combined_exposure_overview(
     leave_top = _top_rules(LEAVE_FINDINGS, top_n=3)
     lsl_top = _top_rules_from_rows(lsl_rows, top_n=3)
 
+    # Shared severity semantics (evidence-weighted rather than dollar-weighted)
+    high_def = SEVERITY_BY_CODE.get("HIGH")
+    med_def = SEVERITY_BY_CODE.get("MEDIUM")
+    low_def = SEVERITY_BY_CODE.get("LOW")
+
+    high_desc = high_def.description if high_def else "Higher-risk record-keeping or entitlement concern."
+    med_desc = med_def.description if med_def else "Material configuration, process, or data concern."
+    low_desc = low_def.description if low_def else "Lower-impact data quality or minor process issue."
+
+    # Canonical RKEG narrative (no tables in combined overview)
+    rkeg_paragraph = build_rkeg_summary_paragraph(
+        has_emp=True,
+        has_pay=True,
+        has_term=False,
+    )
+
     md = f"""# Combined Exposure Overview
 
 **Organisation:** {organisation_name}  
@@ -265,6 +290,7 @@ This combined overview is based on module outputs generated in the same run:
 
 - `outputs/modules/leave_leakage_findings.csv`
 - `outputs/modules/lsl_findings.csv`
+- `outputs/modules/rkeg_findings.csv`
 
 For each module, refer to its detailed report for a description of the upstream payroll and HR data used.
 
@@ -279,13 +305,28 @@ For each module, refer to its detailed report for a description of the upstream 
 
 **Severity meaning**
 
-- **High** — likely compliance breach / underpayment risk (leave) OR likely exposure / provision risk (LSL)  
-- **Medium** — material inconsistency or configuration issue  
-- **Low** — data quality or minor process issue  
+- **High** — {high_desc}  
+- **Medium** — {med_desc}  
+- **Low** — {low_desc}  
+
+These severity definitions are applied consistently across modules and reflect the evidential strength and potential impact of the issues identified, rather than a direct dollar estimate.
 
 ---
 
-## 4. Key Themes (Top signals)
+## 4. Record-Keeping & Evidence Gaps (RKEG)
+
+{rkeg_paragraph}
+
+RKEG findings provide context on evidential strength and do not indicate incorrect payroll outcomes.
+
+This combined overview does not list individual evidence gaps. For itemised findings and remediation actions, refer to:
+
+- `outputs/report.html` (Leave & Entitlement Leakage Review, including integrated RKEG summary)
+- `outputs/modules/rkeg_findings.csv` (machine-readable RKEG findings)
+
+---
+
+## 5. Key Themes (Top signals)
 
 ### Leave & Entitlement Leakage (Top rules)
 {_format_top_rules(leave_top, total=leave_counts.total)}
@@ -295,7 +336,7 @@ For each module, refer to its detailed report for a description of the upstream 
 
 ---
 
-## 5. Recommended Next Steps
+## 6. Recommended Next Steps
 
 1. Prioritise review of **High** severity findings across both modules.
 2. For confirmed issues, identify root causes (configuration, process, data, policy).
@@ -304,7 +345,7 @@ For each module, refer to its detailed report for a description of the upstream 
 
 ---
 
-## 6. Detailed Reports
+## 7. Detailed Reports
 
 Full detail, evidence and recommended actions are available in:
 
@@ -318,6 +359,7 @@ Full detail, evidence and recommended actions are available in:
     OUT_MD.parent.mkdir(parents=True, exist_ok=True)
     OUT_MD.write_text(md, encoding="utf-8")
     return OUT_MD
+
 
 def _format_top_rules(items: List[Tuple[str, int]], total: int | None = None) -> str:
     if not items:

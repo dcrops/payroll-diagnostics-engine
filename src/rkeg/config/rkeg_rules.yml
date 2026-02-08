@@ -1,0 +1,95 @@
+version: "1.0"
+module: "RKEG"
+description: "Record-Keeping & Evidence Gaps – core payroll evidence spine"
+
+rules:
+  - id: "RKEG-EMP-001"
+    domain: "EMP"
+    severity: "HIGH"
+    title: "Pay or leave records exist without an employee master record"
+    datasets:
+      primary: "employee_master"
+      references: ["pay_events", "leave_ledger", "leave_snapshot", "terminations"]
+    text:
+      finding: "Payroll and/or leave records were identified for individuals who do not have a corresponding employee master record."
+      why_it_matters: "Regulators expect employers to clearly identify who was paid and on what basis. Payments without an underlying employee record cannot be substantiated if audited."
+      remediation: "Ensure all individuals referenced in payroll and leave systems have a corresponding employee master record and enforce validation before processing."
+
+  - id: "RKEG-EMP-002"
+    domain: "EMP"
+    severity: "HIGH"
+    title: "Employment start date missing"
+    datasets:
+      primary: "employee_master"
+    text:
+      finding: "Employee records were identified without a recorded employment start date."
+      why_it_matters: "Employment start dates establish entitlement timing and employment continuity. Without them, payroll outcomes cannot be reliably substantiated if audited."
+      remediation: "Record and retain employment commencement dates for all employees and enforce this as a mandatory field in onboarding processes."
+
+  - id: "RKEG-EMP-003"
+    domain: "EMP"
+    severity: "HIGH"
+    title: "Employment status missing or invalid"
+    datasets:
+      primary: "employee_master"
+    text:
+      finding: "Employee records were identified without a valid employment status."
+      why_it_matters: "Employment status establishes whether payments relate to active or ceased employment. Missing or invalid status weakens the employer’s ability to substantiate payroll decisions if audited."
+      remediation: "Ensure all employee records include a valid employment status and enforce controlled status values across HR and payroll systems."
+
+  - id: "RKEG-EMP-004"
+    domain: "EMP"
+    severity: "HIGH"
+    title: "Termination exists but employee record still indicates active employment"
+    datasets:
+      primary: "employee_master"
+      references: ["terminations"]
+    text:
+      finding: "Employees were identified with recorded terminations while still appearing as active in the employee master data."
+      why_it_matters: "Termination events must be clearly reflected in employee records to substantiate payroll cessation and finalisation decisions. Conflicting records weaken audit defensibility."
+      remediation: "Ensure employee master records are promptly updated following termination and reconcile termination events against employee status as part of offboarding controls."
+
+  - id: "RKEG-PAY-001"
+    domain: "PAY"
+    severity: "HIGH"
+    title: "Pay events without a valid pay date"
+    datasets:
+      primary: "pay_events"
+    text:
+      finding: "Pay events were identified without a valid pay date."
+      why_it_matters: "Pay dates establish when wages were paid and how they align with employment periods, terminations and entitlements. Missing or invalid dates weaken the employer’s ability to evidence the timing of payments if audited."
+      remediation: "Ensure all pay events include a valid pay date and enforce validation in payroll processes so events cannot be processed or exported without this field populated."
+
+  - id: "RKEG-PAY-002"
+    domain: "PAY"
+    severity: "HIGH"
+    title: "Pay events without a valid gross amount"
+    datasets:
+      primary: "pay_events"
+    text:
+      finding: "Pay events were identified without a valid gross amount recorded."
+      why_it_matters: "Gross amounts are a core part of the evidential trail for wages paid. Missing or invalid gross values make it difficult to substantiate what was actually paid if audited."
+      remediation: "Ensure all pay events include a valid gross amount and enforce validation in payroll exports and downstream reporting so incomplete records cannot be used for decision-making."
+
+  - id: "RKEG-PAY-003"
+    domain: "PAY"
+    severity: "MEDIUM"
+    title: "Pay events without a pay run reference"
+    datasets:
+      primary: "pay_events"
+    text:
+      finding: "Pay events were identified without a pay run or batch reference."
+      why_it_matters: "Run or batch identifiers help reconstruct which pay cycle an event was processed in. Missing references make it harder to reconcile exports, reruns and corrections if payroll decisions are challenged."
+      remediation: "Ensure all pay events include a pay run or batch reference and align exported payroll data structures with the underlying run identifiers used in the payroll system."
+
+  - id: "RKEG-PAY-004"
+    domain: "PAY"
+    severity: "HIGH"
+    title: "Pay events not linked to an employee master record"
+    datasets:
+      primary: "pay_events"
+      references: ["employee_master"]
+    text:
+      finding: "Pay events were identified for individuals not present in the employee master records."
+      why_it_matters: "All pay events should be traceable to a valid employee record to support payroll accuracy and audit defensibility. Payments without a corresponding employee record weaken the evidential trail."
+      remediation: "Reconcile pay events to employee master records and ensure all individuals paid through payroll are properly recorded and retained in employee data."

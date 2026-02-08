@@ -1,0 +1,5 @@
+employee_id,pay_date,gross_amount,run_id
+E001,2024-03-15,2000,RUN001
+E002,,               ,          # leave completely blank in your real file
+E003,not-a-date,not-a-number,
+E999,2024-03-15,1500,RUN002
