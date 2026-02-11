@@ -10,11 +10,19 @@ ROOT = Path(__file__).resolve().parent
 PH_APP_DIR = ROOT.parent / "address-holidays-app"
 
 # Each command is (argv_list, cwd)
+# Each command is (argv_list, cwd)
 COMMANDS = [
+    # Core payroll modules
     ([PYTHON, "-m", "leave_leakage.run"], ROOT),
     ([PYTHON, "-m", "lsl_exposure.run"], ROOT),
+
+    # Termination Exposure module
+    ([PYTHON, "-m", "termination_exposure.run"], ROOT),
+
+    # Combined reporting (uses outputs from the modules above)
     ([PYTHON, "-m", "reporting.run"], ROOT),
-    # Public holiday batch – run from the address-holidays-app repo
+
+    # Public holiday batch - run from the address-holidays-app repo
     ([PYTHON, "-m", "src.address_holidays.run"], PH_APP_DIR),
 ]
 

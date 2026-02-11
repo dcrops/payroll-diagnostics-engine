@@ -412,9 +412,22 @@ Severity does **not** reflect:
 - magnitude of financial exposure
 - remediation priority
 
-Termination Exposure findings should be read alongside Record-Keeping & Evidence Gaps (RKEG) results, as termination risk is frequently driven by underlying evidence and process weaknesses rather than calculation error alone.
-"""
+---
 
+#### Final pay identification
+
+For each recorded termination, the review compares the **termination date** to pay events recorded for the same employee:
+
+- Dates are interpreted using common business formats (`YYYY-MM-DD`, `DD/MM/YYYY`, `DD-MM-YYYY`); records with unrecognisable dates are excluded from timing-based tests.
+- Any pay event with a pay date on or after the recorded termination date is treated as evidence that a termination or final payment has been processed. Where no such pay is observed, this is reported as a high evidential risk.
+- Where pay events are explicitly flagged in payroll data as “final pay”, the review checks whether those final pays fall **before** or **on/after** the recorded termination date.
+- A separate rule highlights terminations where the last ordinary pay on or before the termination date occurs more than **35 days** (approximately five weeks) before the recorded termination date. This is intended to surface cases where the termination appears significantly later than the last observed pay activity.
+- Where there are multiple possible “final” pays in a window of **14 days before** to **30 days after** the termination date, but none are clearly identified as final pay, the review flags the termination as **ambiguous** from an evidential perspective.
+
+These indicators are designed to support further review of termination processing and evidence traceability. They do not, on their own, determine whether a termination was compliant or correctly paid.
+
+---
+"""
 
 def build_rkeg_summary(rkeg_counts: Dict[str, int]) -> str:
     """

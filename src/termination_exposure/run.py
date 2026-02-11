@@ -14,7 +14,7 @@ DATA_DIR = BASE_DIR / "data" / "sample"
 OUTPUTS_DIR = BASE_DIR / "outputs"
 MODULES_DIR = OUTPUTS_DIR / "modules"
 
-TERMINATIONS_CSV = DATA_DIR / "terminations.csv"
+TERMINATIONS_CSV = DATA_DIR / "terminations_messy.csv"
 PAY_EVENTS_CSV = DATA_DIR / "pay_events.csv"
 EMPLOYEES_CSV = DATA_DIR / "employees.csv"
 
@@ -182,9 +182,16 @@ def run_termination_exposure_review() -> None:
     This function does not handle reporting; it only produces CSV outputs
     for downstream use by the reporting layer.
     """
+    print(f"[TERM] Loading terminations from: {TERMINATIONS_CSV}")
+    print(f"[TERM] Loading pay events from:  {PAY_EVENTS_CSV}")
+    print(f"[TERM] Loading employees from:   {EMPLOYEES_CSV}")
+
     terminations = load_csv(TERMINATIONS_CSV)
     pay_events = load_csv(PAY_EVENTS_CSV)
     employees = load_csv(EMPLOYEES_CSV)
+
+    print(f"[TERM] Loaded {len(terminations)} termination rows, "
+          f"{len(pay_events)} pay events, {len(employees)} employees")
 
     findings = run_all_term_rules(
         terminations=terminations,
@@ -192,6 +199,8 @@ def run_termination_exposure_review() -> None:
         employees=employees,
         max_gap_days=35,
     )
+
+    print(f"[TERM] Generated {len(findings)} findings")
 
     write_term_findings(TERM_FINDINGS_CSV, findings)
 

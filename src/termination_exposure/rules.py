@@ -1,8 +1,22 @@
+"""
+Termination Exposure (TERM) v1
+
+Implements the Final Pay Identification Contract defined in
+docs/contracts/termination_final_pay_contract.md.
+
+Key points:
+- Uses pay_date to compare pay events to termination_date.
+- MAX_FINAL_PAY_GAP_DAYS (currently 35) controls TERM-003.
+- Ambiguous final pay window: 14 days before, 30 days after termination.
+- Evidence focuses on traceability, not entitlement correctness.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Dict, List, Optional, Any
+import hashlib
 
 from common.term_messages import TERM_MESSAGES
 from common.severity import SEVERITY_BY_CODE
@@ -11,8 +25,29 @@ from common.severity import SEVERITY_BY_CODE
 Row = Dict[str, Any]
 
 
+MAX_FINAL_PAY_GAP_DAYS = 35
+AMBIGUOUS_WINDOW_BEFORE_DAYS = 14
+AMBIGUOUS_WINDOW_AFTER_DAYS = 30
+
 # ---------- Helpers ----------
 
+def _make_finding_id(
+    rule_code: str,
+    employee_id: str,
+    termination_date_str: str,
+) -> str:
+    """
+    Build a stable, opaque finding identifier.
+
+    Uses a hash of (module, rule, employee, termination_date) and returns
+    the first 12 hex characters so it looks consistent with other modules
+    (e.g. `c89505e0ec82`).
+
+    This is deterministic: the same inputs will always produce the same ID.
+    """
+    raw = f"TERM|{rule_code}|{employee_id}|{termination_date_str}"
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    return digest[:12]
 
 def _parse_date(value: str | None) -> Optional[date]:
     if not value:
@@ -71,7 +106,11 @@ def _build_finding(
     term_date_str = termination_date.isoformat() if isinstance(termination_date, date) else ""
     final_date_str = final_pay_date.isoformat() if isinstance(final_pay_date, date) else ""
 
-    finding_id = f"{rule_code}:{employee_id}:{term_date_str or 'UNKNOWN'}"
+    finding_id = _make_finding_id(
+        rule_code=rule_code,
+        employee_id=employee_id,
+        termination_date_str=term_date_str or "UNKNOWN",
+    )
 
     return {
         "employee_id": employee_id,
@@ -223,7 +262,7 @@ def term_002_final_pay_before_termination(
 def term_003_gap_since_last_pay(
     terminations: List[Row],
     pay_events: List[Row],
-    max_gap_days: int = 35,
+    max_gap_days: int = MAX_FINAL_PAY_GAP_DAYS,
 ) -> List[Row]:
     """
     TERM-003 — Termination date significantly after last ordinary pay.
@@ -334,7 +373,10 @@ def term_004_missing_or_inconsistent_type(
         # so we keep term_date possibly None and let _build_finding handle it.
 
         t_type = str(
-            t.get("termination_type") or t.get("termination_reason") or ""
+            t.get("termination_type")
+            or t.get("termination_reason")
+            or t.get("reason")
+            or ""
         ).strip()
 
         inconsistent_with_emp = False
@@ -345,7 +387,7 @@ def term_004_missing_or_inconsistent_type(
         if not t_type or inconsistent_with_emp:
             evidence_details: Dict[str, Any] = {
                 "termination_type": t.get("termination_type"),
-                "termination_reason": t.get("termination_reason"),
+                "termination_reason": t.get("termination_reason") or t.get("reason"),
             }
             if emp_record_type:
                 evidence_details["employee_master_termination_type"] = emp_record_type
@@ -434,8 +476,8 @@ def term_005_missing_evidence_reference(
 def term_006_ambiguous_final_pay(
     terminations: List[Row],
     pay_events: List[Row],
-    window_before_days: int = 14,
-    window_after_days: int = 30,
+    window_before_days: int = AMBIGUOUS_WINDOW_BEFORE_DAYS,
+    window_after_days: int = AMBIGUOUS_WINDOW_AFTER_DAYS,
 ) -> List[Row]:
     """
     TERM-006 — Final pay event not clearly identifiable.
@@ -542,7 +584,7 @@ def run_all_term_rules(
     terminations: List[Row],
     pay_events: List[Row],
     employees: Optional[List[Row]] = None,
-    max_gap_days: int = 35,
+    max_gap_days: int = MAX_FINAL_PAY_GAP_DAYS,
 ) -> List[Row]:
     """
     Convenience function to run all TERM v1 rules and return a flat list of findings.
@@ -553,7 +595,9 @@ def run_all_term_rules(
     findings.extend(term_001_no_final_pay(terminations, pay_events))
     findings.extend(term_002_final_pay_before_termination(terminations, pay_events))
     findings.extend(
-        term_003_gap_since_last_pay(terminations, pay_events, max_gap_days=max_gap_days)
+        term_003_gap_since_last_pay(
+            terminations, pay_events, max_gap_days=max_gap_days
+        )
     )
     findings.extend(term_004_missing_or_inconsistent_type(terminations, employees))
     findings.extend(term_005_missing_evidence_reference(terminations))
@@ -561,6 +605,8 @@ def run_all_term_rules(
         term_006_ambiguous_final_pay(
             terminations,
             pay_events,
+            window_before_days=AMBIGUOUS_WINDOW_BEFORE_DAYS,
+            window_after_days=AMBIGUOUS_WINDOW_AFTER_DAYS,
         )
     )
 
