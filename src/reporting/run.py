@@ -7,9 +7,26 @@ from reporting.lsl_report_md import generate_lsl_exposure_report
 from reporting.combined_overview_md import generate_combined_exposure_overview
 from reporting.pre_audit_overview_md import generate_pre_audit_overview
 from reporting.post_audit_overview_md import generate_post_audit_overview
+import argparse
+from typing import Optional, List
 
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser()
+    p.add_argument(
+        "--modules",
+        nargs="+",
+        default=None,
+        help="Modules to include in the main report, e.g. TERM RKEG LEAVE",
+    )
+    p.add_argument(
+        "--only-main-report",
+        action="store_true",
+        help="Only build outputs/report.md(.html/.pdf). Skip LSL/overview packs.",
+    )
+    return p.parse_args()
 
 def main() -> int:
+    args = parse_args()
     repo_root = Path(__file__).resolve().parents[2]
     outputs = repo_root / "outputs"
 
@@ -23,28 +40,32 @@ def main() -> int:
 
     # generate Markdown report
     generate_leave_leakage_report(
-        organisation_name="Example Client Pty Ltd"
-    )
-
-    generate_lsl_exposure_report(
     organisation_name="Example Client Pty Ltd",
+    modules=args.modules,
 )
 
-    generate_combined_exposure_overview(
-    organisation_name="Example Client Pty Ltd",
-    # leave as None to be dynamic:
-    prepared_as_at=None,
-    )
+    if not args.only_main_report:
 
-    generate_pre_audit_overview(
-    organisation_name="Example Client Pty Ltd",
-    prepared_as_at=None,
-    )
+        generate_lsl_exposure_report(
+            organisation_name="Example Client Pty Ltd",
+        )
 
-    generate_post_audit_overview(
-    organisation_name="Example Client Pty Ltd",
-    prepared_as_at=None,
-    )
+        generate_combined_exposure_overview(
+            organisation_name="Example Client Pty Ltd",
+            prepared_as_at=None,
+        )
+
+        generate_pre_audit_overview(
+            organisation_name="Example Client Pty Ltd",
+            prepared_as_at=None,
+        )
+
+        generate_post_audit_overview(
+            organisation_name="Example Client Pty Ltd",
+            prepared_as_at=None,
+        )
+
+    # All the HTML/PDF blocks also go inside this if
 
 
         # HTML layer (PDF is best-effort on Windows)

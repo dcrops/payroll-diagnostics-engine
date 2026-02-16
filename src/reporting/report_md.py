@@ -12,7 +12,18 @@ from reporting.rkeg_text import (
     build_rkeg_severity_overview_table,
 )
 
+from reporting.structure import ReportStructure
+
 report_date = date.today().strftime("%d %b %Y")
+
+# ---------- Engagement scope ----------
+
+MODULE_LEAVE = "LEAVE"   # Leave & Entitlement Leakage findings + exposure section
+MODULE_RKEG = "RKEG"     # Evidence gaps summary
+MODULE_TERM = "TERM"     # Termination Exposure severity summary
+MODULE_LSL  = "LSL"      # (if/when you add LSL sections to this report)
+
+DEFAULT_MODULES = {MODULE_LEAVE, MODULE_RKEG, MODULE_TERM}
 
 # ---------- Paths ----------
 
@@ -26,9 +37,26 @@ RKEG_SUMMARY_BY_SEVERITY_CSV = MODULES_DIR / "rkeg_summary_by_severity.csv"
 RKEG_FINDINGS_CSV = MODULES_DIR / "rkeg_findings.csv"
 TERM_SUMMARY_BY_SEVERITY_CSV = MODULES_DIR / "term_summary_by_severity.csv"
 TERM_FINDINGS_CSV = MODULES_DIR / "term_findings.csv"
+LSL_FINDINGS_CSV = MODULES_DIR / "lsl_findings.csv"
+LSL_SUMMARY_BY_SEVERITY_CSV = MODULES_DIR / "lsl_summary_by_severity.csv"  # if you have / add it
 
 REPORT_MD_PATH = OUTPUTS_DIR / "report.md"
 
+
+def _module_ran(module: str) -> bool:
+    """
+    Returns True if the module has produced outputs we can render.
+    Keeps the report clean (no blank tables / no '0' sections).
+    """
+    if module == MODULE_LEAVE:
+        return LEAVE_FINDINGS_CSV.exists() or LEAKAGE_REPORT_CSV.exists()
+    if module == MODULE_RKEG:
+        return RKEG_SUMMARY_BY_SEVERITY_CSV.exists() or RKEG_FINDINGS_CSV.exists()
+    if module == MODULE_TERM:
+        return TERM_SUMMARY_BY_SEVERITY_CSV.exists() or TERM_FINDINGS_CSV.exists()
+    if module == MODULE_LSL:
+        return LSL_SUMMARY_BY_SEVERITY_CSV.exists() or LSL_FINDINGS_CSV.exists()
+    return False
 
 # ---------- Data models ----------
 
@@ -162,6 +190,38 @@ def load_rkeg_severity_counts() -> Dict[str, int]:
 
     return counts
 
+def load_lsl_severity_counts() -> Dict[str, int]:
+    counts: Dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+
+    summary_rows = load_csv(LSL_SUMMARY_BY_SEVERITY_CSV)
+    if summary_rows:
+        sev_candidates = ["severity", "Severity"]
+        count_candidates = ["finding_count", "count", "Count", "n", "N", "value", "Value"]
+
+        first = summary_rows[0]
+        sev_col = next((c for c in sev_candidates if c in first), None)
+        count_col = next((c for c in count_candidates if c in first), None)
+
+        if sev_col and count_col:
+            for r in summary_rows:
+                sev = (r.get(sev_col) or "").strip().upper()
+                try:
+                    n = int(float((r.get(count_col) or "0") or "0"))
+                except ValueError:
+                    n = 0
+                if sev in counts:
+                    counts[sev] += n
+            return counts
+
+    # fallback: count from findings
+    finding_rows = load_csv(LSL_FINDINGS_CSV)
+    for r in finding_rows:
+        sev = (r.get("severity") or r.get("Severity") or "").strip().upper()
+        if sev in counts:
+            counts[sev] += 1
+
+    return counts
+
 def load_term_severity_counts() -> Dict[str, int]:
     """
     Load simple HIGH / MEDIUM / LOW counts for Termination Exposure.
@@ -261,17 +321,31 @@ def _derive_review_period(findings: List[Finding]) -> str:
 
 # ---------- Markdown section builders ----------
 
-def build_header(organisation_name: str, review_period: str) -> str:
-    return f"""# Leave & Entitlement Leakage Review
+def build_header(report_title: str, organisation_name: str, review_period: str) -> str:
+    return f"""# {report_title}
 
 **Organisation:** {organisation_name}  
 **Review period:** {review_period}  
 **Report prepared as at:** {report_date}  
 
-> This report identifies potential leave and entitlement leakage based on the data provided. It highlights potential risk signals and process issues but does not constitute legal, accounting, or industrial relations advice.
+> This report highlights potential risk signals and process issues based on the data provided. It does not constitute legal, accounting, or industrial relations advice.
 
 ---
 """
+
+def _build_report_title(modules: set[str]) -> str:
+    # You can refine naming later; keep it simple and defensible for now.
+    if modules == {MODULE_LSL}:
+        return "Long Service Leave Exposure Review"
+    if modules == {MODULE_TERM}:
+        return "Termination Exposure Review"
+    if modules == {MODULE_RKEG}:
+        return "Record-Keeping & Evidence Gaps Review"
+    if MODULE_LEAVE in modules and len(modules) == 1:
+        return "Leave & Entitlement Leakage Review"
+
+    # Multi-module
+    return "Payroll Risk & Evidence Review"
 
 
 def build_executive_summary(findings: List[Finding]) -> str:
@@ -291,9 +365,7 @@ def build_executive_summary(findings: List[Finding]) -> str:
         "The presence of a finding does not, on its own, confirm non-compliance or underpayment."
     )
 
-    return f"""## 1. Executive Summary
-
-{paragraph}
+    return f"""{paragraph}
 
 **Findings identified**
 
@@ -305,133 +377,227 @@ def build_executive_summary(findings: List[Finding]) -> str:
 
 This report is intended for payroll managers and related stakeholders responsible for leave, entitlement and payroll compliance.
 
----
-"""
+---"""
 
+def build_scope_and_methodology(included_modules: set[str]) -> str:
+    # Normalise to avoid case/whitespace mismatches
+    mods = {m.strip().upper() for m in (included_modules or set())}
 
-def build_data_sources_section() -> str:
-    return f"""## 2. Data sources
+    module_labels = {
+        MODULE_LEAVE: "Leave & Entitlement Leakage (LEAVE)",
+        MODULE_RKEG: "Record-Keeping & Evidence Gaps (RKEG)",
+        MODULE_TERM: "Termination Exposure (TERM)",
+        MODULE_LSL:  "Long Service Leave Exposure (LSL)",
+    }
 
-This review was generated from the following analysis outputs within the project `outputs/` directory:
+    lines: List[str] = []
+    lines.append(
+        "**Modules included in this engagement:** "
+        + (", ".join(module_labels[m] for m in mods if m in module_labels) or "None")
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
 
-- `{LEAVE_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  
-- `{LEAKAGE_REPORT_CSV.relative_to(OUTPUTS_DIR)}`  
+    if MODULE_LEAVE in mods:
+        lines.append("**Leave & Entitlement Leakage – Scope & Methodology**")
+        lines.append("")
+        lines.append("**Scope**")
+        lines.append("")
+        lines.append(
+            "The Leave & Entitlement Leakage review identifies potential anomalies and risk indicators in leave balances, accruals and leave usage based on the data provided."
+        )
+        lines.append("")
+        lines.append(
+            "The purpose of this review is to highlight records that may warrant follow-up, such as negative balances, unexpected accrual patterns, mismatches between leave activity and employee status, or inconsistencies between leave movement data and balance snapshots."
+        )
+        lines.append("")
+        lines.append(
+            "This review is designed to support payroll and HR teams in prioritising validation and remediation effort. Findings are risk signals only and do not, on their own, confirm non-compliance, underpayment, or an entitlement error."
+        )
+        lines.append("")
+        lines.append("**Data reviewed**")
+        lines.append("")
+        lines.append("- leave balances snapshot data (where supplied)")
+        lines.append("- leave ledger / leave movement records (where supplied)")
+        lines.append("- employee master data (where supplied)")
+        lines.append("- other supporting payroll extracts included in the engagement pack")
+        lines.append("")
+        lines.append("**Checks performed**")
+        lines.append("")
+        lines.append("- rule-based detection of unusual leave balance and movement patterns")
+        lines.append("- identification of negative balances and unexpected accrual behaviour")
+        lines.append(
+            "- consistency checks between employee status and leave activity (for example, terminated employees with ongoing leave movements)"
+        )
+        lines.append("- cross-checks between leave movement data and balance snapshot fields where available")
+        lines.append("")
+        lines.append("**Out of scope**")
+        lines.append("")
+        lines.append("This review does not:")
+        lines.append("")
+        lines.append("- interpret awards, enterprise agreements, or employment contracts")
+        lines.append("- calculate legal entitlement outcomes or confirm the correctness of leave accrual rules")
+        lines.append("- provide legal, accounting, or industrial relations advice")
+        lines.append("- assert breaches of legislation or confirm non-compliance")
+        lines.append("")
+        lines.append(
+            "Where exposure estimates are included, they are indicative only and must be validated before remediation or accounting decisions are made."
+        )
+        lines.append("")
+        lines.append("---")
+        lines.append("")
 
-These outputs were produced by the Leave & Entitlement Leakage engine from payroll and HR CSV extracts supplied by the organisation for the review period.
+    if MODULE_RKEG in mods:
+        lines.append("**Record-Keeping & Evidence Gaps (RKEG) – Scope & Methodology**")
+        lines.append("")
+        lines.append("**Scope**")
+        lines.append("")
+        lines.append(
+            "The Record-Keeping & Evidence Gaps (RKEG) review assesses whether payroll-related records are sufficiently complete, consistent and traceable to support the organisation’s ability to evidence payroll decisions if reviewed by auditors or regulators."
+        )
+        lines.append("")
+        lines.append(
+            "RKEG focuses on evidential strength, not on determining whether payroll outcomes are correct or incorrect. Findings highlight where records may be incomplete, inconsistent, or difficult to substantiate if challenged."
+        )
+        lines.append("")
+        lines.append(
+            "This review is intended to support risk-aware payroll operations by identifying evidence weaknesses that can increase audit effort, increase dispute risk, or reduce the organisation’s ability to confidently explain pay decisions."
+        )
+        lines.append("")
+        lines.append("**Data reviewed**")
+        lines.append("")
+        lines.append("- employee master data (where supplied)")
+        lines.append("- pay event / payroll transaction extracts (where supplied)")
+        lines.append("- termination and employment status fields where included in the engagement data pack")
+        lines.append("")
+        lines.append("**Checks performed**")
+        lines.append("")
+        lines.append("- completeness checks for key employee master fields required for traceability and defensibility")
+        lines.append(
+            "- identification of orphan or untraceable pay events (for example, pay events with missing or inconsistent identifiers)"
+        )
+        lines.append("- consistency checks across employee status and payroll activity where possible")
+        lines.append("- identification of gaps that may require manual reconstruction to support an audit trail")
+        lines.append("")
+        lines.append("**Out of scope**")
+        lines.append("")
+        lines.append("This review does not:")
+        lines.append("")
+        lines.append("- calculate entitlements, underpayments or overpayments")
+        lines.append("- interpret awards, enterprise agreements, or employment contracts")
+        lines.append("- provide legal, accounting, or industrial relations advice")
+        lines.append("- assert breaches of legislation or confirm non-compliance")
+        lines.append("")
+        lines.append(
+            "RKEG findings should be interpreted as evidential risk indicators. Addressing them improves defensibility and reduces audit effort, but does not necessarily imply a payroll outcome is incorrect."
+        )
+        lines.append("")
+        lines.append("---")
+        lines.append("")
 
----
-"""
+    if MODULE_TERM in mods:
+        lines.append("**Termination Exposure – Scope & Methodology**")
+        lines.append("")
+        lines.append("**Scope**")
+        lines.append("")
+        lines.append(
+            "The Termination Exposure review assesses whether termination events recorded in payroll and related employment data are sufficiently complete, timely, and traceable to support the organisation’s ability to evidence termination-related payroll decisions if reviewed by auditors or regulators."
+        )
+        lines.append("")
+        lines.append("This review focuses on process and evidential integrity, not on the correctness of termination payments.")
+        lines.append("")
+        lines.append("Specifically, the review considers whether:")
+        lines.append("")
+        lines.append("- termination events are recorded consistently across available data sources")
+        lines.append("- final pay processing occurs in a reasonable and defensible sequence relative to termination dates")
+        lines.append("- core termination attributes (such as termination date and termination type/reason) are present and internally consistent")
+        lines.append("- termination-related decisions are supported by basic evidentiary artefacts or references")
+        lines.append("")
+        lines.append("**Out of scope**")
+        lines.append("")
+        lines.append("This review does not:")
+        lines.append("")
+        lines.append("- calculate final pay entitlements or assess payment correctness")
+        lines.append("- interpret awards, enterprise agreements, or employment contracts")
+        lines.append("- determine notice, redundancy, or severance obligations")
+        lines.append("- assert breaches of legislation or confirm non-compliance")
+        lines.append("- provide legal advice or compliance guarantees")
+        lines.append("")
+        lines.append("Any potential exposure identified reflects defensibility risk, not confirmed error or liability.")
+        lines.append("")
+        lines.append("**Methodology**")
+        lines.append("")
+        lines.append(
+            "The review applies a series of rule-based checks to payroll and related employment data to identify termination events that exhibit characteristics commonly associated with audit, regulatory, or dispute risk."
+        )
+        lines.append("")
+        lines.append(
+            "Each finding is assigned a severity based on evidential impact, reflecting how materially the issue could impair the organisation’s ability to explain and support termination-related payroll decisions if reviewed."
+        )
+        lines.append("")
+        lines.append("Severity does not represent:")
+        lines.append("")
+        lines.append("- likelihood of underpayment")
+        lines.append("- magnitude of financial exposure")
+        lines.append("- remediation priority")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
 
+    # Only show this if mods is genuinely empty
+    if not mods:
+        lines.append("No scoped modules were included in this run.")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
 
-def build_scope_and_methodology() -> str:
-    return """## 3. Scope & Methodology
+    return "\n".join(lines)
 
-### 3.1 Leave & Entitlement Leakage – Scope & Methodology
+def build_data_sources_section(included_modules: set[str]) -> str:
+    lines: List[str] = []
 
-**Data reviewed**
+    lines.append(
+        "This review was generated from the following analysis outputs within the project `outputs/` directory:"
+    )
+    lines.append("")
 
-- Leave ledger records
-- Leave balances snapshot
-- Employee master data
-- Other CSV files supplied by the organisation
+    # Only list outputs relevant to what was actually included
+    if MODULE_LEAVE in included_modules:
+        lines.append(f"- `{LEAVE_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
+        lines.append(f"- `{LEAKAGE_REPORT_CSV.relative_to(OUTPUTS_DIR)}`  ")
 
-**Checks performed**
+    if MODULE_RKEG in included_modules:
+        if RKEG_SUMMARY_BY_SEVERITY_CSV.exists():
+            lines.append(f"- `{RKEG_SUMMARY_BY_SEVERITY_CSV.relative_to(OUTPUTS_DIR)}`  ")
+        if RKEG_FINDINGS_CSV.exists():
+            lines.append(f"- `{RKEG_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
 
-- Rule-based detection of leave and entitlement leakage
-- Comparison of ledger movements against balances snapshots
-- Identification of negative balances and unexpected accrual patterns
-- Consistency checks between employee status and leave activity
+    if MODULE_TERM in included_modules:
+        if TERM_SUMMARY_BY_SEVERITY_CSV.exists():
+            lines.append(f"- `{TERM_SUMMARY_BY_SEVERITY_CSV.relative_to(OUTPUTS_DIR)}`  ")
+        if TERM_FINDINGS_CSV.exists():
+            lines.append(f"- `{TERM_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
 
-**Out of scope**
+    if MODULE_LSL in included_modules:
+        if LSL_SUMMARY_BY_SEVERITY_CSV.exists():
+            lines.append(f"- `{LSL_SUMMARY_BY_SEVERITY_CSV.relative_to(OUTPUTS_DIR)}`  ")
+        if LSL_FINDINGS_CSV.exists():
+            lines.append(f"- `{LSL_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
 
-- Interpretation of awards and enterprise agreements
-- Review of employment contracts
-- Detailed payroll system configuration
+    lines.append("")
+    lines.append(
+        "These outputs were produced by rule-based checks over payroll and HR CSV extracts supplied by the organisation for the review period."
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
 
----
-
-### 3.2 Record-Keeping & Evidence Gaps (RKEG) – Scope & Methodology
-
-The Record-Keeping & Evidence Gaps (RKEG) review assesses whether payroll-related records are **sufficiently complete, consistent, and traceable** to support the organisation’s ability to evidence payroll decisions if reviewed by auditors or regulators.
-
-RKEG focuses on **evidential strength**, not on determining whether payroll outcomes are correct or incorrect. Findings highlight areas where decisions may be difficult to substantiate due to missing, inconsistent, or fragile records.
-
-Detailed RKEG findings are provided in machine-readable form and summarised later in this report to provide context on evidential defensibility.
-
----
-
-### 3.3 Termination Exposure – Scope & Methodology
-
-#### Scope
-
-The Termination Exposure review assesses whether termination events recorded in payroll and related employment data are **sufficiently complete, timely, and traceable** to support the organisation’s ability to evidence termination-related payroll decisions if reviewed by auditors or regulators.
-
-This review focuses on **process and evidential integrity**, not on the correctness of termination payments.
-
-Specifically, the review considers whether:
-
-- termination events are recorded consistently and coherently across available data sources
-- final pay processing occurs in a reasonable and defensible sequence relative to termination dates
-- core termination attributes (such as termination date and termination type) are present and internally consistent
-- termination-related decisions are supported by basic evidentiary artefacts or references
-
-The review is designed to identify termination scenarios that may be difficult to substantiate if challenged, even where payroll outcomes may ultimately be correct.
-
----
-
-#### Out of Scope
-
-This review does **not**:
-
-- calculate final pay entitlements or assess payment correctness
-- interpret awards, enterprise agreements, or employment contracts
-- determine notice, redundancy, or severance obligations
-- assert breaches of legislation or confirm non-compliance
-- provide legal advice or compliance guarantees
-
-Any potential exposure identified reflects **defensibility risk**, not confirmed error or liability.
-
----
-
-#### Methodology
-
-The Termination Exposure review applies a series of rule-based checks to payroll and related employment data to identify termination events that exhibit characteristics commonly associated with audit, regulatory, or dispute risk.
-
-Rules are designed to assess:
-
-- the presence and sequencing of termination dates and final pay events
-- alignment between termination records and pay processing
-- completeness and consistency of termination metadata
-- indicators of delayed, missing, or inconsistent termination finalisation
-
-Each finding is assigned a severity based on **evidential impact**, reflecting how materially the issue could impair the organisation’s ability to explain and support termination-related payroll decisions if reviewed.
-
-Severity does **not** reflect:
-
-- likelihood of underpayment
-- magnitude of financial exposure
-- remediation priority
-
----
-
-#### Final pay identification
-
-For each recorded termination, the review compares the **termination date** to pay events recorded for the same employee:
-
-- Dates are interpreted using common business formats (`YYYY-MM-DD`, `DD/MM/YYYY`, `DD-MM-YYYY`); records with unrecognisable dates are excluded from timing-based tests.
-- Any pay event with a pay date on or after the recorded termination date is treated as evidence that a termination or final payment has been processed. Where no such pay is observed, this is reported as a high evidential risk.
-- Where pay events are explicitly flagged in payroll data as “final pay”, the review checks whether those final pays fall **before** or **on/after** the recorded termination date.
-- A separate rule highlights terminations where the last ordinary pay on or before the termination date occurs more than **35 days** (approximately five weeks) before the recorded termination date. This is intended to surface cases where the termination appears significantly later than the last observed pay activity.
-- Where there are multiple possible “final” pays in a window of **14 days before** to **30 days after** the termination date, but none are clearly identified as final pay, the review flags the termination as **ambiguous** from an evidential perspective.
-
-These indicators are designed to support further review of termination processing and evidence traceability. They do not, on their own, determine whether a termination was compliant or correctly paid.
-
----
-"""
+    return "\n".join(lines)
 
 def build_rkeg_summary(rkeg_counts: Dict[str, int]) -> str:
     """
-    RKEG summary section for the module report.
+    RKEG summary section content (no headings / no numbering).
 
     Uses shared text helpers so the description of RKEG is consistent
     across this report and the combined overview.
@@ -456,32 +622,38 @@ RKEG findings should be read as **context for defensibility**, not as confirmati
 
     severity_overview = build_rkeg_severity_overview_table(rkeg_counts)
 
-    return f"""## 4. Evidence & Defensibility Overview
-
-### 4.1 Record-Keeping & Evidence Gaps (RKEG) Summary
-
-{interpretation_block}
+    return f"""{interpretation_block}
 
 {body}
 
 {severity_overview}
 """
 
-def build_term_severity_summary() -> str:
-    """
-    Termination Exposure severity overview.
+def build_lsl_severity_summary() -> str:
+    lsl_counts = load_lsl_severity_counts()
+    if not any(lsl_counts.values()):
+        return ""
 
-    This is intentionally high-level and evidential only.
-    Detailed termination findings are provided separately in CSV form.
-    """
+    return f"""Where an LSL Exposure review was performed, the table below summarises the number of LSL-related risk indicators identified by severity. Counts reflect **risk indicators only** and do not represent confirmed underpayments, quantified exposure, or remediation priority.
+
+| Severity | Count | Description |
+|---------|:-------------:|---------------------------|
+| <span class="badge-high">High</span>    | {lsl_counts["HIGH"]}   | Indicators likely to require prompt validation due to potential material impact or audit defensibility concerns. |
+| <span class="badge-medium">Medium</span>  | {lsl_counts["MEDIUM"]} | Indicators that may reflect configuration, data quality, or timing weaknesses requiring review. |
+| <span class="badge-low">Low</span>     | {lsl_counts["LOW"]}    | Lower-impact indicators that should be improved over time. |
+
+*Traffic light indicators reflect risk indicators only and do not represent confirmed breaches or quantified exposure.*
+
+---
+"""
+
+def build_term_severity_summary() -> str:
     term_counts = load_term_severity_counts()
 
     if not any(term_counts.values()):
-        return ""  # no TERM review performed
+        return ""
 
-    return f"""### 4.2 Termination Exposure – Severity Overview
-
-Where a Termination Exposure review was performed, the table below summarises the number of termination-related evidential issues identified by severity. Counts reflect **evidential risk only** and do not represent confirmed breaches, quantified exposure, or remediation priority.
+    return f"""Where a Termination Exposure review was performed, the table below summarises the number of termination-related evidential issues identified by severity. Counts reflect **evidential risk only** and do not represent confirmed breaches, quantified exposure, or remediation priority.
 
 | Severity | Count | Description |
 |---------|:-------------:|---------------------------|
@@ -565,9 +737,7 @@ def build_key_findings_overview(findings: List[Finding]) -> str:
 Individually, these findings are indicators of risk and areas for further review, not determinations of breach, non-compliance, or underpayment.
 """.strip()
 
-    return f"""## 5. Key Findings Overview
-
-The automated checks identified the following potential issues in the leave and entitlement data reviewed. Severity reflects the relative level of risk to payroll accuracy and audit defensibility, not a confirmed breach.
+    return f"""The automated checks identified the following potential issues in the leave and entitlement data reviewed. Severity reflects the relative level of risk to payroll accuracy and audit defensibility, not a confirmed breach.
 
 | Severity | Count | Description |
 |---------|:-----:|-------------|
@@ -584,15 +754,13 @@ The automated checks identified the following potential issues in the leave and 
 
 def build_detailed_findings(findings: List[Finding]) -> str:
     if not findings:
-        return """## 6. Detailed Findings
-
-No findings were identified for the supplied data.
+        return """No findings were identified for the supplied data.
 
 ---
 
 """
 
-    lines: List[str] = ["## 6. Detailed Findings", ""]
+    lines: List[str] = []
 
     lines.append(
         "This section sets out detailed findings for **leave and entitlement leakage** only. "
@@ -614,7 +782,7 @@ No findings were identified for the supplied data.
         lines.append(f"{f.message or 'No description provided.'}")
         lines.append("")
         lines.append("**Evidence**")
-        lines.append("")  # ensure bullets render as a proper list
+        lines.append("")
 
         evidence_bits = []
         if f.employee_id:
@@ -637,7 +805,7 @@ No findings were identified for the supplied data.
         )
         lines.append("")
         lines.append("**Recommended Action**")
-        lines.append("")  # blank line so the list renders properly
+        lines.append("")
 
         lines.append(
             "- Validate this finding against source payroll records and employee entitlements."
@@ -650,6 +818,7 @@ No findings were identified for the supplied data.
         )
 
         lines.append("")
+
     lines.append("---")
     lines.append("")
     return "\n".join(lines)
@@ -657,17 +826,14 @@ No findings were identified for the supplied data.
 
 def build_financial_exposure_section(exposure_rows: List[ExposureRow]) -> str:
     if not exposure_rows:
-        return """## 7. Financial Exposure (Indicative)
-
-No exposure estimates were available from the current data extract. If required, leakage estimates can be added to this section in future runs.
+        return """No exposure estimates were available from the current data extract. If required, leakage estimates can be added to this section in future runs.
 
 ---
 """
 
     total = sum(r.amount for r in exposure_rows)
+
     lines = [
-        "## 7. Financial Exposure (Indicative)",
-        "",
         f"- Number of findings with exposure estimates: {len(exposure_rows)}",
         f"- Indicative total exposure (all severities): {total:,.2f}",
         "",
@@ -682,7 +848,7 @@ No exposure estimates were available from the current data extract. If required,
 
 
 def build_limitations() -> str:
-    return """## 8. Limitations & Assumptions
+    return f"""This review is subject to the following limitations:
 
 This review is subject to the following limitations:
 
@@ -696,7 +862,7 @@ This review is subject to the following limitations:
 
 
 def build_next_steps() -> str:
-    return """## 9. Recommended Next Steps
+    return f"""Recommended Next Steps
 
 1. Prioritise validation of **High** severity findings.
 2. Review affected employee records and reconstruct balances where necessary.
@@ -708,86 +874,235 @@ def build_next_steps() -> str:
 """
 
 
-def build_appendices() -> str:
-    return """## 10. Appendix A – Rule Definitions
+def build_appendices(included_modules: set[str]) -> str:
+    """
+    Build appendices dynamically (content-only).
 
-This review used a set of automated rules to flag potential leave and entitlement leakage. Examples include:
+    Numbering is controlled by the ReportStructure orchestrator.
+    Inside this section we use lettered appendix headings (A/B/C) to keep structure clear
+    without introducing conflicting numeric section numbers.
+    """
+    mods = {m.strip().upper() for m in (included_modules or set())}
 
-- Negative balance checks
-- Casual employees accruing leave
-- Inactive or terminated employees with leave movements
-- Unusual accrual or usage patterns
+    lines: List[str] = []
 
-(Expand this list over time to match your `rules.py` definitions for each module.)
+    # -------------------------
+    # Appendix A – Rule Definitions
+    # -------------------------
+    lines.append("### Appendix A – Rule Definitions")
+    lines.append("")
+    lines.append("This review used a set of automated rules to flag evidential and process risk indicators.")
+    lines.append("")
 
----
+    if MODULE_LEAVE in mods:
+        lines.append("#### Leave & Entitlement Leakage")
+        lines.append("")
+        lines.append("- Negative balance checks")
+        lines.append("- Casual employees accruing leave")
+        lines.append("- Inactive or terminated employees with leave movements")
+        lines.append("- Unusual accrual or usage patterns")
+        lines.append("")
 
-## 11. Appendix B – Data Fields Used
+    if MODULE_LSL in mods:
+        lines.append("#### Long Service Leave (LSL) Exposure")
+        lines.append("")
+        lines.append("- Inconsistent LSL accrual patterns")
+        lines.append("- LSL balances inconsistent with service duration")
+        lines.append("- Missing or incomplete service date records")
+        lines.append("")
 
-Key fields used in this analysis include:
+    if MODULE_RKEG in mods:
+        lines.append("#### Record-Keeping & Evidence Gaps (RKEG)")
+        lines.append("")
+        lines.append("- Missing employee master data fields")
+        lines.append("- Orphan pay events and traceability gaps")
+        lines.append("- Inconsistent employment status records")
+        lines.append("- Missing or inconsistent termination attributes")
+        lines.append("")
 
-- `employee_id`
-- `leave_type`
-- `as_of_date`
-- `balance_units`
-- `movement_units`
-- `employment_status`
-- Termination-related fields such as `termination_date`, `termination_type`, `final_pay_date` and any termination evidence references
+    if MODULE_TERM in mods:
+        lines.append("#### Termination Exposure (TERM)")
+        lines.append("")
+        lines.append("- Final pay sequencing checks vs termination date")
+        lines.append("- Missing / inconsistent termination dates")
+        lines.append("- Missing / inconsistent termination type / reason")
+        lines.append("- Missing evidence references / artefact identifiers")
+        lines.append("- Ambiguous identification of final pay events within a window")
+        lines.append("- Termination events inconsistent with ordinary pay activity patterns")
+        lines.append("")
 
-(Additional fields from the supplied CSV files may also be used.)
+    lines.append("---")
+    lines.append("")
 
----
+    # -------------------------
+    # Appendix B – Data Fields Used
+    # -------------------------
+    lines.append("### Appendix B – Data Fields Used")
+    lines.append("")
+    lines.append("Key fields used in this review may include:")
+    lines.append("")
+    lines.append("- `employee_id`")
 
-## 12. Appendix C – Machine-readable outputs
+    if MODULE_LEAVE in mods or MODULE_LSL in mods:
+        lines.append("- `leave_type`")
+        lines.append("- `balance_units`")
+        lines.append("- `movement_units`")
 
-Complete machine-readable versions of the findings are available in:
+    if MODULE_TERM in mods:
+        lines.append("- `termination_date`")
+        lines.append("- `termination_type` / `termination_reason`")
+        lines.append("- `pay_date` (for sequencing checks)")
+        lines.append("- `is_final_pay` (where available)")
+        lines.append("- Termination evidence reference fields (e.g. `evidence_ref`, `document_id`)")
 
-- `outputs/modules/leave_leakage_findings.csv`
-- `outputs/modules/lsl_findings.csv`
-- `outputs/modules/rkeg_findings.csv`
-- `outputs/modules/term_findings.csv`
-- `outputs/leakage_report.csv`
+    if MODULE_RKEG in mods:
+        lines.append("- Employee master fields (e.g. start date, employment type, status)")
+        lines.append("- Pay event traceability identifiers (run IDs, event IDs where supplied)")
 
-These files provide row-level detail that can be used for remediation planning, sampling, or incorporation into a broader audit work program.
+    lines.append("")
+    lines.append("---")
+    lines.append("")
 
-"""
+    # -------------------------
+    # Appendix C – Machine-readable outputs
+    # -------------------------
+    lines.append("### Appendix C – Machine-readable outputs")
+    lines.append("")
+    lines.append("Complete machine-readable outputs are available in the following files:")
+    lines.append("")
+
+    if MODULE_LEAVE in mods:
+        lines.append("- `outputs/modules/leave_leakage_findings.csv`")
+        lines.append("- `outputs/leakage_report.csv`")
+
+    if MODULE_LSL in mods:
+        lines.append("- `outputs/modules/lsl_findings.csv`")
+        # optional summary if you have it
+        if "LSL_SUMMARY_BY_SEVERITY_CSV" in globals() and LSL_SUMMARY_BY_SEVERITY_CSV.exists():
+            lines.append("- `outputs/modules/lsl_summary_by_severity.csv`")
+
+    if MODULE_RKEG in mods:
+        lines.append("- `outputs/modules/rkeg_findings.csv`")
+        if RKEG_SUMMARY_BY_SEVERITY_CSV.exists():
+            lines.append("- `outputs/modules/rkeg_summary_by_severity.csv`")
+
+    if MODULE_TERM in mods:
+        lines.append("- `outputs/modules/term_findings.csv`")
+        if TERM_SUMMARY_BY_SEVERITY_CSV.exists():
+            lines.append("- `outputs/modules/term_summary_by_severity.csv`")
+        # optional term summary table
+        term_summary_path = OUTPUTS_DIR / "modules" / "term_summary.csv"
+        if term_summary_path.exists():
+            lines.append("- `outputs/modules/term_summary.csv`")
+
+    lines.append("")
+    lines.append(
+        "These files provide row-level detail suitable for operational review, sampling, remediation planning, or incorporation into a broader audit work program."
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+    return "\n".join(lines)
 
 # ---------- Orchestrator ----------
 
 def generate_leave_leakage_report(
     organisation_name: str = "Organisation not specified",
     review_period: str | None = None,
+    modules: Optional[Iterable[str]] = None,
 ) -> Path:
-    """Generate outputs/report.md for the Leave & Entitlement Leakage Review."""
-    findings = load_findings()
-    sorted_findings = sort_findings(findings)
-    exposure_rows = load_exposure_rows()
-    rkeg_counts = load_rkeg_severity_counts()
+    """
+    Generate outputs/report.md.
+
+    modules controls which sections are included.
+    Sections are also suppressed if their underlying module outputs do not exist.
+    """
+    requested: set[str] = {m.strip().upper() for m in (modules or DEFAULT_MODULES)}
+
+    # Only include modules that actually ran (keeps report clean)
+    included: set[str] = {m for m in requested if _module_ran(m)}
+
+    # If nothing ran, fall back to leave title but show a clean "no data" report.
+    report_title: str = _build_report_title(included or requested)
+
+    # Load data only if relevant
+    findings: List[Finding] = load_findings() if MODULE_LEAVE in included else []
+    sorted_findings = sort_findings(findings) if findings else []
+    exposure_rows = load_exposure_rows() if MODULE_LEAVE in included else []
+    rkeg_counts = load_rkeg_severity_counts() if MODULE_RKEG in included else {}
 
     if review_period is None:
-        review_period = _derive_review_period(sorted_findings)
+        # Derive from leave findings only when leave is included; otherwise use generic.
+        review_period = _derive_review_period(sorted_findings) if sorted_findings else "Period not specified"
 
-    parts = [
-        build_header(organisation_name, review_period),
-        build_executive_summary(sorted_findings),
-        build_data_sources_section(),
-        build_scope_and_methodology(),
-        build_rkeg_summary(rkeg_counts),
-        build_term_severity_summary(),
-        build_key_findings_overview(sorted_findings),
-        build_detailed_findings(sorted_findings),
-        build_financial_exposure_section(exposure_rows),
-        build_limitations(),
-        build_next_steps(),
-        build_appendices(),
-    ]
+    parts: List[str] = []
+    final_review_period: str = review_period if review_period is not None else "Period not specified"
+    parts.append(build_header(report_title, organisation_name, final_review_period))
+
+    structure = ReportStructure()
+
+    # --- Section 1: Executive Summary (level 1) ---
+    def exec_summary_content() -> str:
+        if MODULE_LEAVE in included:
+            return build_executive_summary(sorted_findings)  # will become content-only in Step 2
+        return (
+            f"This review produced outputs for the following modules: "
+            f"{', '.join(sorted(included)) or 'None'}.\n"
+            "Findings reflect evidential and process risk indicators only and do not, on their own, "
+            "confirm non-compliance or underpayment.\n\n---"
+        )
+
+    structure.add("Executive Summary", 1, exec_summary_content)
+    structure.add("Data Sources", 1, lambda: build_data_sources_section(included))
+    structure.add("Scope & Methodology", 1, lambda: build_scope_and_methodology(included))
+
+    # ---------------- Evidence & Defensibility Overview ----------------
+    evidence_modules = {MODULE_RKEG, MODULE_TERM, MODULE_LSL}
+
+    if any(m in included for m in evidence_modules):
+        structure.add("Evidence & Defensibility Overview", 1, lambda: "")
+
+        if MODULE_RKEG in included:
+            structure.add(
+                "Record-Keeping & Evidence Gaps (RKEG) – Severity Overview",
+                2,
+                lambda: build_rkeg_summary(rkeg_counts),  # temp
+            )
+
+        if MODULE_TERM in included:
+            structure.add(
+                "Termination Exposure – Severity Overview",
+                2,
+                lambda: build_term_severity_summary(),  # temp
+            )
+
+        if MODULE_LSL in included:
+            structure.add(
+                "Long Service Leave (LSL) Exposure – Severity Overview",
+                2,
+                lambda: build_lsl_severity_summary(),  # temp
+            )
+
+    # ---------------- Leave-only sections ----------------
+    if MODULE_LEAVE in included:
+        structure.add("Key Findings Overview", 1, lambda: build_key_findings_overview(sorted_findings))
+        structure.add("Detailed Findings", 1, lambda: build_detailed_findings(sorted_findings))
+        structure.add("Financial Exposure (Indicative)", 1, lambda: build_financial_exposure_section(exposure_rows))
+
+    # ---------------- Trailing sections ----------------
+    structure.add("Limitations & Assumptions", 1, lambda: build_limitations())
+    structure.add("Recommended Next Steps", 1, lambda: build_next_steps())
+    structure.add("Appendices", 1, lambda: build_appendices(included_modules=included))
+
+    # ---------------- Render + write ----------------
+    parts.append(structure.render_markdown())
 
     REPORT_MD_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_MD_PATH.write_text("\n".join(parts), encoding="utf-8")
-
     return REPORT_MD_PATH
 
 
 if __name__ == "__main__":
-    generate_leave_leakage_report()
-    print(f"Generated Markdown report at {REPORT_MD_PATH}")
+    path = generate_leave_leakage_report(modules=["TERM"])
+    print(f"Generated at: {path}")
