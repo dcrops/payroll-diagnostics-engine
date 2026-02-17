@@ -52,13 +52,9 @@ The RKEG assessment does **not** determine whether payroll outcomes are correct 
 
 def build_rkeg_severity_overview_table(rkeg_counts: Dict[str, int]) -> str:
     """
-    Small, conservative severity summary table for the detailed module report.
-
-    Expected rkeg_counts shape:
-        {"HIGH": 3, "MEDIUM": 5, "LOW": 0}
-    Missing keys are treated as zero.
+    Severity summary table (table-only, no headings).
     """
-    # Normalise counts and ensure all expected keys exist
+
     counts = {code: int(rkeg_counts.get(code, 0) or 0) for code in SEVERITY_ORDER}
 
     high = SEVERITY_BY_CODE["HIGH"]
@@ -66,13 +62,8 @@ def build_rkeg_severity_overview_table(rkeg_counts: Dict[str, int]) -> str:
     low = SEVERITY_BY_CODE["LOW"]
 
     lines = [
-        "### RKEG severity overview",
-        "",
-        "The table below summarises the number of record-keeping and evidence gaps identified by severity. "
-        "Counts reflect evidential risk only and do not represent confirmed breaches or quantified dollar exposure.",
-        "",
         "| Severity | Count | Description |",
-        "|----------|:-------------:|---------------------------|",
+        "|----------|:-----:|-------------|",
         f"| <span class=\"badge-high\">{high.label}</span> | {counts['HIGH']} | {high.description} |",
         f"| <span class=\"badge-medium\">{med.label}</span> | {counts['MEDIUM']} | {med.description} |",
         f"| <span class=\"badge-low\">{low.label}</span> | {counts['LOW']} | {low.description} |",
