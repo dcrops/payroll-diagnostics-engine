@@ -1,10 +1,8 @@
 from datetime import date
 from pathlib import Path
-from reporting.combine_findings import combine_findings
 from reporting.report_md import generate_leave_leakage_report
 from reporting.report_pdf import build_html_and_pdf
 from reporting.lsl_report_md import generate_lsl_exposure_report
-from reporting.combined_overview_md import generate_combined_exposure_overview
 from reporting.pre_audit_overview_md import generate_pre_audit_overview
 from reporting.post_audit_overview_md import generate_post_audit_overview
 import argparse
@@ -30,14 +28,6 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
     outputs = repo_root / "outputs"
 
-    combine_findings(
-        inputs={
-            "leave_leakage": outputs / "modules" / "leave_leakage_findings.csv",
-            "lsl_exposure": outputs / "modules" / "lsl_findings.csv",
-        },
-        out_path=outputs / "combined_findings.csv",
-    )
-
     # generate Markdown report
     generate_leave_leakage_report(
     organisation_name="Example Client Pty Ltd",
@@ -48,11 +38,6 @@ def main() -> int:
 
         generate_lsl_exposure_report(
             organisation_name="Example Client Pty Ltd",
-        )
-
-        generate_combined_exposure_overview(
-            organisation_name="Example Client Pty Ltd",
-            prepared_as_at=None,
         )
 
         generate_pre_audit_overview(
@@ -85,13 +70,6 @@ def main() -> int:
         page_title="Long Service Leave (LSL) Exposure Review",
     )
 
-    build_html_and_pdf(
-    md_path=outputs / "combined_overview.md",
-    html_path=outputs / "combined_overview.html",
-    pdf_path=outputs / "combined_overview.pdf",
-    page_title="Combined Exposure Overview",
-    )
-
         # Pre-Audit overview
     build_html_and_pdf(
         md_path=outputs / "pre_audit_overview.md",
@@ -121,10 +99,8 @@ def main() -> int:
     else:
         print("Skipping Public Holiday HTML/PDF – markdown not found in this repo's outputs/")
 
-    print("Wrote outputs/combined_findings.csv")
     print("Wrote outputs/report.md / report.html")
     print("Wrote outputs/lsl_report.md / lsl_report.html")
-    print("Wrote outputs/combined_overview.md / combined_overview.html")
     print("Wrote outputs/pre_audit_overview.md / pre_audit_overview.html")
     print("Wrote outputs/post_audit_overview.md / post_audit_overview.html")
     # PDFs are best-effort; they may or may not exist depending on WeasyPrint setup.

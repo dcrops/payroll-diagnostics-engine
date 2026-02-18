@@ -55,15 +55,18 @@ It does **not** replace an audit, provide legal or accounting advice, or guarant
 
 ## 2. Relationship to Detailed Reviews
 
-This pre-audit review provides a consolidated, high-level view of potential payroll compliance risk.  
-All severity counts, themes, and examples referenced in this report are derived from the following detailed module reviews:
+This Pre-Audit Review provides a consolidated, high-level view of potential payroll risk indicators derived from the following CRC modules:
 
 - **Leave & Entitlement Leakage Review**
-- **Public Holiday Compliance Review**
 - **Long Service Leave (LSL) Exposure Review**
+- **Termination Exposure Review**
+- **Record-Keeping & Evidence Gaps (RKEG) Review**
 
-These detailed reports contain the underlying evidence, rule logic, employee-level findings, and recommended remediation actions.  
+These detailed reports contain the underlying evidence, rule logic, employee-level findings, and recommended remediation actions.
+
 This overview does not independently reassess payroll calculations or confirm compliance outcomes.
+
+Where commissioned separately, a **Public Holiday Compliance Review** may also be considered as part of broader payroll risk assessment. That review is delivered under a standalone tool and is not included in this engagement unless expressly commissioned.
 
 ---
 
@@ -73,7 +76,7 @@ This Pre-Audit Review should be read as a **preparatory tool**, not a definitive
 
 Recommended approach:
 
-1. Review the **Combined Exposure Overview** to understand overall exposure levels.
+1. Review the **Executive Summary** and **Module Severity Overview** sections to understand overall exposure levels.
 2. Prioritise **High severity** findings for validation and remediation.
 3. Use the detailed module reports to:
    - understand the nature of each finding
@@ -86,7 +89,7 @@ Recommended approach:
 
 ## 4. Key Risk Snapshot
 
-This review draws together exposure signals identified across the following modules:
+This review draws together exposure signals identified across the following CRC modules:
 
 - **Leave & Entitlement Leakage Review**  
   (operational payroll accuracy and entitlement consistency)
@@ -94,10 +97,13 @@ This review draws together exposure signals identified across the following modu
 - **Long Service Leave (LSL) Exposure Review**  
   (long-horizon entitlement and provision risk)
 
-- **Public Holiday Compliance Review**  
-  (state, locality, and calendar-based public holiday alignment)
+- **Termination Exposure Review**  
+  (final pay process integrity and evidential defensibility)
 
-A consolidated view of findings by severity is provided in the **Combined Exposure Overview**. That overview should be used as the primary reference for risk prioritisation.
+- **Record-Keeping & Evidence Gaps (RKEG) Review**  
+  (traceability, completeness, and audit-readiness of payroll records)
+
+Severity distribution and thematic patterns are presented within the Executive Summary and Module Overview sections and should be used as the primary reference for risk prioritisation.
 
 ---
 
@@ -109,7 +115,8 @@ Based on common payroll audit and regulatory review patterns, findings in the fo
 - **Leave accruals for ineligible employee types** (for example, casual employees accruing leave)
 - **Inconsistencies between ledger movements and balance snapshots**
 - **Long-serving employees with low or zero Long Service Leave balances**
-- **Public holiday application inconsistencies across locations or cohorts**
+- **Termination events with incomplete or weak evidential support**
+- **Gaps in employee master data or traceability fields required to evidence payroll decisions**
 
 The presence of findings in these areas does not by itself imply non-compliance, but they are typically considered higher-risk and should be prioritised for validation.
 
@@ -142,19 +149,21 @@ The following actions are recommended to reduce payroll risk prior to audit acti
 
 ## 7. Supporting Detailed Reports
 
-This Pre-Audit Review is supported by the following detailed reports, which contain full findings, evidence, and recommended actions:
-
-- **Combined Exposure Overview**  
-  `outputs/combined_overview.html`
+This Pre-Audit Review is supported by the following detailed CRC module reports, which contain full findings, evidence, and recommended actions:
 
 - **Leave & Entitlement Leakage Review**  
-  `outputs/report.html`
+  `outputs/leave_report.html`
 
 - **Long Service Leave (LSL) Exposure Review**  
   `outputs/lsl_report.html`
 
-- **Public Holiday Compliance Review**  
-  Provided separately from the stand-alone Public Holiday Compliance tool.
+- **Termination Exposure Review**  
+  `outputs/term_report.html`
+
+- **Record-Keeping & Evidence Gaps (RKEG) Review**  
+  `outputs/rkeg_report.html`
+
+Where commissioned separately, a Public Holiday Compliance Review will be provided as a standalone artefact outside this CRC report pack.
 
 These reports should be retained as supporting documentation for internal review and audit preparation.
 
@@ -172,7 +181,6 @@ This Pre-Audit Review is subject to the following limitations:
 The review is intended to support informed preparation and prioritisation and should be used alongside professional advice where appropriate.
 
 ---
-
 """
 
     PRE_AUDIT_MD_PATH.parent.mkdir(parents=True, exist_ok=True)

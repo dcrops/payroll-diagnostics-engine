@@ -29,7 +29,7 @@ def generate_post_audit_overview(
 **Organisation:** {organisation_name}  
 **Prepared as at:** {prepared_as_at}  
 
-> This Post-Audit Review is intended to support internal follow-up after an audit, regulatory review, or external assurance activity. It summarises key risk indicators based on the data provided but does not constitute legal, accounting, or industrial relations advice.
+> This Post-Audit Review is intended to support internal follow-up after an audit, regulatory review, or external assurance activity. It summarises payroll risk indicators based on the data provided but does not constitute legal, accounting, or industrial relations advice.
 
 > This review does not re-perform audit procedures or validate audit conclusions.
 
@@ -41,8 +41,7 @@ This Post-Audit Payroll Compliance Review is designed to help the organisation
 understand, triage and respond to payroll risk indicators **after** an audit,
 regulatory review or external assurance activity.
 
-The review applies the same automated, data-driven checks used in the
-Pre-Audit context to:
+The review applies automated, data-driven checks to:
 
 - provide an indicative view of residual risk
 - identify areas where similar issues may arise beyond audited samples
@@ -50,40 +49,45 @@ Pre-Audit context to:
 
 This review does **not** replace audit conclusions, does not re-perform audit
 procedures, and does not provide legal or accounting advice. Its purpose is to
-support internal follow-up and ongoing risk management.
+support structured post-audit follow-up and ongoing risk management.
 
 ---
 
 ## 2. Relationship to Detailed Reviews
 
-This post-audit review summarises residual risk and remediation themes following audit activity.  
-It references findings identified in the following detailed module reviews:
+This Post-Audit Review summarises residual risk and remediation themes
+identified across the following CRC modules:
 
 - **Leave & Entitlement Leakage Review**
-- **Public Holiday Compliance Review**
 - **Long Service Leave (LSL) Exposure Review**
+- **Termination Exposure Review**
+- **Record-Keeping & Evidence Gaps (RKEG) Review**
 
-This report does not re-perform audit procedures or validate audit conclusions.  
-It is intended to support internal tracking of remediation actions and residual risk assessment.
+These detailed reports contain the underlying findings, rule logic,
+employee-level indicators, and recommended remediation actions.
+
+Where commissioned separately, a **Public Holiday Compliance Review**
+may also be considered as part of broader payroll risk assessment.
+That review is delivered under a standalone tool and is not included
+in this CRC report pack unless expressly commissioned.
 
 ---
 
 ## 3. How to Use This Review
 
-This Post-Audit Review should be read as a **supporting tool** alongside the
-audit outcomes, not as a replacement for them.
+This Post-Audit Review should be read as a **supporting tool**
+alongside audit outcomes, not as a replacement for them.
 
 Recommended approach:
 
 1. Consider this review together with:
    - audit findings and recommendations
-   - any internal reports or management responses
-2. Use the **Combined Exposure Overview** to understand the distribution of
-   residual risk indicators across key payroll areas.
+   - internal reports or management responses
+2. Use the Executive Summary and Module Severity Overviews to understand the distribution of residual risk indicators.
 3. Compare risk indicators with audit findings to:
    - identify alignment (where indicators match known issues)
-   - surface adjacent or similar risks that may not have been sampled in detail
-4. Prioritise follow-up where risk indicators suggest:
+   - surface adjacent or similar risks not sampled in detail
+4. Prioritise follow-up where indicators suggest:
    - broader population impact
    - similar issues across multiple locations, cohorts or entitlement types
 5. Re-run relevant modules after remediation to confirm reduction in residual risk.
@@ -92,7 +96,7 @@ Recommended approach:
 
 ## 4. Residual Risk Snapshot
 
-This review draws together residual exposure signals identified across the following modules:
+This review draws together residual exposure signals identified across:
 
 - **Leave & Entitlement Leakage Review**  
   (operational payroll accuracy and entitlement consistency)
@@ -100,10 +104,20 @@ This review draws together residual exposure signals identified across the follo
 - **Long Service Leave (LSL) Exposure Review**  
   (long-horizon entitlement and provision risk)
 
-- **Public Holiday Compliance Review**  
-  (state, locality, and calendar-based public holiday alignment)
+- **Termination Exposure Review**  
+  (final pay process integrity and evidential defensibility)
 
-A consolidated view of findings by severity is provided in the **Combined Exposure Overview**. Post-audit, this should be used to understand where risk indicators remain and where further work may be required.
+- **Record-Keeping & Evidence Gaps (RKEG) Review**  
+  (traceability, completeness and audit-readiness of payroll records)
+
+Severity distribution and thematic patterns are presented within the
+Executive Summary and Module Severity Overview sections.
+Post-audit, these should be used to understand where risk indicators remain
+and where further follow-up may be required.
+
+If a Public Holiday Compliance Review was conducted separately,
+its findings should be considered alongside this report when assessing
+overall payroll risk posture.
 
 ---
 
@@ -112,20 +126,21 @@ A consolidated view of findings by severity is provided in the **Combined Exposu
 Where audit findings are available, this review can assist by:
 
 - highlighting areas where automated indicators align with audit issues
-- identifying similar patterns in parts of the population that were not sampled
+- identifying similar patterns in parts of the population not sampled
 - providing additional context on the potential spread or persistence of issues
 
 Potential use cases include:
 
-- confirming that known issues are isolated or widespread
+- confirming whether known issues are isolated or widespread
 - identifying additional employees, locations or periods that may warrant review
 - supporting communication with stakeholders (Payroll, HR, Finance, Audit and Governance)
 
-The presence of risk indicators does not by itself confirm non-compliance, but it may suggest areas where further analysis, sampling or remediation is appropriate.
+The presence of risk indicators does not by itself confirm non-compliance,
+but it may suggest areas where further analysis, sampling or remediation is appropriate.
 
 ---
 
-## 6. Recommended Post-Audit Actions (After Audit Activity)
+## 6. Recommended Post-Audit Actions
 
 ### A. Alignment with Audit Outcomes
 
@@ -146,22 +161,25 @@ The presence of risk indicators does not by itself confirm non-compliance, but i
 
 ## 7. Supporting Detailed Reports
 
-This Post-Audit Review is supported by the following detailed reports, which
-contain full findings, evidence, and recommended actions:
-
-- **Combined Exposure Overview**  
-  `outputs/combined_overview.html`
+This Post-Audit Review is supported by the following CRC module reports:
 
 - **Leave & Entitlement Leakage Review**  
-  `outputs/report.html`
+  `outputs/leave_report.html`
 
 - **Long Service Leave (LSL) Exposure Review**  
   `outputs/lsl_report.html`
 
-- **Public Holiday Compliance Review**  
-  Provided separately from the stand-alone Public Holiday Compliance tool.
+- **Termination Exposure Review**  
+  `outputs/term_report.html`
 
-These reports should be retained alongside audit documentation and management responses as part of the organisation's payroll governance records.
+- **Record-Keeping & Evidence Gaps (RKEG) Review**  
+  `outputs/rkeg_report.html`
+
+Where commissioned separately, a Public Holiday Compliance Review
+will be provided as a standalone artefact outside this CRC report pack.
+
+These reports should be retained alongside audit documentation and
+management responses as part of the organisation's payroll governance records.
 
 ---
 
@@ -171,14 +189,14 @@ This Post-Audit Review is subject to the following limitations:
 
 - The review relies on the accuracy and completeness of the data provided.
 - Automated checks are rule-based and may not capture all payroll risks.
-- Award, enterprise agreement, and contract interpretation is not performed by this tool.
+- Award, enterprise agreement, and contract interpretation is not performed.
 - This review does not provide legal, accounting, or industrial relations advice.
 - Audit scope, sampling and methodology are determined by the relevant audit function and are not replicated here.
 
-The review is intended to support informed post-audit follow-up and prioritisation and should be used alongside professional advice and formal audit outputs.
+The review is intended to support informed post-audit follow-up
+and should be used alongside professional advice and formal audit outputs.
 
 ---
-
 """
 
     POST_AUDIT_MD_PATH.parent.mkdir(parents=True, exist_ok=True)

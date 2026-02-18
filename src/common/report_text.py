@@ -27,9 +27,8 @@ RISK_PHRASES = {
     ),
 }
 
-# Terms we want to avoid in narrative text. These are not enforced automatically,
-# but act as a checklist when drafting new sections.
-FORBIDDEN_TERMS = [
+# Terms that must never appear in executive narrative
+HARD_FORBIDDEN_TERMS = [
     "breach",
     "breaches",
     "non-compliant",
@@ -39,15 +38,35 @@ FORBIDDEN_TERMS = [
     "guaranteed",
     "guarantee",
     "fully compliant",
-    "underpayment",   # if needed, use 'potential underpayment risk' very carefully
+]
+
+# Terms that require careful context (warn-only)
+SOFT_FLAG_TERMS = [
+    "underpayment",
     "overpayment",
 ]
 
 
-def contains_forbidden_term(text: str) -> bool:
+def scan_report_text(text: str) -> dict[str, list[str]]:
     """
-    Lightweight helper for ad-hoc checks in tests or scripts.
-    Not used in core reporting flows yet.
+    Scan report text for hard-forbidden and soft-flag terms.
+
+    Returns:
+        {
+            "hard": [...],
+            "soft": [...]
+        }
     """
     lower = text.lower()
-    return any(term in lower for term in FORBIDDEN_TERMS)
+
+    hard_hits = [term for term in HARD_FORBIDDEN_TERMS if term in lower]
+    soft_hits = [term for term in SOFT_FLAG_TERMS if term in lower]
+
+    return {
+        "hard": hard_hits,
+        "soft": soft_hits,
+    }
+
+def contains_forbidden_term(text: str) -> bool:
+    """Backwards-compatible helper. True if any hard-forbidden term is present."""
+    return len(scan_report_text(text)["hard"]) > 0

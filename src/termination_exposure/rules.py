@@ -29,6 +29,18 @@ MAX_FINAL_PAY_GAP_DAYS = 35
 AMBIGUOUS_WINDOW_BEFORE_DAYS = 14
 AMBIGUOUS_WINDOW_AFTER_DAYS = 30
 
+# Keep this list in sync with TERM rule functions below.
+# If you add TERM-007, it must be added here and in TERM_MESSAGES.
+
+TERM_RULE_CODES = ["TERM-001", "TERM-002", "TERM-003", "TERM-004", "TERM-005", "TERM-006"]
+
+# --- Governance check: ensure every TERM rule has a message definition ---
+missing = [c for c in TERM_RULE_CODES if c not in TERM_MESSAGES]
+if missing:
+    raise KeyError(
+        f"TERM_MESSAGES missing definitions for: {missing}"
+    )
+
 # ---------- Helpers ----------
 
 def _make_finding_id(
@@ -99,9 +111,20 @@ def _build_finding(
     evidence: Optional[Dict[str, Any]] = None,
 ) -> Row:
     sev = _normalise_severity(severity)
-    msg_pack = TERM_MESSAGES.get(rule_code, {})
-    message = msg_pack.get("message", "")
-    next_action = msg_pack.get("next_action", "")
+    msg_pack = TERM_MESSAGES.get(rule_code)
+
+    if not msg_pack:
+        raise KeyError(
+            f"Missing TERM_MESSAGES entry for rule_code={rule_code}"
+        )
+
+    try:
+        message = msg_pack["message"]
+        next_action = msg_pack["next_action"]
+    except KeyError as e:
+        raise KeyError(
+            f"TERM_MESSAGES for {rule_code} is missing required key: {e}"
+        )
 
     term_date_str = termination_date.isoformat() if isinstance(termination_date, date) else ""
     final_date_str = final_pay_date.isoformat() if isinstance(final_pay_date, date) else ""
@@ -510,7 +533,6 @@ def term_006_ambiguous_final_pay(
             # No pays at all – TERM-001 handles clear absence
             continue
 
-        window_start = term_date.replace()  # copy
         window_start = term_date.fromordinal(term_date.toordinal() - window_before_days)
         window_end = term_date.fromordinal(term_date.toordinal() + window_after_days)
 

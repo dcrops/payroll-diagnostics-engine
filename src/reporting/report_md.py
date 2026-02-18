@@ -13,6 +13,7 @@ from reporting.rkeg_text import (
 )
 
 from reporting.structure import ReportStructure
+from common.report_text import scan_report_text
 
 report_date = date.today().strftime("%d %b %Y")
 
@@ -23,7 +24,18 @@ MODULE_RKEG = "RKEG"     # Evidence gaps summary
 MODULE_TERM = "TERM"     # Termination Exposure severity summary
 MODULE_LSL  = "LSL"      # (if/when you add LSL sections to this report)
 
-DEFAULT_MODULES = {MODULE_LEAVE, MODULE_RKEG, MODULE_TERM}
+# Canonical CRC module order (used everywhere in reporting)
+MODULE_ORDER = [MODULE_LEAVE, MODULE_LSL, MODULE_TERM, MODULE_RKEG]
+
+MODULE_LABELS = {
+    MODULE_LEAVE: "Leave & Entitlement Leakage (LEAVE)",
+    MODULE_LSL:  "Long Service Leave Exposure (LSL)",
+    MODULE_TERM: "Termination Exposure (TERM)",
+    MODULE_RKEG: "Record-Keeping & Evidence Gaps (RKEG)",
+}
+
+# Default module inclusion for a run (keep as list for predictable ordering)
+DEFAULT_MODULES = [MODULE_LEAVE, MODULE_LSL, MODULE_TERM, MODULE_RKEG]
 
 # ---------- Paths ----------
 
@@ -57,6 +69,13 @@ def _module_ran(module: str) -> bool:
     if module == MODULE_LSL:
         return LSL_SUMMARY_BY_SEVERITY_CSV.exists() or LSL_FINDINGS_CSV.exists()
     return False
+
+def normalise_modules(included_modules: set[str] | list[str] | None) -> set[str]:
+    return {m.strip().upper() for m in (included_modules or [])}
+
+def included_modules_in_order(included_modules: set[str] | list[str] | None) -> list[str]:
+    mods = normalise_modules(included_modules)
+    return [m for m in MODULE_ORDER if m in mods]
 
 # ---------- Data models ----------
 
@@ -180,7 +199,11 @@ def build_interpretation_block_exec(included_modules: set[str]) -> str:
 
     lines.append("")
     lines.append(
-        "Findings are risk indicators requiring validation and do not, on their own, confirm breach, non-compliance or underpayment."
+        "Findings are risk indicators requiring validation and do not, on their own, confirm non-compliance, legislative contravention, or underpayment."
+    )
+    lines.append("")
+    lines.append(
+        "*Traffic light indicators reflect evidential risk only and do not represent confirmed contraventions or quantified exposure.*"
     )
 
     return "\n".join(lines).strip()
@@ -469,7 +492,7 @@ This engagement reviewed payroll and HR data across the following modules:
 
 The review identified risk indicators across payroll outcomes, termination processing and record-keeping defensibility.
 
-Severity reflects relative evidential or payroll risk only. Findings are indicators requiring validation and do not, on their own, confirm underpayment, breach, or non-compliance.
+Severity reflects relative evidential or payroll risk only. Findings are indicators requiring validation and do not, on their own, confirm underpayment, non-compliance, or legislative contravention.
 
 ---
 
@@ -481,30 +504,29 @@ Severity reflects relative evidential or payroll risk only. Findings are indicat
 
 **Who should read this**
 
-This report is intended for payroll leaders, HR managers, finance stakeholders and risk/compliance personnel responsible for payroll governance and evidential defensibility.
+This report is intended for:
+
+- Payroll leaders
+- HR managers
+- Finance stakeholders
+- Risk and compliance personnel responsible for payroll governance and evidential integrity
 """
 
-def build_scope_and_methodology(included_modules: set[str]) -> str:
+def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -> str:
     # Normalise to avoid case/whitespace mismatches
-    mods = {m.strip().upper() for m in (included_modules or set())}
+    mods = normalise_modules(included_modules)
     subsection_no = 1
 
-    # Define labels BEFORE use
-    module_labels = {
-        MODULE_LEAVE: "Leave & Entitlement Leakage (LEAVE)",
-        MODULE_RKEG: "Record-Keeping & Evidence Gaps (RKEG)",
-        MODULE_TERM: "Termination Exposure (TERM)",
-        MODULE_LSL:  "Long Service Leave Exposure (LSL)",
-    }
-
-    # Fixed display order (stable and predictable)
-    order = [MODULE_LEAVE, MODULE_RKEG, MODULE_TERM, MODULE_LSL]
-    included_list = ", ".join(module_labels[m] for m in order if m in mods) or "None"
+    ordered = included_modules_in_order(mods)
+    included_list = ", ".join(MODULE_LABELS[m] for m in ordered) or "None"
 
     lines: List[str] = []
     lines.append("Scope & Methodology")
     lines.append("")
-    lines.append(f"**Modules included in this engagement:** {included_list}")
+    lines.append("**Modules included in this engagement:**")
+    lines.append("")
+    for m in ordered:
+        lines.append(f"- {MODULE_LABELS[m]}")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -550,7 +572,7 @@ def build_scope_and_methodology(included_modules: set[str]) -> str:
         lines.append("- interpret awards, enterprise agreements, or employment contracts")
         lines.append("- calculate legal entitlement outcomes or confirm the correctness of leave accrual rules")
         lines.append("- provide legal, accounting, or industrial relations advice")
-        lines.append("- assert breaches of legislation or confirm non-compliance")
+        lines.append("- assert contraventions of legislation or confirm non-compliance.")
         lines.append("")
         lines.append(
             "Where exposure estimates are included, they are indicative only and must be validated before remediation or accounting decisions are made."
@@ -597,7 +619,7 @@ def build_scope_and_methodology(included_modules: set[str]) -> str:
         lines.append("- interpret awards, enterprise agreements, or employment contracts")
         lines.append("- calculate legal LSL entitlement outcomes or confirm the correctness of LSL accrual rules")
         lines.append("- provide legal, accounting, or industrial relations advice")
-        lines.append("- assert breaches of legislation or confirm non-compliance")
+        lines.append("- assert contraventions of legislation or confirm non-compliance.")
         lines.append("")
         lines.append(
             "Where any exposure estimates or balance concerns are inferred, they are indicative only and must be validated "
@@ -633,8 +655,8 @@ def build_scope_and_methodology(included_modules: set[str]) -> str:
         lines.append("- calculate final pay entitlements or assess payment correctness")
         lines.append("- interpret awards, enterprise agreements, or employment contracts")
         lines.append("- determine notice, redundancy, or severance obligations")
-        lines.append("- assert breaches of legislation or confirm non-compliance")
-        lines.append("- provide legal advice or compliance guarantees")
+        lines.append("- assert contraventions of legislation or confirm non-compliance.")
+        lines.append("- provide legal advice or assurance of compliance.")
         lines.append("")
         lines.append("Any potential exposure identified reflects defensibility risk, not confirmed error or liability.")
         lines.append("")
@@ -697,7 +719,7 @@ def build_scope_and_methodology(included_modules: set[str]) -> str:
         lines.append("- calculate entitlements, underpayments or overpayments")
         lines.append("- interpret awards, enterprise agreements, or employment contracts")
         lines.append("- provide legal, accounting, or industrial relations advice")
-        lines.append("- assert breaches of legislation or confirm non-compliance")
+        lines.append("- assert contraventions of legislation or confirm non-compliance.")
         lines.append("")
         lines.append(
             "RKEG findings should be interpreted as evidential risk indicators. Addressing them improves defensibility and reduces audit effort, but does not necessarily imply a payroll outcome is incorrect."
@@ -717,7 +739,7 @@ def build_scope_and_methodology(included_modules: set[str]) -> str:
 
     return "\n".join(lines)
 
-def build_data_sources_section(included_modules: set[str]) -> str:
+def build_data_sources_section(included_modules: set[str] | list[str] | None) -> str:
     lines: List[str] = []
 
     lines.append(
@@ -725,28 +747,31 @@ def build_data_sources_section(included_modules: set[str]) -> str:
     )
     lines.append("")
 
-    # Only list outputs relevant to what was actually included
-    if MODULE_LEAVE in included_modules:
-        lines.append(f"- `{LEAVE_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
-        lines.append(f"- `{LEAKAGE_REPORT_CSV.relative_to(OUTPUTS_DIR)}`  ")
+        # Only list outputs relevant to what was actually included (in canonical module order)
+    mods = normalise_modules(included_modules)
+    for m in included_modules_in_order(mods):
 
-    if MODULE_LSL in included_modules:
-        if LSL_SUMMARY_BY_SEVERITY_CSV.exists():
-            lines.append(f"- `{LSL_SUMMARY_BY_SEVERITY_CSV.relative_to(OUTPUTS_DIR)}`  ")
-        if LSL_FINDINGS_CSV.exists():
-            lines.append(f"- `{LSL_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
+        if m == MODULE_LEAVE:
+            lines.append(f"- `{LEAVE_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
+            lines.append(f"- `{LEAKAGE_REPORT_CSV.relative_to(OUTPUTS_DIR)}`  ")
 
-    if MODULE_TERM in included_modules:
-        if TERM_SUMMARY_BY_SEVERITY_CSV.exists():
-            lines.append(f"- `{TERM_SUMMARY_BY_SEVERITY_CSV.relative_to(OUTPUTS_DIR)}`  ")
-        if TERM_FINDINGS_CSV.exists():
-            lines.append(f"- `{TERM_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
+        elif m == MODULE_LSL:
+            if LSL_SUMMARY_BY_SEVERITY_CSV.exists():
+                lines.append(f"- `{LSL_SUMMARY_BY_SEVERITY_CSV.relative_to(OUTPUTS_DIR)}`  ")
+            if LSL_FINDINGS_CSV.exists():
+                lines.append(f"- `{LSL_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
 
-    if MODULE_RKEG in included_modules:
-        if RKEG_SUMMARY_BY_SEVERITY_CSV.exists():
-            lines.append(f"- `{RKEG_SUMMARY_BY_SEVERITY_CSV.relative_to(OUTPUTS_DIR)}`  ")
-        if RKEG_FINDINGS_CSV.exists():
-            lines.append(f"- `{RKEG_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
+        elif m == MODULE_TERM:
+            if TERM_SUMMARY_BY_SEVERITY_CSV.exists():
+                lines.append(f"- `{TERM_SUMMARY_BY_SEVERITY_CSV.relative_to(OUTPUTS_DIR)}`  ")
+            if TERM_FINDINGS_CSV.exists():
+                lines.append(f"- `{TERM_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
+
+        elif m == MODULE_RKEG:
+            if RKEG_SUMMARY_BY_SEVERITY_CSV.exists():
+                lines.append(f"- `{RKEG_SUMMARY_BY_SEVERITY_CSV.relative_to(OUTPUTS_DIR)}`  ")
+            if RKEG_FINDINGS_CSV.exists():
+                lines.append(f"- `{RKEG_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
 
 
     lines.append("")
@@ -793,7 +818,6 @@ def build_lsl_severity_summary() -> str:
 | <span class="badge-medium">Medium</span>  | {lsl_counts["MEDIUM"]} | Indicators that may reflect configuration, data quality, or timing weaknesses requiring review. |
 | <span class="badge-low">Low</span>     | {lsl_counts["LOW"]}    | Lower-impact indicators that should be improved over time. |
 
-*Traffic light indicators reflect risk indicators only and do not represent confirmed breaches or quantified exposure.*
 
 ---
 """
@@ -812,7 +836,6 @@ def build_term_severity_summary() -> str:
 | <span class="badge-medium">Medium</span>  | {term_counts["MEDIUM"]} | Termination evidence exists but is incomplete, delayed or ambiguous and may require additional explanation or manual reconstruction. |
 | <span class="badge-low">Low</span>     | {term_counts["LOW"]}    | Minor record-keeping or data quality weaknesses in termination records that should be improved over time to support efficient and reliable payroll operations. |
 
-*Traffic light indicators reflect evidential risk only and do not represent confirmed breaches, quantified exposure, or remediation priority.*
 
 ---
 """
@@ -1252,9 +1275,21 @@ def generate_leave_leakage_report(
     # ---------------- Render + write ----------------
     parts.append(structure.render_markdown())
 
-    REPORT_MD_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_MD_PATH.write_text("\n".join(parts), encoding="utf-8")
-    return REPORT_MD_PATH
+    final_md = "\n".join(parts)
+
+    scan_result = scan_report_text(final_md)
+
+    if scan_result["hard"]:
+        print("⚠ HARD forbidden terms detected in report:")
+        print(sorted(set(scan_result["hard"])))
+
+    if scan_result["soft"]:
+        print("ℹ Soft-flag terms detected in report:")
+        print(sorted(set(scan_result["soft"])))
+
+        REPORT_MD_PATH.parent.mkdir(parents=True, exist_ok=True)
+        REPORT_MD_PATH.write_text(final_md, encoding="utf-8")
+        return REPORT_MD_PATH
 
 
 if __name__ == "__main__":

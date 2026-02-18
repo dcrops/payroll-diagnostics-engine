@@ -38,8 +38,8 @@ def build_rkeg_summary_paragraph(
     """
     Canonical explanation of what the RKEG assessment does and does not do.
 
-    This text is shared between the detailed module report and the combined
-    exposure overview so that the description cannot drift.
+    This text is shared between the Executive Pack and the standalone
+    RKEG module report to ensure consistent, non-drifting language.
     """
     scope_text = _build_scope_phrase(has_emp=has_emp, has_pay=has_pay, has_term=has_term)
 
