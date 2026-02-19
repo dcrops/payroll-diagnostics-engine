@@ -59,7 +59,7 @@ python -m reporting.report_md
 After running, open the consolidated report:
 
 ```text
-outputs/report.md
+outputs/crc_executive_pack.md
 ```
 
 ---
@@ -102,13 +102,13 @@ The codebase is intentionally kept simple, transparent, and extensible.
 
 After running the pipeline, open:
 
-- `outputs/report.md`
+- `outputs/crc_executive_pack.md`
 
 ## Repository structure (key files)
 
 - `src/leave_leakage/` — leave leakage rules + runner
 - `src/lsl_exposure/` — LSL heuristic checks + runner
-- `src/reporting/` — combines findings and generates `outputs/report.md`
+- `src/reporting/` — combines findings and generates `outputs/crc_executive_pack.md`
 - `outputs/modules/` — per-module outputs
 
 > Disclaimer: Outputs are indicative risk flags and should be validated against your organisation’s policies and applicable legislation/agreements.

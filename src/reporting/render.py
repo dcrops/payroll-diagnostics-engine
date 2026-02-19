@@ -16,12 +16,12 @@ except Exception as e:  # WeasyPrint can raise non-ImportError exceptions
 # ---------- Paths (defaults for the leave leakage report) ----------
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-CSS_SOURCE = BASE_DIR / "docs" / "report.css"
+CSS_SOURCE = BASE_DIR / "docs" / "crc_report.css"
 OUTPUTS_DIR = BASE_DIR / "outputs"
 
-REPORT_MD_PATH = OUTPUTS_DIR / "report.md"
-REPORT_HTML_PATH = OUTPUTS_DIR / "report.html"
-REPORT_PDF_PATH = OUTPUTS_DIR / "report.pdf"
+EXEC_PACK_MD_PATH = OUTPUTS_DIR / "crc_executive_pack.md"
+EXEC_PACK_HTML_PATH = OUTPUTS_DIR / "crc_executive_pack.html"
+EXEC_PACK_PDF_PATH = OUTPUTS_DIR / "crc_executive_pack.pdf"
 
 
 # ---------- HTML template ----------
@@ -31,7 +31,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
   <meta charset="utf-8">
   <title>{title}</title>
-  <link rel="stylesheet" href="report.css">
+  <link rel="stylesheet" href="crc_report.css">
 </head>
 <body>
   <div class="report-container">
@@ -64,7 +64,7 @@ def build_html_from_markdown(
     # Ensure output folder exists
     html_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Copy shared CSS alongside the HTML so <link href="report.css"> works
+    # Copy shared CSS alongside the HTML so <link href="crc_report.css"> works
     if CSS_SOURCE.exists():
         css_target = html_path.parent / CSS_SOURCE.name
         try:
@@ -129,9 +129,9 @@ def build_html_and_pdf(
 # Convenience wrapper for the original leave-leakage report, if ever needed.
 def build_default_html_and_pdf() -> tuple[Path, Path | None]:
     return build_html_and_pdf(
-        md_path=REPORT_MD_PATH,
-        html_path=REPORT_HTML_PATH,
-        pdf_path=REPORT_PDF_PATH,
+        md_path=EXEC_PACK_MD_PATH ,
+        html_path=EXEC_PACK_HTML_PATH,
+        pdf_path=EXEC_PACK_PDF_PATH,
         page_title="Leave & Entitlement Leakage Review",
     )
 

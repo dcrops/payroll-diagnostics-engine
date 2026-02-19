@@ -29,8 +29,6 @@ RISK_PHRASES = {
 
 # Terms that must never appear in executive narrative
 HARD_FORBIDDEN_TERMS = [
-    "breach",
-    "breaches",
     "non-compliant",
     "non compliant",
     "noncompliant",

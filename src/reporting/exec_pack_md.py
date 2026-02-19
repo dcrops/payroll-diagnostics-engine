@@ -1,28 +1,28 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass 
 from datetime import date
 from pathlib import Path
 from typing import Iterable, List, Dict, Optional
 
 from common.severity import SEVERITY_BY_CODE
 from reporting.rkeg_text import (
-    build_rkeg_summary_paragraph,
+    build_rkeg_summary_paragraph,  # currently unused but fine to keep
     build_rkeg_severity_overview_table,
 )
-
 from reporting.structure import ReportStructure
 from common.report_text import scan_report_text
+
 
 report_date = date.today().strftime("%d %b %Y")
 
 # ---------- Engagement scope ----------
 
-MODULE_LEAVE = "LEAVE"   # Leave & Entitlement Leakage findings + exposure section
+MODULE_LEAVE = "LEAVE"   # Leave & Entitlement Leakage findings
 MODULE_RKEG = "RKEG"     # Evidence gaps summary
 MODULE_TERM = "TERM"     # Termination Exposure severity summary
-MODULE_LSL  = "LSL"      # (if/when you add LSL sections to this report)
+MODULE_LSL  = "LSL"      # Long Service Leave Exposure
 
 # Canonical CRC module order (used everywhere in reporting)
 MODULE_ORDER = [MODULE_LEAVE, MODULE_LSL, MODULE_TERM, MODULE_RKEG]
@@ -52,32 +52,9 @@ TERM_FINDINGS_CSV = MODULES_DIR / "term_findings.csv"
 LSL_FINDINGS_CSV = MODULES_DIR / "lsl_findings.csv"
 LSL_SUMMARY_BY_SEVERITY_CSV = MODULES_DIR / "lsl_summary_by_severity.csv"  # if you have / add it
 
-REPORT_MD_PATH = OUTPUTS_DIR / "report.md"
+EXEC_PACK_MD_PATH = OUTPUTS_DIR / "crc_executive_pack.md"
 
-
-def _module_ran(module: str) -> bool:
-    """
-    Returns True if the module has produced outputs we can render.
-    Keeps the report clean (no blank tables / no '0' sections).
-    """
-    if module == MODULE_LEAVE:
-        return LEAVE_FINDINGS_CSV.exists() or LEAKAGE_REPORT_CSV.exists()
-    if module == MODULE_RKEG:
-        return RKEG_SUMMARY_BY_SEVERITY_CSV.exists() or RKEG_FINDINGS_CSV.exists()
-    if module == MODULE_TERM:
-        return TERM_SUMMARY_BY_SEVERITY_CSV.exists() or TERM_FINDINGS_CSV.exists()
-    if module == MODULE_LSL:
-        return LSL_SUMMARY_BY_SEVERITY_CSV.exists() or LSL_FINDINGS_CSV.exists()
-    return False
-
-def normalise_modules(included_modules: set[str] | list[str] | None) -> set[str]:
-    return {m.strip().upper() for m in (included_modules or [])}
-
-def included_modules_in_order(included_modules: set[str] | list[str] | None) -> list[str]:
-    mods = normalise_modules(included_modules)
-    return [m for m in MODULE_ORDER if m in mods]
-
-# ---------- Data models ----------
+# ---------- Data models used by exec pack (leave findings) ----------
 
 @dataclass
 class Finding:
@@ -137,11 +114,13 @@ class ExposureRow:
         return cls(label=label, amount=amount_value)
 
 
-# ---------- CSV helpers ----------
+# ---------- CSV helpers (leave findings) ----------
 
 def load_csv(path: Path) -> List[Dict[str, str]]:
     if not path.exists():
         return []
+    import csv  # local import to avoid circular headaches elsewhere
+
     with path.open("r", newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         return list(reader)
@@ -160,6 +139,69 @@ def load_exposure_rows() -> List[ExposureRow]:
         if er is not None:
             exposure_rows.append(er)
     return exposure_rows
+
+
+# ---------- Review period helpers (leave) ----------
+
+def _parse_iso_date(s: str | None) -> Optional[date]:
+    """Parse a simple YYYY-MM-DD string into a date, or return None."""
+    if not s:
+        return None
+    s = s.strip()
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def _derive_review_period(findings: List[Finding]) -> str:
+    """
+    Derive a human-readable review period from the findings' as_of_date values.
+    Uses the earliest and latest valid dates found.
+    """
+    dates: List[date] = []
+    for f in findings:
+        d = _parse_iso_date(f.as_of_date)
+        if d is not None:
+            dates.append(d)
+
+    if not dates:
+        return "Period not specified"
+
+    start = min(dates)
+    end = max(dates)
+
+    if start == end:
+        return start.strftime("%d %b %Y")
+
+    return f"{start.strftime('%d %b %Y')} to {end.strftime('%d %b %Y')}"
+
+def _module_ran(module: str) -> bool:
+    """
+    Returns True if the module has produced outputs we can render.
+    Keeps the report clean (no blank tables / no '0' sections).
+    """
+    if module == MODULE_LEAVE:
+        return LEAVE_FINDINGS_CSV.exists() or LEAKAGE_REPORT_CSV.exists()
+    if module == MODULE_RKEG:
+        return RKEG_SUMMARY_BY_SEVERITY_CSV.exists() or RKEG_FINDINGS_CSV.exists()
+    if module == MODULE_TERM:
+        return TERM_SUMMARY_BY_SEVERITY_CSV.exists() or TERM_FINDINGS_CSV.exists()
+    if module == MODULE_LSL:
+        return LSL_SUMMARY_BY_SEVERITY_CSV.exists() or LSL_FINDINGS_CSV.exists()
+    return False
+
+
+def normalise_modules(included_modules: set[str] | list[str] | None) -> set[str]:
+    return {m.strip().upper() for m in (included_modules or [])}
+
+
+def included_modules_in_order(included_modules: set[str] | list[str] | None) -> list[str]:
+    mods = normalise_modules(included_modules)
+    return [m for m in MODULE_ORDER if m in mods]
+
 
 def build_interpretation_block_exec(included_modules: set[str]) -> str:
     mods = {m.strip().upper() for m in (included_modules or set())}
@@ -208,6 +250,7 @@ def build_interpretation_block_exec(included_modules: set[str]) -> str:
 
     return "\n".join(lines).strip()
 
+
 def load_rkeg_severity_counts() -> Dict[str, int]:
     """
     Load simple HIGH / MEDIUM / LOW counts for RKEG.
@@ -215,14 +258,11 @@ def load_rkeg_severity_counts() -> Dict[str, int]:
     First preference: outputs/modules/rkeg_summary_by_severity.csv
     Fallback:        outputs/modules/rkeg_findings.csv (count severity column)
     """
-    # Default all severities to zero
     counts: Dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
 
-    # --- 1) Try the summary_by_severity CSV ---
-    summary_rows = load_csv(RKEG_SUMMARY_BY_SEVERITY_CSV)
+    summary_rows = _load_csv(RKEG_SUMMARY_BY_SEVERITY_CSV)
     if summary_rows:
         sev_candidates = ["severity", "Severity"]
-        # 👇 this now includes 'finding_count'
         count_candidates = ["finding_count", "count", "Count", "n", "N", "value", "Value"]
 
         first = summary_rows[0]
@@ -241,12 +281,12 @@ def load_rkeg_severity_counts() -> Dict[str, int]:
                 if sev in counts:
                     counts[sev] += n
 
-            return counts  # we got usable data, no need to fall back
+            return counts
 
-    # --- 2) Fallback: count from rkeg_findings.csv ---
-    finding_rows = load_csv(RKEG_FINDINGS_CSV)
+    # fallback: count from findings
+    finding_rows = _load_csv(RKEG_FINDINGS_CSV)
     if not finding_rows:
-        return counts  # still all zeros, nothing we can do
+        return counts
 
     for r in finding_rows:
         sev = (r.get("severity") or r.get("Severity") or "").strip().upper()
@@ -255,10 +295,11 @@ def load_rkeg_severity_counts() -> Dict[str, int]:
 
     return counts
 
+
 def load_lsl_severity_counts() -> Dict[str, int]:
     counts: Dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
 
-    summary_rows = load_csv(LSL_SUMMARY_BY_SEVERITY_CSV)
+    summary_rows = _load_csv(LSL_SUMMARY_BY_SEVERITY_CSV)
     if summary_rows:
         sev_candidates = ["severity", "Severity"]
         count_candidates = ["finding_count", "count", "Count", "n", "N", "value", "Value"]
@@ -279,13 +320,14 @@ def load_lsl_severity_counts() -> Dict[str, int]:
             return counts
 
     # fallback: count from findings
-    finding_rows = load_csv(LSL_FINDINGS_CSV)
+    finding_rows = _load_csv(LSL_FINDINGS_CSV)
     for r in finding_rows:
         sev = (r.get("severity") or r.get("Severity") or "").strip().upper()
         if sev in counts:
             counts[sev] += 1
 
     return counts
+
 
 def load_term_severity_counts() -> Dict[str, int]:
     """
@@ -296,8 +338,7 @@ def load_term_severity_counts() -> Dict[str, int]:
     """
     counts: Dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
 
-    # --- 1) Try the summary_by_severity CSV ---
-    summary_rows = load_csv(TERM_SUMMARY_BY_SEVERITY_CSV)
+    summary_rows = _load_csv(TERM_SUMMARY_BY_SEVERITY_CSV)
     if summary_rows:
         sev_candidates = ["severity", "Severity"]
         count_candidates = ["finding_count", "count", "Count", "n", "N", "value", "Value"]
@@ -318,10 +359,9 @@ def load_term_severity_counts() -> Dict[str, int]:
                 if sev in counts:
                     counts[sev] += n
 
-            return counts  # we got usable data, no need to fall back
+            return counts
 
-    # --- 2) Fallback: count from term_findings.csv ---
-    finding_rows = load_csv(TERM_FINDINGS_CSV)
+    finding_rows = _load_csv(TERM_FINDINGS_CSV)
     if not finding_rows:
         return counts
 
@@ -332,56 +372,30 @@ def load_term_severity_counts() -> Dict[str, int]:
 
     return counts
 
-def sort_findings(findings: List[Finding]) -> List[Finding]:
+
+def _load_csv(path: Path) -> List[Dict[str, str]]:
+    """Tiny internal helper so we don't re-import csv + dataclasses here."""
+    if not path.exists():
+        return []
+    import csv  # local import to avoid unused top-level dependency
+
+    with path.open("r", newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
+
+
+def sort_findings(findings: List) -> List:
     """Sort findings by severity (HIGH→MEDIUM→LOW), then rule_code, then employee/date."""
     severity_rank = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
     return sorted(
         findings,
         key=lambda f: (
-            severity_rank.get(f.severity, 99),
-            f.rule_code or "",
-            f.employee_id or "",
-            f.as_of_date or "",
+            severity_rank.get(getattr(f, "severity", ""), 99),
+            getattr(f, "rule_code", "") or "",
+            getattr(f, "employee_id", "") or "",
+            getattr(f, "as_of_date", "") or "",
         ),
     )
-
-
-# ---------- Review period helpers ----------
-
-def _parse_iso_date(s: str | None) -> Optional[date]:
-    """Parse a simple YYYY-MM-DD string into a date, or return None."""
-    if not s:
-        return None
-    s = s.strip()
-    if not s:
-        return None
-    try:
-        return date.fromisoformat(s)
-    except ValueError:
-        return None
-
-
-def _derive_review_period(findings: List[Finding]) -> str:
-    """
-    Derive a human-readable review period from the findings' as_of_date values.
-    Uses the earliest and latest valid dates found.
-    """
-    dates: List[date] = []
-    for f in findings:
-        d = _parse_iso_date(f.as_of_date)
-        if d is not None:
-            dates.append(d)
-
-    if not dates:
-        return "Period not specified"
-
-    start = min(dates)
-    end = max(dates)
-
-    if start == end:
-        return start.strftime("%d %b %Y")
-
-    return f"{start.strftime('%d %b %Y')} to {end.strftime('%d %b %Y')}"
 
 
 # ---------- Markdown section builders ----------
@@ -398,8 +412,8 @@ def build_header(report_title: str, organisation_name: str, review_period: str) 
 ---
 """
 
+
 def _build_report_title(modules: set[str]) -> str:
-    # You can refine naming later; keep it simple and defensible for now.
     if modules == {MODULE_LSL}:
         return "Long Service Leave Exposure Review"
     if modules == {MODULE_TERM}:
@@ -409,26 +423,20 @@ def _build_report_title(modules: set[str]) -> str:
     if MODULE_LEAVE in modules and len(modules) == 1:
         return "Leave & Entitlement Leakage Review"
 
-    # Multi-module
     return "Payroll Risk & Evidence Review"
 
 
 def build_executive_summary(
     included_modules: set[str],
-    leave_findings: List[Finding],
+    leave_findings: List,
     rkeg_counts: Dict[str, int],
     term_counts: Dict[str, int] | None = None,
     lsl_counts: Dict[str, int] | None = None,
 ) -> str:
-    """
-    Executive-level overview across all included modules.
-    """
-
     # ---- Leave totals ----
-    leave_total = len(leave_findings)
-    leave_high = sum(1 for f in leave_findings if f.severity == "HIGH")
-    leave_med = sum(1 for f in leave_findings if f.severity == "MEDIUM")
-    leave_low = sum(1 for f in leave_findings if f.severity == "LOW")
+    leave_high = sum(1 for f in leave_findings if getattr(f, "severity", "") == "HIGH")
+    leave_med = sum(1 for f in leave_findings if getattr(f, "severity", "") == "MEDIUM")
+    leave_low = sum(1 for f in leave_findings if getattr(f, "severity", "") == "LOW")
 
     # ---- RKEG totals ----
     rkeg_high = rkeg_counts.get("HIGH", 0)
@@ -460,7 +468,6 @@ def build_executive_summary(
     else:
         module_block = "- None"
 
-    # ---- Dynamic risk summary block ----
     risk_lines = []
 
     if MODULE_LEAVE in included_modules:
@@ -512,41 +519,58 @@ This report is intended for:
 - Risk and compliance personnel responsible for payroll governance and evidential integrity
 """
 
+
 def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -> str:
+    """
+    Build the shared Scope & Methodology section for the EXEC pack.
+
+    - The parent heading "3. Scope & Methodology" is handled by ReportStructure.
+    - This function renders:
+        * A short intro + list of included modules
+        * One 3.x subsection per module actually included (LEAVE, LSL, TERM, RKEG)
+        * A fallback message if no modules are in scope
+    """
     # Normalise to avoid case/whitespace mismatches
     mods = normalise_modules(included_modules)
     subsection_no = 1
 
     ordered = included_modules_in_order(mods)
-    included_list = ", ".join(MODULE_LABELS[m] for m in ordered) or "None"
 
     lines: List[str] = []
     lines.append("Scope & Methodology")
     lines.append("")
     lines.append("**Modules included in this engagement:**")
     lines.append("")
+
     for m in ordered:
         lines.append(f"- {MODULE_LABELS[m]}")
+    if not ordered:
+        lines.append("- None specified")
     lines.append("")
     lines.append("---")
     lines.append("")
-    
 
+    # 1️⃣ LEAVE
     if MODULE_LEAVE in mods:
         lines.append(f"### 3.{subsection_no} **Leave & Entitlement Leakage – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
         lines.append(
-            "The Leave & Entitlement Leakage review identifies potential anomalies and risk indicators in leave balances, accruals and leave usage based on the data provided."
+            "The Leave & Entitlement Leakage review identifies potential anomalies and risk indicators "
+            "in leave balances, accruals and leave usage based on the data provided."
         )
         lines.append("")
         lines.append(
-            "The purpose of this review is to highlight records that may warrant follow-up, such as negative balances, unexpected accrual patterns, mismatches between leave activity and employee status, or inconsistencies between leave movement data and balance snapshots."
+            "The purpose of this review is to highlight records that may warrant follow-up, such as negative "
+            "balances, unexpected accrual patterns, mismatches between leave activity and employee status, or "
+            "inconsistencies between leave movement data and balance snapshots."
         )
         lines.append("")
         lines.append(
-            "This review is designed to support payroll and HR teams in prioritising validation and remediation effort. Findings are risk signals only and do not, on their own, confirm non-compliance, underpayment, or an entitlement error."
+            "This review is designed to support payroll and HR teams in prioritising validation and remediation "
+            "effort. Findings are risk signals only and do not, on their own, confirm non-compliance, "
+            "underpayment, or an entitlement error."
         )
         lines.append("")
         lines.append("**Data reviewed**")
@@ -561,7 +585,8 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         lines.append("- rule-based detection of unusual leave balance and movement patterns")
         lines.append("- identification of negative balances and unexpected accrual behaviour")
         lines.append(
-            "- consistency checks between employee status and leave activity (for example, terminated employees with ongoing leave movements)"
+            "- consistency checks between employee status and leave activity "
+            "(for example, terminated employees with ongoing leave movements)"
         )
         lines.append("- cross-checks between leave movement data and balance snapshot fields where available")
         lines.append("")
@@ -575,7 +600,8 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         lines.append("- assert contraventions of legislation or confirm non-compliance.")
         lines.append("")
         lines.append(
-            "Where exposure estimates are included, they are indicative only and must be validated before remediation or accounting decisions are made."
+            "Where exposure estimates are included, they are indicative only and must be validated before "
+            "remediation or accounting decisions are made."
         )
         lines.append("")
         lines.append("---")
@@ -589,14 +615,16 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         lines.append("**Scope**")
         lines.append("")
         lines.append(
-            "The Long Service Leave (LSL) Exposure review identifies risk indicators in LSL balance and service-related data "
-            "that may warrant further validation. The purpose of this review is to highlight records that appear inconsistent, "
-            "incomplete, or difficult to substantiate based on the data provided."
+            "The Long Service Leave (LSL) Exposure review identifies risk indicators in LSL balance and "
+            "service-related data that may warrant further validation. The purpose of this review is to "
+            "highlight records that appear inconsistent, incomplete, or difficult to substantiate based on "
+            "the data provided."
         )
         lines.append("")
         lines.append(
-            "This review is designed to support payroll, HR and finance teams in prioritising follow-up effort. Findings are "
-            "risk signals only and do not, on their own, confirm an entitlement error, underpayment, or non-compliance."
+            "This review is designed to support payroll, HR and finance teams in prioritising follow-up effort. "
+            "Findings are risk signals only and do not, on their own, confirm an entitlement error, "
+            "underpayment, or non-compliance."
         )
         lines.append("")
         lines.append("**Data reviewed**")
@@ -622,24 +650,30 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         lines.append("- assert contraventions of legislation or confirm non-compliance.")
         lines.append("")
         lines.append(
-            "Where any exposure estimates or balance concerns are inferred, they are indicative only and must be validated "
-            "before remediation or accounting decisions are made."
+            "Where any exposure estimates or balance concerns are inferred, they are indicative only and must be "
+            "validated before remediation or accounting decisions are made."
         )
         lines.append("")
         lines.append("---")
         lines.append("")
         subsection_no += 1
 
+    # 3️⃣ TERM
     if MODULE_TERM in mods:
         lines.append(f"### 3.{subsection_no} **Termination Exposure – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
         lines.append(
-            "The Termination Exposure review assesses whether termination events recorded in payroll and related employment data are sufficiently complete, timely, and traceable to support the organisation’s ability to evidence termination-related payroll decisions if reviewed by auditors or regulators."
+            "The Termination Exposure review assesses whether termination events recorded in payroll and "
+            "related employment data are sufficiently complete, timely, and traceable to support the "
+            "organisation’s ability to evidence termination-related payroll decisions if reviewed by "
+            "auditors or regulators."
         )
         lines.append("")
-        lines.append("This review focuses on process and evidential integrity, not on the correctness of termination payments.")
+        lines.append(
+            "This review focuses on process and evidential integrity, not on the correctness of termination payments."
+        )
         lines.append("")
         lines.append("Specifically, the review considers whether:")
         lines.append("")
@@ -663,11 +697,15 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         lines.append("**Methodology**")
         lines.append("")
         lines.append(
-            "The review applies a series of rule-based checks to payroll and related employment data to identify termination events that exhibit characteristics commonly associated with audit, regulatory, or dispute risk."
+            "The review applies a series of rule-based checks to payroll and related employment data to "
+            "identify termination events that exhibit characteristics commonly associated with audit, "
+            "regulatory, or dispute risk."
         )
         lines.append("")
         lines.append(
-            "Each finding is assigned a severity based on evidential impact, reflecting how materially the issue could impair the organisation’s ability to explain and support termination-related payroll decisions if reviewed."
+            "Each finding is assigned a severity based on evidential impact, reflecting how materially the "
+            "issue could impair the organisation’s ability to explain and support termination-related payroll "
+            "decisions if reviewed."
         )
         lines.append("")
         lines.append("Severity does not represent:")
@@ -680,21 +718,28 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         lines.append("")
         subsection_no += 1
 
+    # 4️⃣ RKEG
     if MODULE_RKEG in mods:
         lines.append(f"### 3.{subsection_no} **Record-Keeping & Evidence Gaps (RKEG) – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
         lines.append(
-            "The Record-Keeping & Evidence Gaps (RKEG) review assesses whether payroll-related records are sufficiently complete, consistent and traceable to support the organisation’s ability to evidence payroll decisions if reviewed by auditors or regulators."
+            "The Record-Keeping & Evidence Gaps (RKEG) review assesses whether payroll-related records are "
+            "sufficiently complete, consistent and traceable to support the organisation’s ability to evidence "
+            "payroll decisions if reviewed by auditors or regulators."
         )
         lines.append("")
         lines.append(
-            "RKEG focuses on evidential strength, not on determining whether payroll outcomes are correct or incorrect. Findings highlight where records may be incomplete, inconsistent, or difficult to substantiate if challenged."
+            "RKEG focuses on evidential strength, not on determining whether payroll outcomes are correct or "
+            "incorrect. Findings highlight where records may be incomplete, inconsistent, or difficult to "
+            "substantiate if challenged."
         )
         lines.append("")
         lines.append(
-            "This review is intended to support risk-aware payroll operations by identifying evidence weaknesses that can increase audit effort, increase dispute risk, or reduce the organisation’s ability to confidently explain pay decisions."
+            "This review is intended to support risk-aware payroll operations by identifying evidence weaknesses "
+            "that can increase audit effort, increase dispute risk, or reduce the organisation’s ability to "
+            "confidently explain pay decisions."
         )
         lines.append("")
         lines.append("**Data reviewed**")
@@ -707,7 +752,8 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         lines.append("")
         lines.append("- completeness checks for key employee master fields required for traceability and defensibility")
         lines.append(
-            "- identification of orphan or untraceable pay events (for example, pay events with missing or inconsistent identifiers)"
+            "- identification of orphan or untraceable pay events (for example, pay events with missing or "
+            "inconsistent identifiers)"
         )
         lines.append("- consistency checks across employee status and payroll activity where possible")
         lines.append("- identification of gaps that may require manual reconstruction to support an audit trail")
@@ -722,15 +768,15 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         lines.append("- assert contraventions of legislation or confirm non-compliance.")
         lines.append("")
         lines.append(
-            "RKEG findings should be interpreted as evidential risk indicators. Addressing them improves defensibility and reduces audit effort, but does not necessarily imply a payroll outcome is incorrect."
+            "RKEG findings should be interpreted as evidential risk indicators. Addressing them improves "
+            "defensibility and reduces audit effort, but does not necessarily imply a payroll outcome is incorrect."
         )
         lines.append("")
         lines.append("---")
         lines.append("")
         subsection_no += 1
 
-
-    # Only show this if mods is genuinely empty
+    # If somehow nothing was in scope
     if not mods:
         lines.append("No scoped modules were included in this run.")
         lines.append("")
@@ -738,6 +784,7 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         lines.append("")
 
     return "\n".join(lines)
+
 
 def build_data_sources_section(included_modules: set[str] | list[str] | None) -> str:
     lines: List[str] = []
@@ -747,7 +794,6 @@ def build_data_sources_section(included_modules: set[str] | list[str] | None) ->
     )
     lines.append("")
 
-        # Only list outputs relevant to what was actually included (in canonical module order)
     mods = normalise_modules(included_modules)
     for m in included_modules_in_order(mods):
 
@@ -773,7 +819,6 @@ def build_data_sources_section(included_modules: set[str] | list[str] | None) ->
             if RKEG_FINDINGS_CSV.exists():
                 lines.append(f"- `{RKEG_FINDINGS_CSV.relative_to(OUTPUTS_DIR)}`  ")
 
-
     lines.append("")
     lines.append(
         "These outputs were produced by rule-based checks over payroll and HR CSV extracts supplied by the organisation for the review period."
@@ -784,11 +829,8 @@ def build_data_sources_section(included_modules: set[str] | list[str] | None) ->
 
     return "\n".join(lines)
 
-def build_rkeg_summary(rkeg_counts: Dict[str, int]) -> str:
-    """
-    RKEG summary section content (no headings / no numbering).
-    """
 
+def build_rkeg_summary(rkeg_counts: Dict[str, int]) -> str:
     if not any(rkeg_counts.values()):
         return ""
 
@@ -799,7 +841,7 @@ As part of this review, a Record-Keeping & Evidence Gaps (RKEG) assessment was p
 
 The RKEG assessment focuses on evidential strength only. It does not determine whether payroll outcomes are correct or incorrect, and does not interpret awards, enterprise agreements or employment contracts.
 
-The table below summarises the number of record-keeping and evidence gaps identified by severity. Counts reflect evidential risk only and do not represent confirmed breaches or quantified financial exposure.
+The table below summarises the number of record-keeping and evidence gaps identified by severity. Counts reflect **evidential risk** only and do not represent confirmed non-compliance or quantified financial exposure.
 
 {severity_overview}
 """
@@ -822,13 +864,14 @@ def build_lsl_severity_summary() -> str:
 ---
 """
 
+
 def build_term_severity_summary() -> str:
     term_counts = load_term_severity_counts()
 
     if not any(term_counts.values()):
         return ""
 
-    return f"""Where a Termination Exposure review was performed, the table below summarises the number of termination-related evidential issues identified by severity. Counts reflect **evidential risk only** and do not represent confirmed breaches, quantified exposure, or remediation priority.
+    return f"""Where a Termination Exposure review was performed, the table below summarises the number of termination-related evidential issues identified by severity. Counts reflect **evidential risk** only and do not represent confirmed non-compliance or quantified financial exposure, or remediation priority.
 
 | Severity | Count | Description |
 |---------|:-------------:|---------------------------|
@@ -840,11 +883,11 @@ def build_term_severity_summary() -> str:
 ---
 """
 
-def build_key_findings_overview(findings: List[Finding]) -> str:
-    """Exec summary: Leave/LSL severity overview (no per-rule breakdown)."""
-    high = sum(1 for f in findings if f.severity == "HIGH")
-    med = sum(1 for f in findings if f.severity == "MEDIUM")
-    low = sum(1 for f in findings if f.severity == "LOW")
+
+def build_key_findings_overview(findings: List) -> str:
+    high = sum(1 for f in findings if getattr(f, "severity", "") == "HIGH")
+    med = sum(1 for f in findings if getattr(f, "severity", "") == "MEDIUM")
+    low = sum(1 for f in findings if getattr(f, "severity", "") == "LOW")
 
     high_def = SEVERITY_BY_CODE.get("HIGH")
     med_def = SEVERITY_BY_CODE.get("MEDIUM")
@@ -865,103 +908,9 @@ def build_key_findings_overview(findings: List[Finding]) -> str:
 ---
 """
 
-def build_detailed_findings(findings: List[Finding]) -> str:
-    if not findings:
-        return """No findings were identified for the supplied data.
-
----
-
-"""
-
-    lines: List[str] = []
-
-    lines.append(
-        "This section sets out detailed findings for **leave and entitlement leakage** only. "
-        "Record-Keeping & Evidence Gaps (RKEG) and Termination Exposure findings are available "
-        "in machine-readable form (see Appendix C) and are intended to support operational review, "
-        "sampling and remediation planning rather than narrative reporting."
-    )
-    lines.append("")
-    lines.append(
-        "Each leave/LSL finding below follows a consistent **Finding → Evidence → Impact → Recommended Action** pattern."
-    )
-    lines.append("")
-
-    for idx, f in enumerate(findings, start=1):
-        lines.append(f"### Finding {idx}: {f.rule_code or 'UNSPECIFIED RULE'}")
-        lines.append(f"**Severity:** {f.severity or 'UNSPECIFIED'}")
-        lines.append("")
-        lines.append("**Finding**")
-        lines.append(f"{f.message or 'No description provided.'}")
-        lines.append("")
-        lines.append("**Evidence**")
-        lines.append("")
-
-        evidence_bits = []
-        if f.employee_id:
-            evidence_bits.append(f"Employee ID: `{f.employee_id}`")
-        if f.leave_type:
-            evidence_bits.append(f"Leave type: `{f.leave_type}`")
-        if f.as_of_date:
-            evidence_bits.append(f"As at: `{f.as_of_date}`")
-
-        if evidence_bits:
-            lines.append("- " + "\n- ".join(evidence_bits))
-        else:
-            lines.append("- Not specified in the source data.")
-        lines.append("")
-        lines.append("**Impact / Risk**")
-        lines.append(
-            "Potential leave or entitlement imbalance and/or record-keeping weakness. "
-            "The actual impact will depend on the underlying award or agreement, "
-            "actual pay outcomes, and the period over which the issue has occurred."
-        )
-        lines.append("")
-        lines.append("**Recommended Action**")
-        lines.append("")
-
-        lines.append(
-            "- Validate this finding against source payroll records and employee entitlements."
-        )
-        lines.append(
-            "- Correct any confirmed configuration, data or process issues."
-        )
-        lines.append(
-            "- Consider remediation where underpayments are confirmed."
-        )
-
-        lines.append("")
-
-    lines.append("---")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def build_financial_exposure_section(exposure_rows: List[ExposureRow]) -> str:
-    if not exposure_rows:
-        return """No exposure estimates were available from the current data extract. If required, leakage estimates can be added to this section in future runs.
-
----
-"""
-
-    total = sum(r.amount for r in exposure_rows)
-
-    lines = [
-        f"- Number of findings with exposure estimates: {len(exposure_rows)}",
-        f"- Indicative total exposure (all severities): {total:,.2f}",
-        "",
-        "> These figures are indicative only and rely on the provided data and simplifying assumptions. "
-        "They should be validated before any remediation or accounting decisions are made.",
-        "",
-        "---",
-        "",
-    ]
-
-    return "\n".join(lines)
-
 
 def build_limitations() -> str:
-    return f"""This review is subject to the following limitations:
+    return """This review is subject to the following limitations:
 
 
 - Calculations assume the underlying pay rates, loadings and multipliers are correct in the source systems.
@@ -974,7 +923,7 @@ def build_limitations() -> str:
 
 
 def build_next_steps() -> str:
-    return f"""Recommended Next Steps
+    return """Recommended Next Steps
 
 1. Prioritise validation of **High** severity findings.
 2. Review affected employee records and reconstruct balances where necessary.
@@ -987,20 +936,10 @@ def build_next_steps() -> str:
 
 
 def build_appendices(included_modules: set[str]) -> str:
-    """
-    Build appendices dynamically (content-only).
-
-    Numbering is controlled by the ReportStructure orchestrator.
-    Inside this section we use lettered appendix headings (A/B/C) to keep structure clear
-    without introducing conflicting numeric section numbers.
-    """
     mods = {m.strip().upper() for m in (included_modules or set())}
 
     lines: List[str] = []
 
-    # -------------------------
-    # Appendix A – Rule Definitions
-    # -------------------------
     lines.append("### Appendix A – Rule Definitions")
     lines.append("")
     lines.append("This review used a set of automated rules to flag evidential and process risk indicators.")
@@ -1046,15 +985,11 @@ def build_appendices(included_modules: set[str]) -> str:
     lines.append("---")
     lines.append("")
 
-    # -------------------------
-    # Appendix B – Data Fields Used
-    # -------------------------
     lines.append("### Appendix B – Data Fields Used")
     lines.append("")
     lines.append("Key data fields referenced in this engagement include:")
     lines.append("")
 
-    # ---- Leave / LSL ----
     if MODULE_LEAVE in mods:
         lines.append("**Leave & Entitlement Leakage**")
         lines.append("")
@@ -1083,7 +1018,6 @@ def build_appendices(included_modules: set[str]) -> str:
         lines.append("- `next_action`")
         lines.append("")
 
-    # ---- Termination ----
     if MODULE_TERM in mods:
         lines.append("**Termination Exposure (TERM)**")
         lines.append("")
@@ -1099,7 +1033,6 @@ def build_appendices(included_modules: set[str]) -> str:
         lines.append("- `next_action`")
         lines.append("")
 
-    # ---- RKEG ----
     if MODULE_RKEG in mods:
         lines.append("**Record-Keeping & Evidence Gaps (RKEG)**")
         lines.append("")
@@ -1114,13 +1047,9 @@ def build_appendices(included_modules: set[str]) -> str:
         lines.append("- `finding_id`")
         lines.append("- `next_action`")
         lines.append("")
-
         lines.append("---")
         lines.append("")
 
-    # -------------------------
-    # Appendix C – Machine-readable outputs
-    # -------------------------
     lines.append("### Appendix C – Machine-readable outputs")
     lines.append("")
     lines.append("Complete machine-readable outputs are available in the following files:")
@@ -1132,15 +1061,13 @@ def build_appendices(included_modules: set[str]) -> str:
 
     if MODULE_LSL in mods:
         lines.append("- `outputs/modules/lsl_findings.csv`")
-        # optional summary if you have it
-        if "LSL_SUMMARY_BY_SEVERITY_CSV" in globals() and LSL_SUMMARY_BY_SEVERITY_CSV.exists():
+        if LSL_SUMMARY_BY_SEVERITY_CSV.exists():
             lines.append("- `outputs/modules/lsl_summary_by_severity.csv`")
 
     if MODULE_TERM in mods:
         lines.append("- `outputs/modules/term_findings.csv`")
         if TERM_SUMMARY_BY_SEVERITY_CSV.exists():
             lines.append("- `outputs/modules/term_summary_by_severity.csv`")
-        # optional term summary table
         term_summary_path = OUTPUTS_DIR / "modules" / "term_summary.csv"
         if term_summary_path.exists():
             lines.append("- `outputs/modules/term_summary.csv`")
@@ -1160,45 +1087,39 @@ def build_appendices(included_modules: set[str]) -> str:
 
     return "\n".join(lines)
 
+
 # ---------- Orchestrator ----------
 
 def generate_leave_leakage_report(
     organisation_name: str = "Organisation not specified",
     review_period: str | None = None,
     modules: Optional[Iterable[str]] = None,
-    report_type: str = "EXEC",  # "EXEC" or "MODULE"
 ) -> Path:
     """
-    Generate outputs/report.md.
+    Generate outputs/crc_executive_pack.md.
 
     modules controls which sections are included.
     Sections are also suppressed if their underlying module outputs do not exist.
     """
+    
     requested: set[str] = {m.strip().upper() for m in (modules or DEFAULT_MODULES)}
 
     # Only include modules that actually ran (keeps report clean)
     included: set[str] = {m for m in requested if _module_ran(m)}
 
-    report_type = (report_type or "EXEC").strip().upper()
-    if report_type not in {"EXEC", "MODULE"}:
-        raise ValueError("report_type must be 'EXEC' or 'MODULE'")
-
     # If nothing ran, fall back to leave title but show a clean "no data" report.
     report_title: str = _build_report_title(included or requested)
 
     # Load data only if relevant
-    findings: List[Finding] = load_findings() if MODULE_LEAVE in included else []
+    findings = load_findings() if MODULE_LEAVE in included else []
     sorted_findings = sort_findings(findings) if findings else []
-    exposure_rows = load_exposure_rows() if MODULE_LEAVE in included else []
     rkeg_counts = load_rkeg_severity_counts() if MODULE_RKEG in included else {}
 
     if review_period is None:
-        # Derive from leave findings only when leave is included; otherwise use generic.
         review_period = _derive_review_period(sorted_findings) if sorted_findings else "Period not specified"
 
     parts: List[str] = []
-    final_review_period: str = review_period if review_period is not None else "Period not specified"
-    parts.append(build_header(report_title, organisation_name, final_review_period))
+    parts.append(build_header(report_title, organisation_name, review_period))
 
     structure = ReportStructure()
 
@@ -1216,13 +1137,12 @@ def generate_leave_leakage_report(
     structure.add("Data Sources", 1, lambda: build_data_sources_section(included))
     structure.add("Scope & Methodology", 1, lambda: build_scope_and_methodology(included))
 
-        # ---------------- Module Summary Overview (Exec report) ----------------
+    # ---------------- Module Summary Overview (Exec report) ----------------
     summary_modules = {MODULE_LEAVE, MODULE_LSL, MODULE_TERM, MODULE_RKEG}
 
     if any(m in included for m in summary_modules):
         structure.add("Module Summary Overview", 1, lambda: "")
 
-        # 4.1 LEAVE (flagship summary)
         if MODULE_LEAVE in included:
             structure.add(
                 "Leave & Entitlement Leakage (LEAVE) – Summary Overview",
@@ -1230,7 +1150,6 @@ def generate_leave_leakage_report(
                 lambda: build_key_findings_overview(sorted_findings),
             )
 
-        # 4.2 LSL
         if MODULE_LSL in included:
             structure.add(
                 "Long Service Leave (LSL) Exposure – Severity Overview",
@@ -1238,7 +1157,6 @@ def generate_leave_leakage_report(
                 lambda: build_lsl_severity_summary(),
             )
 
-        # 4.3 TERM
         if MODULE_TERM in included:
             structure.add(
                 "Termination Exposure – Severity Overview",
@@ -1246,7 +1164,6 @@ def generate_leave_leakage_report(
                 lambda: build_term_severity_summary(),
             )
 
-        # 4.4 RKEG
         if MODULE_RKEG in included:
             structure.add(
                 "Record-Keeping & Evidence Gaps (RKEG) – Severity Overview",
@@ -1254,27 +1171,20 @@ def generate_leave_leakage_report(
                 lambda: build_rkeg_summary(rkeg_counts),
             )
 
-        # 4.5 Interpretation (shared across modules)
         if any(m in included for m in {MODULE_LEAVE, MODULE_LSL, MODULE_TERM, MODULE_RKEG}):
             structure.add(
-            "How to interpret findings",
-            2,
-            lambda: build_interpretation_block_exec(included),
-        )
+                "How to interpret findings",
+                2,
+                lambda: build_interpretation_block_exec(included),
+            )
 
-    # ---------------- Leave evidence sections (MODULE report only) ----------------
-    if MODULE_LEAVE in included and report_type == "MODULE":
-        structure.add("Detailed Findings", 1, lambda: build_detailed_findings(sorted_findings))
-        structure.add("Financial Exposure (Indicative)", 1, lambda: build_financial_exposure_section(exposure_rows))
+    # No detailed leave sections here anymore – those now live in leave_report_md.py
 
-    # ---------------- Trailing sections ----------------
     structure.add("Limitations & Assumptions", 1, lambda: build_limitations())
     structure.add("Recommended Next Steps", 1, lambda: build_next_steps())
     structure.add("Appendices", 1, lambda: build_appendices(included_modules=included))
 
-    # ---------------- Render + write ----------------
     parts.append(structure.render_markdown())
-
     final_md = "\n".join(parts)
 
     scan_result = scan_report_text(final_md)
@@ -1287,9 +1197,9 @@ def generate_leave_leakage_report(
         print("ℹ Soft-flag terms detected in report:")
         print(sorted(set(scan_result["soft"])))
 
-        REPORT_MD_PATH.parent.mkdir(parents=True, exist_ok=True)
-        REPORT_MD_PATH.write_text(final_md, encoding="utf-8")
-        return REPORT_MD_PATH
+    EXEC_PACK_MD_PATH.parent.mkdir(parents=True, exist_ok=True)
+    EXEC_PACK_MD_PATH.write_text(final_md, encoding="utf-8")
+    return EXEC_PACK_MD_PATH
 
 
 if __name__ == "__main__":
