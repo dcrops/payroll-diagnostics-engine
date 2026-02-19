@@ -19,9 +19,6 @@ COMMANDS = [
     # Termination Exposure module
     ([PYTHON, "-m", "termination_exposure.run"], ROOT),
 
-    # Combined reporting (uses outputs from the modules above)
-    ([PYTHON, "-m", "reporting.run"], ROOT),
-
     # Public holiday batch - run from the address-holidays-app repo
     ([PYTHON, "-m", "src.address_holidays.run"], PH_APP_DIR),
 ]

@@ -14,11 +14,14 @@ class Finding:
     """
     Canonical RKEG finding.
 
-    Fields deliberately match the columns used in combined_findings.csv:
+    Fields are designed to align with the CRC module reporting schema
+    used across Executive and standalone module reports:
+
     employee_id, leave_type, as_of_date, rule_code, severity, message,
     diff_units, evidence, finding_id, next_action.
 
-    source_module is added later by combine_findings.py.
+    The schema is intentionally consistent across modules to support
+    clean aggregation, severity summaries, and defensible reporting.
     """
 
     employee_id: str | None
@@ -47,7 +50,8 @@ def write_findings_csv(findings: Iterable[Finding], path: Path) -> None:
     df = findings_to_dataframe(findings)
 
     if df.empty:
-        # keep the exact same columns + order as combined_findings.csv (minus source_module)
+        # Maintain canonical CRC finding column order for consistent
+        # module-level reporting and downstream severity summaries.
         df = pd.DataFrame(
             columns=[
                 "employee_id",
