@@ -6,6 +6,14 @@ from datetime import date
 from pathlib import Path
 from typing import List, Dict, Optional
 
+from reporting.leave_common import (
+    Finding,
+    ExposureRow,
+    load_leave_findings,
+    load_leave_exposure_rows,
+    derive_leave_review_period,
+)
+
 from reporting.structure import ReportStructure
 from reporting.exec_pack_md import (
     MODULE_LEAVE,
@@ -26,129 +34,6 @@ from reporting.exec_pack_md import (
 LEAVE_REPORT_MD_PATH = OUTPUTS_DIR / "leave_report.md"
 
 
-# ---------- Data models ----------
-
-@dataclass
-class Finding:
-    rule_code: str
-    severity: str
-    employee_id: str
-    leave_type: str
-    as_of_date: str
-    message: str
-
-    @classmethod
-    def from_row(cls, row: Dict[str, str]) -> "Finding":
-        # Adjust these field names if your CSV uses slightly different headers
-        return cls(
-            rule_code=row.get("rule_code") or row.get("rule_id") or "",
-            severity=(row.get("severity", "") or "").upper(),
-            employee_id=row.get("employee_id", ""),
-            leave_type=row.get("leave_type", ""),
-            as_of_date=row.get("as_of_date", ""),
-            message=row.get("message") or row.get("description") or "",
-        )
-
-
-@dataclass
-class ExposureRow:
-    label: str
-    amount: float
-
-    @classmethod
-    def from_row(cls, row: Dict[str, str]) -> Optional["ExposureRow"]:
-        """
-        Try a few common column names for exposure amounts.
-        If none are present, return None and the exposure section
-        will fall back to a 'not available' message.
-        """
-        label = row.get("label") or row.get("rule_code") or row.get("bucket") or ""
-        amount_field_candidates = [
-            "estimated_exposure",
-            "exposure_amount",
-            "leakage_amount",
-            "amount",
-            "value",
-        ]
-
-        amount_value: Optional[float] = None
-        for field in amount_field_candidates:
-            if field in row and row[field]:
-                try:
-                    amount_value = float(row[field])
-                    break
-                except ValueError:
-                    continue
-
-        if amount_value is None:
-            return None
-
-        return cls(label=label, amount=amount_value)
-
-
-# ---------- CSV helpers ----------
-
-def load_csv(path: Path) -> List[Dict[str, str]]:
-    if not path.exists():
-        return []
-    with path.open("r", newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        return list(reader)
-
-
-def load_findings() -> List[Finding]:
-    rows = load_csv(LEAVE_FINDINGS_CSV)
-    return [Finding.from_row(r) for r in rows]
-
-
-def load_exposure_rows() -> List[ExposureRow]:
-    rows = load_csv(LEAKAGE_REPORT_CSV)
-    exposure_rows: List[ExposureRow] = []
-    for r in rows:
-        er = ExposureRow.from_row(r)
-        if er is not None:
-            exposure_rows.append(er)
-    return exposure_rows
-
-
-# ---------- Review period helpers ----------
-
-def _parse_iso_date(s: str | None) -> Optional[date]:
-    """Parse a simple YYYY-MM-DD string into a date, or return None."""
-    if not s:
-        return None
-    s = s.strip()
-    if not s:
-        return None
-    try:
-        return date.fromisoformat(s)
-    except ValueError:
-        return None
-
-
-def _derive_review_period(findings: List[Finding]) -> str:
-    """
-    Derive a human-readable review period from the findings' as_of_date values.
-    Uses the earliest and latest valid dates found.
-    """
-    dates: List[date] = []
-    for f in findings:
-        d = _parse_iso_date(f.as_of_date)
-        if d is not None:
-            dates.append(d)
-
-    if not dates:
-        return "Period not specified"
-
-    start = min(dates)
-    end = max(dates)
-
-    if start == end:
-        return start.strftime("%d %b %Y")
-
-    return f"{start.strftime('%d %b %Y')} to {end.strftime('%d %b %Y')}"
-
-
 # ---------- Section builders specific to the LEAVE module report ----------
 
 def build_leave_module_summary(
@@ -158,8 +43,8 @@ def build_leave_module_summary(
     """
     Top-level Executive Summary for the leave-only module report.
 
-    Reuses the existing severity overview + exposure section to keep things consistent
-    with the exec pack, but written as a module-focused summary.
+    Provides narrative plus a concise severity snapshot. The full severity
+    table is presented in the Findings Overview section.
     """
     parts: List[str] = []
 
@@ -172,8 +57,22 @@ def build_leave_module_summary(
     )
     parts.append("")
 
-    # Severity snapshot (reuses shared helper)
-    parts.append(build_key_findings_overview(findings))
+    # Headline severity counts (table lives in Findings Overview)
+    high = sum(1 for f in findings if f.severity == "HIGH")
+    med = sum(1 for f in findings if f.severity == "MEDIUM")
+    low = sum(1 for f in findings if f.severity == "LOW")
+
+    parts.append("Across the dataset provided, the automated checks identified:")
+    parts.append("")
+    parts.append(f"- **High:** {high}")
+    parts.append(f"- **Medium:** {med}")
+    parts.append(f"- **Low:** {low}")
+    parts.append("")
+    parts.append(
+        "A detailed breakdown by severity is provided in the "
+        "**Findings Overview** section."
+    )
+    parts.append("")
 
     # Exposure (indicative)
     parts.append(build_financial_exposure_section(exposure_rows))
@@ -200,12 +99,16 @@ def generate_leave_report(
     """
     included = {MODULE_LEAVE}  # this is a LEAVE-only report
 
-    findings = load_findings()
+    findings = load_leave_findings()
     sorted_findings = sort_findings(findings) if findings else []
-    exposure_rows = load_exposure_rows()
+    exposure_rows = load_leave_exposure_rows()
 
     if review_period is None:
-        review_period = _derive_review_period(sorted_findings) if sorted_findings else "Period not specified"
+        review_period = (
+            derive_leave_review_period(sorted_findings)
+            if sorted_findings
+            else "Period not specified"
+        )
 
     parts: List[str] = []
     parts.append(

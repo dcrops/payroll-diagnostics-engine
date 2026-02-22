@@ -265,11 +265,11 @@ def build_lsl_executive_summary(findings: List[LSLFinding]) -> str:
 
 **Summary of findings**
 
-- High severity: {high} — likely LSL exposure or provision risk  
-- Medium severity: {med} — material inconsistency or configuration issue  
-- Low severity: {low} — data quality or minor process issue  
+- **High:** {high}
+- **Medium:** {med}
+- **Low:** {low}
 
-This report is intended to support payroll and finance teams in understanding LSL exposure, prioritising review efforts and informing internal discussions. It highlights areas requiring further investigation rather than providing definitive accounting or legal conclusions.
+A detailed breakdown by severity is provided in the **Key Findings Overview** section.
 
 ---
 """
@@ -497,7 +497,9 @@ def build_lsl_next_steps() -> str:
 
 
 def build_lsl_appendices() -> str:
-    return """## 9. Appendix A – Rule Definitions
+    return """## 9. Appendices
+
+### Appendix A – Rule Definitions
 
 This review used a set of automated rules to flag potential LSL exposure and imbalance. Examples include:
 
@@ -509,7 +511,7 @@ This review used a set of automated rules to flag potential LSL exposure and imb
 
 ---
 
-## 10. Appendix B – Data Fields Used
+### Appendix B – Data Fields Used
 
 Key fields used in this analysis include:
 
@@ -523,7 +525,7 @@ Key fields used in this analysis include:
 
 ---
 
-## 11. Appendix C – Full Findings Table
+### Appendix C – Full Findings Table
 
 A complete machine-readable version of the LSL findings is available in:
 
@@ -532,22 +534,15 @@ A complete machine-readable version of the LSL findings is available in:
 """
 
 
-# ---------- Orchestrator ----------
-
-from typing import Optional
-from datetime import date
-
-# ... keep the rest of the file as-is above ...
-
-
 def generate_lsl_exposure_report(
     organisation_name: str = "Organisation not specified",
     review_period: Optional[str] = None,
 ) -> Path:
     """Generate outputs/lsl_report.md for the LSL Exposure Review."""
     raw_findings = load_lsl_findings()
-    deduped_findings = dedupe_lsl_findings(raw_findings)
-    findings = sort_lsl_findings(deduped_findings)
+    # deduped_findings = dedupe_lsl_findings(raw_findings)
+    # findings = sort_lsl_findings(deduped_findings)
+    findings = sort_lsl_findings(raw_findings)
     exposure_rows = load_lsl_exposure_rows()
 
     # If not explicitly supplied, derive review period from the data

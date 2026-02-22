@@ -49,7 +49,7 @@ This review:
 - highlights areas likely to attract audit attention
 - assists with prioritisation of follow-up work
 
-It does **not** replace an audit, provide legal or accounting advice, or guarantee audit outcomes.
+It does **not** replace a formal audit, provide legal or accounting advice, or constitute any form of assurance regarding compliance or audit outcomes.
 
 ---
 

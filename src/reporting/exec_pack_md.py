@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable, List, Dict, Optional
 
@@ -193,6 +193,66 @@ def _module_ran(module: str) -> bool:
         return LSL_SUMMARY_BY_SEVERITY_CSV.exists() or LSL_FINDINGS_CSV.exists()
     return False
 
+
+from datetime import datetime
+
+def _derive_exec_review_period(included_modules: set[str]) -> str:
+    """
+    Derive a review period across all included modules by scanning
+    their findings CSVs for any column containing 'date'.
+
+    Returns min → max date if found, otherwise 'Period not specified'.
+    """
+    candidate_paths = []
+
+    if MODULE_LEAVE in included_modules:
+        candidate_paths.append(LEAVE_FINDINGS_CSV)
+
+    if MODULE_LSL in included_modules:
+        candidate_paths.append(LSL_FINDINGS_CSV)
+
+    if MODULE_TERM in included_modules:
+        candidate_paths.append(TERM_FINDINGS_CSV)
+
+    if MODULE_RKEG in included_modules:
+        candidate_paths.append(RKEG_FINDINGS_CSV)
+
+    all_dates: list[date] = []
+
+    for path in candidate_paths:
+        if not path.exists():
+            continue
+
+        rows = _load_csv(path)
+
+        for row in rows:
+            for col, raw in row.items():
+                if not col or "date" not in col.lower():
+                    continue
+
+                value = (raw or "").strip()
+                if not value:
+                    continue
+
+                # Try common formats
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+                    try:
+                        d = datetime.strptime(value, fmt).date()
+                        all_dates.append(d)
+                        break
+                    except ValueError:
+                        continue
+
+    if not all_dates:
+        return "Period not specified"
+
+    start = min(all_dates)
+    end = max(all_dates)
+
+    if start == end:
+        return start.strftime("%d %b %Y")
+
+    return f"{start.strftime('%d %b %Y')} to {end.strftime('%d %b %Y')}"
 
 def normalise_modules(included_modules: set[str] | list[str] | None) -> set[str]:
     return {m.strip().upper() for m in (included_modules or [])}
@@ -1116,7 +1176,7 @@ def generate_leave_leakage_report(
     rkeg_counts = load_rkeg_severity_counts() if MODULE_RKEG in included else {}
 
     if review_period is None:
-        review_period = _derive_review_period(sorted_findings) if sorted_findings else "Period not specified"
+        review_period = _derive_exec_review_period(included)
 
     parts: List[str] = []
     parts.append(build_header(report_title, organisation_name, review_period))

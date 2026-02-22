@@ -3,6 +3,8 @@ from pathlib import Path
 from markdown import markdown
 from shutil import copyfile
 
+from common.report_text import scan_report_text  # 🔹 NEW
+
 # Try to import WeasyPrint, but don't crash if it misbehaves (common on Windows).
 try:
     from weasyprint import HTML  # type: ignore[import-untyped]
@@ -51,11 +53,32 @@ def build_html_from_markdown(
 ) -> Path:
     """
     Convert the given Markdown file into a styled HTML file.
+
+    Centralised safety check:
+    - All reports are scanned for forbidden terms before rendering.
+    - HARD flags stop generation.
+    - SOFT flags are logged.
     """
     if not md_path.exists():
         raise FileNotFoundError(f"Markdown report not found: {md_path}")
 
     md_text = md_path.read_text(encoding="utf-8")
+
+    # 🔎 Forbidden-term scan on the raw markdown
+    scan_result = scan_report_text(md_text)
+
+    if scan_result.get("hard"):
+        print("❌ HARD forbidden terms detected in markdown:")
+        print(sorted(set(scan_result["hard"])))
+        raise ValueError(
+            f"Hard forbidden terms detected in {md_path.name}. "
+            "Fix the wording before rendering HTML/PDF."
+        )
+
+    if scan_result.get("soft"):
+        print("⚠ Soft-flag terms detected in markdown:")
+        print(sorted(set(scan_result["soft"])))
+
     # Use 'extra' + 'tables' so Markdown tables become proper <table> elements.
     content_html = markdown(md_text, extensions=["extra", "tables"])
 
@@ -77,6 +100,7 @@ def build_html_from_markdown(
     html_path.write_text(full_html, encoding="utf-8")
 
     return html_path
+
 
 def html_to_pdf(
     html_path: Path,
@@ -129,7 +153,7 @@ def build_html_and_pdf(
 # Convenience wrapper for the original leave-leakage report, if ever needed.
 def build_default_html_and_pdf() -> tuple[Path, Path | None]:
     return build_html_and_pdf(
-        md_path=EXEC_PACK_MD_PATH ,
+        md_path=EXEC_PACK_MD_PATH,
         html_path=EXEC_PACK_HTML_PATH,
         pdf_path=EXEC_PACK_PDF_PATH,
         page_title="Leave & Entitlement Leakage Review",
