@@ -7,7 +7,7 @@ from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from reporting.exec_pack_md import (
+from reporting.executive.exec_pack_md import (
     LEAVE_FINDINGS_CSV,
     LEAKAGE_REPORT_CSV,
 )

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
-report_date = date.today().strftime("%d %b %Y")
+MELBOURNE_TZ = ZoneInfo("Australia/Melbourne")
+report_date = datetime.now(MELBOURNE_TZ).strftime("%d %b %Y")
 
 # ---------- Paths ----------
 
@@ -29,9 +31,9 @@ def generate_post_audit_overview(
 **Organisation:** {organisation_name}  
 **Prepared as at:** {prepared_as_at}  
 
-> This Post-Audit Review is intended to support internal follow-up after an audit, regulatory review, or external assurance activity. It summarises payroll risk indicators based on the data provided but does not constitute legal, accounting, or industrial relations advice.
+> This Post-Audit Review provides structured guidance on interpreting the CRC Executive Pack and supporting module reports following an audit, regulatory review, or external assurance activity.
 
-> This review does not re-perform audit procedures or validate audit conclusions.
+> It summarises how automated risk indicators may align with, extend, or contextualise audit findings. This document does not re-perform audit procedures, validate audit conclusions, or provide legal, accounting, or industrial relations advice.
 
 ---
 
@@ -83,7 +85,7 @@ Recommended approach:
 1. Consider this review together with:
    - audit findings and recommendations
    - internal reports or management responses
-2. Use the Executive Summary and Module Severity Overviews to understand the distribution of residual risk indicators.
+2. Refer to the **CRC Executive Pack** for severity distributions and module-level findings.
 3. Compare risk indicators with audit findings to:
    - identify alignment (where indicators match known issues)
    - surface adjacent or similar risks not sampled in detail
@@ -110,8 +112,7 @@ This review draws together residual exposure signals identified across:
 - **Record-Keeping & Evidence Gaps (RKEG) Review**  
   (traceability, completeness and audit-readiness of payroll records)
 
-Severity distribution and thematic patterns are presented within the
-Executive Summary and Module Severity Overview sections.
+Detailed severity distributions and module-level findings are presented in the **CRC Executive Pack** and supporting module reports.
 Post-audit, these should be used to understand where risk indicators remain
 and where further follow-up may be required.
 
@@ -137,6 +138,8 @@ Potential use cases include:
 
 The presence of risk indicators does not by itself confirm non-compliance,
 but it may suggest areas where further analysis, sampling or remediation is appropriate.
+
+This review is intended to complement, not challenge or override, formal audit conclusions.
 
 ---
 
@@ -180,6 +183,8 @@ will be provided as a standalone artefact outside this CRC report pack.
 
 These reports should be retained alongside audit documentation and
 management responses as part of the organisation's payroll governance records.
+
+This Post-Audit Review should be used as a structured governance tool alongside audit documentation, management responses and remediation plans. The **CRC Executive Pack** remains the primary analytical artefact.
 
 ---
 

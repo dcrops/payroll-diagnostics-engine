@@ -3,10 +3,12 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Dict, List, Optional
 
-report_date = date.today().strftime("%d %b %Y")
+MELBOURNE_TZ = ZoneInfo("Australia/Melbourne")
+report_date = datetime.now(MELBOURNE_TZ).strftime("%d %b %Y")
 
 
 # ---------- Paths ----------

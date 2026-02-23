@@ -5,8 +5,8 @@ from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from reporting.structure import ReportStructure
-from reporting.exec_pack_md import (
+from reporting.core.structure import ReportStructure
+from reporting.executive.exec_pack_md import (
     MODULE_TERM,
     TERM_FINDINGS_CSV,
     OUTPUTS_DIR,
@@ -291,5 +291,5 @@ def generate_term_report(
 
 
 if __name__ == "__main__":
-    path = generate_term_report(organisation_name="Example Client Pty Ltd")
+    path = generate_term_report(organisation_name=args.organisation_name)
     print(f"Generated TERM detailed report at: {path}")

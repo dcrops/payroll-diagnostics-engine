@@ -14,8 +14,8 @@ from reporting.leave_common import (
     derive_leave_review_period,
 )
 
-from reporting.structure import ReportStructure
-from reporting.exec_pack_md import (
+from reporting.core.structure import ReportStructure
+from reporting.executive.exec_pack_md import (
     MODULE_LEAVE,
     LEAVE_FINDINGS_CSV,
     LEAKAGE_REPORT_CSV,

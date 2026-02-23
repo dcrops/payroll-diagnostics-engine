@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass 
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Iterable, List, Dict, Optional
 
@@ -11,11 +12,12 @@ from reporting.rkeg_text import (
     build_rkeg_summary_paragraph,  # currently unused but fine to keep
     build_rkeg_severity_overview_table,
 )
-from reporting.structure import ReportStructure
+from reporting.core.structure import ReportStructure
 from common.report_text import scan_report_text
 
 
-report_date = date.today().strftime("%d %b %Y")
+MELBOURNE_TZ = ZoneInfo("Australia/Melbourne")
+report_date = datetime.now(MELBOURNE_TZ).strftime("%d %b %Y")
 
 # ---------- Engagement scope ----------
 
@@ -39,7 +41,7 @@ DEFAULT_MODULES = [MODULE_LEAVE, MODULE_LSL, MODULE_TERM, MODULE_RKEG]
 
 # ---------- Paths ----------
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[3]
 OUTPUTS_DIR = BASE_DIR / "outputs"
 MODULES_DIR = OUTPUTS_DIR / "modules"
 
@@ -1154,6 +1156,7 @@ def generate_leave_leakage_report(
     organisation_name: str = "Organisation not specified",
     review_period: str | None = None,
     modules: Optional[Iterable[str]] = None,
+    output_dir: Path | None = None,
 ) -> Path:
     """
     Generate outputs/crc_executive_pack.md.
@@ -1169,6 +1172,12 @@ def generate_leave_leakage_report(
 
     # If nothing ran, fall back to leave title but show a clean "no data" report.
     report_title: str = _build_report_title(included or requested)
+
+    print("Requested modules:", requested)
+    print("Included modules:", included)
+    print("Module CSV detection:")
+    for m in requested:
+        print(" -", m, "=>", _module_ran(m))
 
     # Load data only if relevant
     findings = load_findings() if MODULE_LEAVE in included else []
@@ -1257,9 +1266,13 @@ def generate_leave_leakage_report(
         print("ℹ Soft-flag terms detected in report:")
         print(sorted(set(scan_result["soft"])))
 
-    EXEC_PACK_MD_PATH.parent.mkdir(parents=True, exist_ok=True)
-    EXEC_PACK_MD_PATH.write_text(final_md, encoding="utf-8")
-    return EXEC_PACK_MD_PATH
+        # Where to write the exec pack markdown
+    target_dir = output_dir or OUTPUTS_DIR
+    md_path = target_dir / "crc_executive_pack.md"
+
+    md_path.parent.mkdir(parents=True, exist_ok=True)
+    md_path.write_text(final_md, encoding="utf-8")
+    return md_path
 
 
 if __name__ == "__main__":
