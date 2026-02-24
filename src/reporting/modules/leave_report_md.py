@@ -107,7 +107,7 @@ def generate_leave_report(
         review_period = (
             derive_leave_review_period(sorted_findings)
             if sorted_findings
-            else "Period not specified"
+            else "Review period not clearly identifiable from supplied data"
         )
 
     parts: List[str] = []

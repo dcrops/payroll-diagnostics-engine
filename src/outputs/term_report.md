@@ -1,8 +1,8 @@
 # Termination Exposure – Detailed Report
 
-**Organisation:** Organisation not specified 
+**Organisation:** Example Client Pty Ltd  
 **Review period:** Period not specified  
-**Report prepared as at:** 23 Feb 2026  
+**Report prepared as at:** 24 Feb 2026  
 
 > This report highlights potential risk signals and process issues based on the data provided. It does not constitute legal, accounting, or industrial relations advice.
 

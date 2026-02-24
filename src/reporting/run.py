@@ -1,6 +1,8 @@
 from pathlib import Path
 import argparse
 
+from reporting.core.paths import get_repo_root, get_default_outputs_dir
+
 from reporting.modules.leave_report_md import generate_leave_report
 from reporting.modules.term_report_md import generate_term_report
 from reporting.modules.rkeg_report_md import generate_rkeg_report
@@ -39,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--organisation-name",
-        default="Example Client Pty Ltd",
+        default=None,
         help="Organisation name to show in report headers.",
     )
     p.add_argument(
@@ -60,10 +62,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    repo_root = Path(__file__).resolve().parents[2]
 
-    # Base outputs dir where CSVs and Markdown live
-    repo_outputs = repo_root / "outputs"
+    # Centralised repo + outputs paths
+    repo_root = get_repo_root()
+    repo_outputs = get_default_outputs_dir()
 
     # Where to write rendered reports (may be a client-specific subfolder)
     if args.output_dir:
@@ -77,7 +79,10 @@ def main() -> int:
     repo_outputs.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    org_name = args.organisation_name
+    # Organisation name: CLI if provided, else neutral fallback
+    org_name = args.organisation_name or "Organisation name not provided"
+
+    # Review period: CLI override flows through to modules/executive
     review_period_override = args.review_period
 
     # Normalise module selection

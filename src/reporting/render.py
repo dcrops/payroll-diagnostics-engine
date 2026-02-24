@@ -4,6 +4,8 @@ from pathlib import Path
 from shutil import copyfile
 from markdown import markdown
 
+from reporting.core.paths import get_repo_root, get_default_outputs_dir
+
 # Try to import WeasyPrint, but don't crash if it misbehaves (common on Windows).
 try:
     from weasyprint import HTML  # type: ignore[import-untyped]
@@ -16,9 +18,9 @@ except Exception as e:  # WeasyPrint can raise non-ImportError exceptions
 
 # ---------- Paths (defaults for the leave leakage report) ----------
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-CSS_SOURCE = BASE_DIR / "docs" / "crc_report.css"
-OUTPUTS_DIR = BASE_DIR / "outputs"
+REPO_ROOT = get_repo_root()
+CSS_SOURCE = REPO_ROOT / "docs" / "crc_report.css"
+OUTPUTS_DIR = get_default_outputs_dir()
 
 EXEC_PACK_MD_PATH = OUTPUTS_DIR / "crc_executive_pack.md"
 EXEC_PACK_HTML_PATH = OUTPUTS_DIR / "crc_executive_pack.html"

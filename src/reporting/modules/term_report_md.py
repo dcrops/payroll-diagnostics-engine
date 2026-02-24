@@ -104,7 +104,7 @@ def _derive_review_period(findings: List[TerminationFinding]) -> str:
             dates.append(d)
 
     if not dates:
-        return "Period not specified"
+        return "Review period not clearly identifiable from supplied data"
 
     start = min(dates)
     end = max(dates)
@@ -291,5 +291,5 @@ def generate_term_report(
 
 
 if __name__ == "__main__":
-    path = generate_term_report(organisation_name=args.organisation_name)
+    path = generate_term_report()
     print(f"Generated TERM detailed report at: {path}")

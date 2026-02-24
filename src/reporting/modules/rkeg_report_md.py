@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -80,16 +80,39 @@ def load_rkeg_findings() -> List[RKEGFinding]:
 # ---------- Review period helpers ----------
 
 def _parse_iso_date(s: str | None) -> Optional[date]:
-    """Parse a simple YYYY-MM-DD string into a date, or return None."""
+    """
+    Try to parse a date string in a few common formats.
+
+    - Ignores blanks and common placeholders
+    - Ignores obviously unrealistic years (< 2000 or > current_year + 1)
+    """
     if not s:
         return None
-    s = s.strip()
-    if not s:
+
+    value = s.strip()
+    if not value:
         return None
-    try:
-        return date.fromisoformat(s)
-    except ValueError:
+
+    # Ignore common placeholder / junk values
+    if value.lower() in {"n/a", "na", "none", "null", "unknown", "-"}:
         return None
+
+    # Try a few common formats
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            parsed = datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+
+        # Sanity-check the year so we don't treat obviously bogus dates as real
+        today = date.today()
+        if parsed.year < 2000 or parsed.year > today.year + 1:
+            return None
+
+        return parsed
+
+    # Nothing matched
+    return None
 
 
 def _derive_review_period(findings: List[RKEGFinding]) -> str:
@@ -104,7 +127,7 @@ def _derive_review_period(findings: List[RKEGFinding]) -> str:
             dates.append(d)
 
     if not dates:
-        return "Period not specified"
+        return "Review period not clearly identifiable from supplied data"
 
     start = min(dates)
     end = max(dates)
@@ -294,5 +317,5 @@ def generate_rkeg_report(
 
 
 if __name__ == "__main__":
-    path = generate_rkeg_report(organisation_name=args.organisation_name)
+    path = generate_rkeg_report()
     print(f"Generated RKEG detailed report at: {path}")

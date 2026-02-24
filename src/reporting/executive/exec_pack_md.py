@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-import csv
-from dataclasses import dataclass 
-from datetime import date, datetime
-from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Iterable, List, Dict, Optional
+
+from reporting.core.paths import get_repo_root, get_default_outputs_dir
+
+import csv
+from dataclasses import dataclass
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from common.severity import SEVERITY_BY_CODE
 from reporting.rkeg_text import (
@@ -14,6 +17,7 @@ from reporting.rkeg_text import (
 )
 from reporting.core.structure import ReportStructure
 from common.report_text import scan_report_text
+from reporting.core.paths import get_repo_root, get_default_outputs_dir
 
 
 MELBOURNE_TZ = ZoneInfo("Australia/Melbourne")
@@ -41,8 +45,8 @@ DEFAULT_MODULES = [MODULE_LEAVE, MODULE_LSL, MODULE_TERM, MODULE_RKEG]
 
 # ---------- Paths ----------
 
-BASE_DIR = Path(__file__).resolve().parents[3]
-OUTPUTS_DIR = BASE_DIR / "outputs"
+BASE_DIR = get_repo_root()
+OUTPUTS_DIR = get_default_outputs_dir()
 MODULES_DIR = OUTPUTS_DIR / "modules"
 
 LEAVE_FINDINGS_CSV = MODULES_DIR / "leave_leakage_findings.csv"
@@ -170,7 +174,7 @@ def _derive_review_period(findings: List[Finding]) -> str:
             dates.append(d)
 
     if not dates:
-        return "Period not specified"
+        return "Review period not clearly identifiable from supplied data"
 
     start = min(dates)
     end = max(dates)
@@ -179,6 +183,7 @@ def _derive_review_period(findings: List[Finding]) -> str:
         return start.strftime("%d %b %Y")
 
     return f"{start.strftime('%d %b %Y')} to {end.strftime('%d %b %Y')}"
+
 
 def _module_ran(module: str) -> bool:
     """
@@ -196,14 +201,13 @@ def _module_ran(module: str) -> bool:
     return False
 
 
-from datetime import datetime
-
 def _derive_exec_review_period(included_modules: set[str]) -> str:
     """
-    Derive a review period across all included modules by scanning
-    their findings CSVs for any column containing 'date'.
+    Internal helper: derive a review period across all included modules by
+    scanning their module-level outputs (currently findings CSVs) for any
+    column containing 'date' in the header.
 
-    Returns min → max date if found, otherwise 'Period not specified'.
+    Returns min → max date if found, otherwise a clear fallback string.
     """
     candidate_paths = []
 
@@ -246,7 +250,7 @@ def _derive_exec_review_period(included_modules: set[str]) -> str:
                         continue
 
     if not all_dates:
-        return "Period not specified"
+        return "Review period not clearly identifiable from supplied module outputs"
 
     start = min(all_dates)
     end = max(all_dates)
@@ -255,6 +259,19 @@ def _derive_exec_review_period(included_modules: set[str]) -> str:
         return start.strftime("%d %b %Y")
 
     return f"{start.strftime('%d %b %Y')} to {end.strftime('%d %b %Y')}"
+
+
+def derive_exec_review_period_from_data(included_modules: set[str]) -> str:
+    """
+    Public helper used by the EXEC pack when no --review-period override is
+    supplied via the CLI.
+
+    For now, it derives the review period from available module-level outputs
+    (e.g. findings CSVs) for the included modules. In future, this can be
+    extended to use broader source data without changing the call sites.
+    """
+    return _derive_exec_review_period(included_modules)
+
 
 def normalise_modules(included_modules: set[str] | list[str] | None) -> set[str]:
     return {m.strip().upper() for m in (included_modules or [])}
@@ -1164,7 +1181,7 @@ def generate_leave_leakage_report(
     modules controls which sections are included.
     Sections are also suppressed if their underlying module outputs do not exist.
     """
-    
+
     requested: set[str] = {m.strip().upper() for m in (modules or DEFAULT_MODULES)}
 
     # Only include modules that actually ran (keeps report clean)
@@ -1184,8 +1201,9 @@ def generate_leave_leakage_report(
     sorted_findings = sort_findings(findings) if findings else []
     rkeg_counts = load_rkeg_severity_counts() if MODULE_RKEG in included else {}
 
+    # CLI override wins; otherwise derive from module-level data
     if review_period is None:
-        review_period = _derive_exec_review_period(included)
+        review_period = derive_exec_review_period_from_data(included)
 
     parts: List[str] = []
     parts.append(build_header(report_title, organisation_name, review_period))
@@ -1266,7 +1284,7 @@ def generate_leave_leakage_report(
         print("ℹ Soft-flag terms detected in report:")
         print(sorted(set(scan_result["soft"])))
 
-        # Where to write the exec pack markdown
+    # Where to write the exec pack markdown
     target_dir = output_dir or OUTPUTS_DIR
     md_path = target_dir / "crc_executive_pack.md"
 

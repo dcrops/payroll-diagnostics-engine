@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Dict, List, Optional
+
+from reporting.core.paths import get_repo_root, get_default_outputs_dir
+
 import csv
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -13,8 +18,10 @@ report_date = datetime.now(MELBOURNE_TZ).strftime("%d %b %Y")
 
 # ---------- Paths ----------
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-OUTPUTS_DIR = BASE_DIR / "outputs"
+# ---------- Paths ----------
+
+REPO_ROOT = get_repo_root()
+OUTPUTS_DIR = get_default_outputs_dir()
 MODULES_DIR = OUTPUTS_DIR / "modules"
 
 LSL_FINDINGS_CSV = MODULES_DIR / "lsl_findings.csv"
@@ -85,7 +92,7 @@ def _derive_review_period_from_data(paths: list[Path]) -> str:
     Try to derive a review period (min → max date) from one or more CSV files.
 
     We look for columns whose names contain 'date' and try common date formats.
-    If we can't find anything usable, we fall back to 'Report prepared as at ...'.
+    If we can't find anything usable, we fall back to a conservative placeholder.
     """
     all_dates: list[date] = []
 
@@ -115,10 +122,12 @@ def _derive_review_period_from_data(paths: list[Path]) -> str:
     if all_dates:
         start = min(all_dates)
         end = max(all_dates)
+        if start == end:
+            return f"{start:%d %b %Y}"
         return f"{start:%d %b %Y} to {end:%d %b %Y}"
 
     # Fallback if no dates found
-    return f"Report prepared as at {date.today():%d %b %Y}"
+    return "Review period not clearly identifiable from supplied data"
 
 def load_lsl_findings() -> List[LSLFinding]:
     rows = _load_csv(LSL_FINDINGS_CSV)
@@ -219,7 +228,7 @@ def _derive_lsl_review_period() -> str:
     dates += _collect_dates_from_csv(LSL_EXPOSURE_CSV, ["as_of_date", "snapshot_date", "period_start", "period_end"])
 
     if not dates:
-        return "Period not specified"
+        return "Review period not clearly identifiable from supplied data"
 
     start = min(dates)
     end = max(dates)
