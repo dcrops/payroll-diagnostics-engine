@@ -33,8 +33,50 @@ from reporting.executive.exec_pack_md import (
 # Where this leave-only module report will be written
 LEAVE_REPORT_MD_PATH = OUTPUTS_DIR / "leave_report.md"
 
+# New: review-period data window written by the LEAVE engine
+LEAVE_DATA_WINDOW_CSV = LEAVE_FINDINGS_CSV.parent / "leave_data_window.csv"
+
 
 # ---------- Section builders specific to the LEAVE module report ----------
+
+def _derive_review_period_from_window(path: Path) -> str | None:
+    """
+    Prefer review period from the engine's data-window CSV, if present.
+
+    Expects a CSV with columns:
+        first_date,last_date
+        2018-12-01,2024-03-01
+
+    Dates are stored as ISO (YYYY-MM-DD) from the engine.
+    """
+    if not path.exists():
+        return None
+
+    try:
+        with path.open("r", newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+    except OSError:
+        return None
+
+    if not rows:
+        return None
+
+    row = rows[0]
+    start_raw = (row.get("first_date") or row.get("start_date") or "").strip()
+    end_raw = (row.get("last_date") or row.get("end_date") or "").strip()
+    if not start_raw:
+        return None
+
+    try:
+        start = date.fromisoformat(start_raw)
+        end = date.fromisoformat(end_raw) if end_raw else start
+    except ValueError:
+        return None
+
+    if start == end:
+        return start.strftime("%d %b %Y")
+    return f"{start.strftime('%d %b %Y')} to {end.strftime('%d %b %Y')}"
 
 def build_leave_module_summary(
     findings: List[Finding],
@@ -104,11 +146,18 @@ def generate_leave_report(
     exposure_rows = load_leave_exposure_rows()
 
     if review_period is None:
-        review_period = (
-            derive_leave_review_period(sorted_findings)
-            if sorted_findings
-            else "Review period not clearly identifiable from supplied data"
-        )
+        # 1) Prefer client data window written by the LEAVE engine
+        from_window = _derive_review_period_from_window(LEAVE_DATA_WINDOW_CSV)
+
+        if from_window is not None:
+            review_period = from_window
+        else:
+            # 2) Fallback to findings-based derivation for older runs
+            review_period = (
+                derive_leave_review_period(sorted_findings)
+                if sorted_findings
+                else "Review period not clearly identifiable from supplied data"
+            )
 
     parts: List[str] = []
     parts.append(

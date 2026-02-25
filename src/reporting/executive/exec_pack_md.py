@@ -18,6 +18,7 @@ from reporting.rkeg_text import (
 from reporting.core.structure import ReportStructure
 from common.report_text import scan_report_text
 from reporting.core.paths import get_repo_root, get_default_outputs_dir
+from reporting.core.review_period import derive_review_period_from_windows
 
 
 MELBOURNE_TZ = ZoneInfo("Australia/Melbourne")
@@ -56,7 +57,12 @@ RKEG_FINDINGS_CSV = MODULES_DIR / "rkeg_findings.csv"
 TERM_SUMMARY_BY_SEVERITY_CSV = MODULES_DIR / "term_summary_by_severity.csv"
 TERM_FINDINGS_CSV = MODULES_DIR / "term_findings.csv"
 LSL_FINDINGS_CSV = MODULES_DIR / "lsl_findings.csv"
-LSL_SUMMARY_BY_SEVERITY_CSV = MODULES_DIR / "lsl_summary_by_severity.csv"  # if you have / add it
+LSL_SUMMARY_BY_SEVERITY_CSV = MODULES_DIR / "lsl_summary_by_severity.csv"  
+
+LEAVE_DATA_WINDOW_CSV = MODULES_DIR / "leave_data_window.csv"
+LSL_DATA_WINDOW_CSV = MODULES_DIR / "lsl_data_window.csv"
+TERM_DATA_WINDOW_CSV = MODULES_DIR / "term_data_window.csv"
+RKEG_DATA_WINDOW_CSV = MODULES_DIR / "rkeg_data_window.csv"
 
 EXEC_PACK_MD_PATH = OUTPUTS_DIR / "crc_executive_pack.md"
 
@@ -266,10 +272,31 @@ def derive_exec_review_period_from_data(included_modules: set[str]) -> str:
     Public helper used by the EXEC pack when no --review-period override is
     supplied via the CLI.
 
-    For now, it derives the review period from available module-level outputs
-    (e.g. findings CSVs) for the included modules. In future, this can be
-    extended to use broader source data without changing the call sites.
+    Preferred order:
+      1) Per-module data window CSVs (leave_data_window.csv, etc.)
+      2) Findings-based review period (_derive_exec_review_period).
     """
+    # 1) Try per-module data windows
+    window_paths: list[Path] = []
+
+    if MODULE_LEAVE in included_modules:
+        window_paths.append(LEAVE_DATA_WINDOW_CSV)
+    if MODULE_LSL in included_modules:
+        window_paths.append(LSL_DATA_WINDOW_CSV)
+    if MODULE_TERM in included_modules:
+        window_paths.append(TERM_DATA_WINDOW_CSV)
+    if MODULE_RKEG in included_modules:
+        window_paths.append(RKEG_DATA_WINDOW_CSV)
+
+    period_from_windows = derive_review_period_from_windows(
+        window_paths,
+        fallback=None,  # return None if nothing usable
+    )
+
+    if period_from_windows:
+        return period_from_windows
+
+    # 2) Fallback: existing findings-based behaviour
     return _derive_exec_review_period(included_modules)
 
 

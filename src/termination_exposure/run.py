@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import csv
 import json
+from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, List, Any
 
 from termination_exposure.rules import run_all_term_rules
+from common.data_window import write_data_window
 
 # ---------- Paths ----------
 
@@ -25,6 +27,40 @@ TERM_SUMMARY_CSV = MODULES_DIR / "term_summary.csv"
 
 # ---------- CSV helpers ----------
 
+def _extract_term_dates(rows: List[Dict[str, str]]) -> List[date]:
+    """
+    Collect valid dates from termination / pay event rows.
+
+    We look at termination and final-pay date columns, try common
+    formats, and ignore anything that won't parse cleanly.
+    """
+    if not rows:
+        return []
+
+    candidate_cols = [
+        "termination_date",
+        "term_date",
+        "final_pay_date",
+        "pay_date",
+    ]
+
+    dates: List[date] = []
+
+    for row in rows:
+        for col in candidate_cols:
+            raw = (row.get(col) or "").strip()
+            if not raw:
+                continue
+
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+                try:
+                    d = datetime.strptime(raw, fmt).date()
+                    dates.append(d)
+                    break
+                except ValueError:
+                    continue
+
+    return dates
 
 def load_csv(path: Path) -> List[Dict[str, str]]:
     if not path.exists():
@@ -192,6 +228,19 @@ def run_termination_exposure_review() -> None:
 
     print(f"[TERM] Loaded {len(terminations)} termination rows, "
           f"{len(pay_events)} pay events, {len(employees)} employees")
+
+    # Derive TERM data window from client source data
+    term_dates = _extract_term_dates(terminations) + _extract_term_dates(pay_events)
+    if term_dates:
+        MODULES_DIR.mkdir(parents=True, exist_ok=True)
+        term_window_path = MODULES_DIR / "term_data_window.csv"
+        write_data_window(term_window_path, term_dates)
+        print(
+            f"[TERM] Wrote data window to {term_window_path} "
+            f"({min(term_dates)} → {max(term_dates)})"
+        )
+    else:
+        print("[TERM] No usable dates found for data window – term_data_window.csv not written")
 
     findings = run_all_term_rules(
         terminations=terminations,

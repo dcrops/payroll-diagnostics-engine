@@ -27,6 +27,7 @@ MODULES_DIR = OUTPUTS_DIR / "modules"
 LSL_FINDINGS_CSV = MODULES_DIR / "lsl_findings.csv"
 LSL_EXPOSURE_CSV = OUTPUTS_DIR / "lsl_exposure_report.csv"
 LSL_REPORT_MD_PATH = OUTPUTS_DIR / "lsl_report.md"
+LSL_DATA_WINDOW_CSV = MODULES_DIR / "lsl_data_window.csv"
 
 
 # ---------- Data models ----------
@@ -86,6 +87,38 @@ def _load_csv(path: Path) -> List[Dict[str, str]]:
     with path.open("r", newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         return list(reader)
+
+def _derive_review_period_from_window() -> str:
+    """
+    Prefer review period from outputs/modules/lsl_data_window.csv
+    written by the LSL engine.
+
+    Falls back to a conservative message if the file is missing
+    or cannot be parsed cleanly.
+    """
+    if not LSL_DATA_WINDOW_CSV.exists():
+        return "Review period not clearly identifiable from supplied data"
+
+    rows = _load_csv(LSL_DATA_WINDOW_CSV)
+    if not rows:
+        return "Review period not clearly identifiable from supplied data"
+
+    row = rows[0]
+    start_raw = (row.get("first_date") or "").strip()
+    end_raw = (row.get("last_date") or "").strip()
+    if not start_raw or not end_raw:
+        return "Review period not clearly identifiable from supplied data"
+
+    try:
+        start = date.fromisoformat(start_raw)
+        end = date.fromisoformat(end_raw)
+    except ValueError:
+        return "Review period not clearly identifiable from supplied data"
+
+    if start == end:
+        return start.strftime("%d %b %Y")
+
+    return f"{start:%d %b %Y} to {end:%d %b %Y}"
 
 def _derive_review_period_from_data(paths: list[Path]) -> str:
     """
@@ -556,11 +589,9 @@ def generate_lsl_exposure_report(
     findings = sort_lsl_findings(raw_findings)
     exposure_rows = load_lsl_exposure_rows()
 
-    # If not explicitly supplied, derive review period from the data
+    # If not explicitly supplied, derive review period from the LSL data window
     if review_period is None:
-        review_period = _derive_review_period_from_data(
-            [LSL_FINDINGS_CSV, LSL_EXPOSURE_CSV]
-        )
+        review_period = _derive_review_period_from_window()
 
     parts = [
         build_lsl_header(organisation_name, review_period),

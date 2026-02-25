@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, date
 from pathlib import Path
 from typing import Iterable
 
@@ -7,6 +8,7 @@ import pandas as pd
 
 from rkeg.rules import Finding, write_findings_csv
 from rkeg.engine import run_rkeg_engine
+from common.data_window import write_data_window
 
 
 REQUIRED_EMP = {"employee_id"}
@@ -20,6 +22,42 @@ def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
     missing = sorted(required - set(df.columns))
     if missing:
         raise ValueError(f"{name} missing required columns: {missing}")
+
+
+def _collect_dates_from_df(
+    df: pd.DataFrame,
+    candidate_cols: Iterable[str],
+) -> list[date]:
+    """
+    Collect valid dates from a dataframe for the given list of candidate
+    date columns. Used to derive the RKEG data window from client data,
+    not from findings.
+    """
+    if df is None or df.empty:
+        return []
+
+    dates: list[date] = []
+
+    for col in candidate_cols:
+        if col not in df.columns:
+            continue
+
+        series = df[col].dropna()
+        for raw in series:
+            s = str(raw).strip()
+            if not s:
+                continue
+
+            # Try a few common formats; ignore anything that won't parse
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+                try:
+                    d = datetime.strptime(s, fmt).date()
+                    dates.append(d)
+                    break
+                except ValueError:
+                    continue
+
+    return dates
 
 
 def main() -> int:
@@ -45,10 +83,26 @@ def main() -> int:
     leave_snapshot_path = data_dir / "balances_snapshot.csv"
     terminations_path = data_dir / "terminations.csv"
 
-    pay_events = pd.read_csv(pay_events_path, dtype={"employee_id": "string"}) if pay_events_path.exists() else pd.DataFrame()
-    leave_ledger = pd.read_csv(leave_ledger_path, dtype={"employee_id": "string"}) if leave_ledger_path.exists() else pd.DataFrame()
-    leave_snapshot = pd.read_csv(leave_snapshot_path, dtype={"employee_id": "string"}) if leave_snapshot_path.exists() else pd.DataFrame()
-    terminations = pd.read_csv(terminations_path, dtype={"employee_id": "string"}) if terminations_path.exists() else pd.DataFrame()
+    pay_events = (
+        pd.read_csv(pay_events_path, dtype={"employee_id": "string"})
+        if pay_events_path.exists()
+        else pd.DataFrame()
+    )
+    leave_ledger = (
+        pd.read_csv(leave_ledger_path, dtype={"employee_id": "string"})
+        if leave_ledger_path.exists()
+        else pd.DataFrame()
+    )
+    leave_snapshot = (
+        pd.read_csv(leave_snapshot_path, dtype={"employee_id": "string"})
+        if leave_snapshot_path.exists()
+        else pd.DataFrame()
+    )
+    terminations = (
+        pd.read_csv(terminations_path, dtype={"employee_id": "string"})
+        if terminations_path.exists()
+        else pd.DataFrame()
+    )
 
     # Normalise employee_id
     for df in (employees, pay_events, leave_ledger, leave_snapshot, terminations):
@@ -65,6 +119,38 @@ def main() -> int:
         _require_cols(leave_snapshot, REQUIRED_SNAP, "balances_snapshot.csv")
     if not terminations.empty:
         _require_cols(terminations, REQUIRED_TERM, "terminations.csv")
+
+    # ----------------------------
+    # Derive RKEG data window from client source data
+    # ----------------------------
+    rkeg_dates: list[date] = []
+
+    rkeg_dates += _collect_dates_from_df(
+        pay_events,
+        ["pay_date", "period_start", "period_end"],
+    )
+    rkeg_dates += _collect_dates_from_df(
+        leave_ledger,
+        ["as_of_date", "event_date"],
+    )
+    rkeg_dates += _collect_dates_from_df(
+        leave_snapshot,
+        ["as_of_date"],
+    )
+    rkeg_dates += _collect_dates_from_df(
+        terminations,
+        ["termination_date", "final_pay_date", "term_date", "pay_date"],
+    )
+
+    if rkeg_dates:
+        rkeg_window_path = modules_dir / "rkeg_data_window.csv"
+        write_data_window(rkeg_window_path, rkeg_dates)
+        print(
+            f"[RKEG] Wrote data window to {rkeg_window_path} "
+            f"({min(rkeg_dates)} → {max(rkeg_dates)})"
+        )
+    else:
+        print("[RKEG] No usable dates found for data window – rkeg_data_window.csv not written")
 
     # ----------------------------
     # Run RKEG engine

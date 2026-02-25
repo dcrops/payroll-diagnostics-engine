@@ -13,6 +13,7 @@ from lsl_exposure.rules import (
     compute_exposure_band,
 )
 
+from common.data_window import write_data_window
 
 REQUIRED_EMP = {"employee_id", "employment_type", "fte", "start_date"}
 REQUIRED_SNAP = {"employee_id", "leave_type", "as_of_date", "balance_units"}
@@ -59,14 +60,34 @@ def main() -> int:
     _require_cols(snapshot, REQUIRED_SNAP, "balances_snapshot.csv")
 
     # Parse dates
-    employees["start_date"] = pd.to_datetime(employees["start_date"], errors="coerce", dayfirst=True)
-    snapshot["as_of_date"] = pd.to_datetime(snapshot["as_of_date"], errors="coerce", dayfirst=True)
+    employees["start_date"] = pd.to_datetime(
+        employees["start_date"], errors="coerce", dayfirst=True
+    )
+    snapshot["as_of_date"] = pd.to_datetime(
+        snapshot["as_of_date"], errors="coerce", dayfirst=True
+    )
 
     bad_emp_dates = employees["start_date"].isna().sum()
     bad_snapshot_dates = snapshot["as_of_date"].isna().sum()
     print(f"[input] Unparseable employee start_date rows: {bad_emp_dates}")
     print(f"[input] Unparseable snapshot as_of_date rows: {bad_snapshot_dates}")
 
+    # ----------------------------
+    # LSL data window (for reporting)
+    # ----------------------------
+    window_dates: list[date] = []
+
+    emp_dates = employees["start_date"].dropna()
+    snap_dates = snapshot["as_of_date"].dropna()
+
+    if not emp_dates.empty:
+        window_dates.extend(emp_dates.dt.date.tolist())
+    if not snap_dates.empty:
+        window_dates.extend(snap_dates.dt.date.tolist())
+
+    write_data_window(modules_dir / "lsl_data_window.csv", window_dates)
+
+    # Latest snapshot date is still useful for state prep
     snapshot_date = snapshot["as_of_date"].max()
 
     # Build LSL state view

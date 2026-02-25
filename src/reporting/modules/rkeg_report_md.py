@@ -5,6 +5,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from reporting.core.review_period import derive_review_period_from_windows
+from reporting.executive.exec_pack_md import MODULES_DIR
 from reporting.core.structure import ReportStructure
 from reporting.executive.exec_pack_md import (
     MODULE_RKEG,
@@ -23,6 +25,8 @@ from reporting.executive.exec_pack_md import (
 
 # Where this RKEG-only module report will be written
 RKEG_REPORT_MD_PATH = OUTPUTS_DIR / "rkeg_report.md"
+
+RKEG_DATA_WINDOW_CSV = MODULES_DIR / "rkeg_data_window.csv"
 
 
 # ---------- Data model ----------
@@ -117,9 +121,22 @@ def _parse_iso_date(s: str | None) -> Optional[date]:
 
 def _derive_review_period(findings: List[RKEGFinding]) -> str:
     """
-    Derive a human-readable review period from the findings' as_of_date values.
-    Uses the earliest and latest valid dates found.
+    Derive a human-readable review period for the RKEG report.
+
+    Priority:
+      1) A module-level data window CSV (rkeg_data_window.csv) if present.
+      2) Fallback: derive from any valid as_of_date values in the findings.
+      3) If nothing usable is found, return a neutral placeholder.
     """
+    # 1) Prefer data window CSV if/when the engine writes it
+    period_from_window = derive_review_period_from_windows(
+        [RKEG_DATA_WINDOW_CSV],
+        fallback=None,
+    )
+    if period_from_window:
+        return period_from_window
+
+    # 2) Fallback: use findings' as_of_date values (ISO-only, dodgy values ignored)
     dates: List[date] = []
     for f in findings:
         d = _parse_iso_date(f.as_of_date)
@@ -127,7 +144,8 @@ def _derive_review_period(findings: List[RKEGFinding]) -> str:
             dates.append(d)
 
     if not dates:
-        return "Review period not clearly identifiable from supplied data"
+        # 3) Nothing usable → neutral string, consistent with other modules
+        return "Period not specified"
 
     start = min(dates)
     end = max(dates)

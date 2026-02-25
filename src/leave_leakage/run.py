@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime, date
 from pathlib import Path
 import pandas as pd
+
+from common.data_window import write_data_window
 
 from leave_leakage.rules import (
     Finding,
@@ -18,11 +21,56 @@ REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units", "event_ty
 REQUIRED_SNAP = {"employee_id", "leave_type", "as_of_date", "balance_units"}
 
 
+def _extract_dates_from_leave_ledger_df(df) -> list[date]:
+    """
+    Collect valid dates from the client leave ledger DataFrame.
+
+    We prefer the actual ledger date column and accept a few
+    common formats, ignoring anything that doesn't parse cleanly.
+    """
+    if df is None or df.empty:
+        return []
+
+    # If you know the real column name (e.g. 'as_of_date'), you can
+    # just use that; this list is defensive.
+    candidate_cols = [
+        "as_of_date",
+        "ledger_date",
+        "leave_date",
+        "transaction_date",
+        "event_date",
+        "snapshot_date",
+        "date",
+    ]
+
+    for col in candidate_cols:
+        if col in df.columns:
+            series = df[col].dropna()
+            break
+    else:
+        return []
+
+    dates: list[date] = []
+
+    for raw in series:
+        raw_str = str(raw).strip()
+        if not raw_str:
+            continue
+
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+            try:
+                d = datetime.strptime(raw_str, fmt).date()
+                dates.append(d)
+                break
+            except ValueError:
+                continue
+
+    return dates
+
 def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
     missing = sorted(required - set(df.columns))
     if missing:
         raise ValueError(f"{name} missing required columns: {missing}")
-
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
@@ -42,6 +90,15 @@ def main() -> int:
         data_dir / "leave_ledger.csv",
         dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
     )
+
+    # NEW: derive LEAVE data window from client ledger
+    dates = _extract_dates_from_leave_ledger_df(ledger)
+    if dates:
+        # Use the same outputs/modules structure as reporting.
+        # This assumes you're running from repo root (which you are).
+        modules_dir = Path("outputs") / "modules"
+        window_path = modules_dir / "leave_data_window.csv"
+        write_data_window(window_path, dates)
 
     snapshot = pd.read_csv(
         data_dir / "balances_snapshot.csv",
