@@ -9,6 +9,8 @@ import pandas as pd
 from rkeg.rules import Finding, write_findings_csv
 from rkeg.engine import run_rkeg_engine
 from common.data_window import write_data_window
+from rkeg.datasets import load_all_datasets
+from rkeg.engine import run_rkeg_engine
 
 
 REQUIRED_EMP = {"employee_id"}
@@ -69,43 +71,29 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     modules_dir.mkdir(parents=True, exist_ok=True)
 
-    # --------
-    # Load inputs (v1 assumes they live alongside your leave datasets)
-    # You can tweak filenames later if needed.
-    # --------
-    employees = pd.read_csv(
-        data_dir / "employees.csv",
-        dtype={"employee_id": "string"},
-    )
+    # ----------------------------
+    # Load all datasets via central loader
+    # ----------------------------
+    datasets = load_all_datasets(data_dir)
 
-    pay_events_path = data_dir / "pay_events.csv"
-    leave_ledger_path = data_dir / "leave_ledger.csv"
-    leave_snapshot_path = data_dir / "balances_snapshot.csv"
-    terminations_path = data_dir / "terminations.csv"
+    print("[RKEG] Loaded dataset keys:", list(datasets.keys()))
+    for name, df in datasets.items():
+        print(f"[RKEG] {name}: shape={df.shape}")
 
-    pay_events = (
-        pd.read_csv(pay_events_path, dtype={"employee_id": "string"})
-        if pay_events_path.exists()
-        else pd.DataFrame()
-    )
-    leave_ledger = (
-        pd.read_csv(leave_ledger_path, dtype={"employee_id": "string"})
-        if leave_ledger_path.exists()
-        else pd.DataFrame()
-    )
-    leave_snapshot = (
-        pd.read_csv(leave_snapshot_path, dtype={"employee_id": "string"})
-        if leave_snapshot_path.exists()
-        else pd.DataFrame()
-    )
-    terminations = (
-        pd.read_csv(terminations_path, dtype={"employee_id": "string"})
-        if terminations_path.exists()
-        else pd.DataFrame()
-    )
+    # Extract individual dataframes for convenience
+    employees = datasets.get("employee_master", pd.DataFrame())
+    pay_events = datasets.get("pay_events", pd.DataFrame())
+    leave_ledger = datasets.get("leave_ledger", pd.DataFrame())
+    leave_snapshot = datasets.get("leave_snapshot", pd.DataFrame())
+    terminations = datasets.get("terminations", pd.DataFrame())
+
+    # New Tier 2 datasets (optional)
+    super_payments = datasets.get("super_payments", pd.DataFrame())
+    rate_history = datasets.get("rate_history", pd.DataFrame())
+    pay_overrides = datasets.get("pay_overrides", pd.DataFrame())
 
     # Normalise employee_id
-    for df in (employees, pay_events, leave_ledger, leave_snapshot, terminations):
+    for df in (employees, pay_events, leave_ledger, leave_snapshot, terminations, super_payments, rate_history, pay_overrides):
         if not df.empty and "employee_id" in df.columns:
             df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
@@ -152,10 +140,10 @@ def main() -> int:
     else:
         print("[RKEG] No usable dates found for data window – rkeg_data_window.csv not written")
 
-    # ----------------------------
+        # ----------------------------
     # Run RKEG engine
     # ----------------------------
-    datasets = {
+    engine_datasets: dict[str, pd.DataFrame] = {
         "employee_master": employees,
         "pay_events": pay_events,
         "leave_ledger": leave_ledger,
@@ -163,7 +151,17 @@ def main() -> int:
         "terminations": terminations,
     }
 
-    findings: list[Finding] = list(run_rkeg_engine(datasets))
+    # Include Tier 2 datasets if present
+    if not super_payments.empty:
+        engine_datasets["super_payments"] = super_payments
+    if not rate_history.empty:
+        engine_datasets["rate_history"] = rate_history
+    if not pay_overrides.empty:
+        engine_datasets["pay_overrides"] = pay_overrides
+
+    findings: list[Finding] = list(
+        run_rkeg_engine(engine_datasets, enabled_tiers={1, 2})
+    )
 
     # ----------------------------
     # Write findings output (module-level)

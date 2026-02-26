@@ -4,18 +4,20 @@ description: "Record-Keeping & Evidence Gaps – core payroll evidence spine"
 
 rules:
   - id: "RKEG-EMP-001"
+    tier: 1
     domain: "EMP"
     severity: "HIGH"
     title: "Pay or leave records exist without an employee master record"
     datasets:
       primary: "employee_master"
-      references: ["pay_events", "leave_ledger", "leave_snapshot", "terminations"]
+      references: ["pay_events", "leave_ledger", "balance_snapshot", "terminations"]
     text:
       finding: "Payroll and/or leave records were identified for individuals who do not have a corresponding employee master record."
       why_it_matters: "Regulators expect employers to clearly identify who was paid and on what basis. Payments without an underlying employee record cannot be substantiated if audited."
       remediation: "Ensure all individuals referenced in payroll and leave systems have a corresponding employee master record and enforce validation before processing."
 
   - id: "RKEG-EMP-002"
+    tier: 1
     domain: "EMP"
     severity: "HIGH"
     title: "Employment start date missing"
@@ -27,6 +29,7 @@ rules:
       remediation: "Record and retain employment commencement dates for all employees and enforce this as a mandatory field in onboarding processes."
 
   - id: "RKEG-EMP-003"
+    tier: 1
     domain: "EMP"
     severity: "HIGH"
     title: "Employment status missing or invalid"
@@ -38,6 +41,7 @@ rules:
       remediation: "Ensure all employee records include a valid employment status and enforce controlled status values across HR and payroll systems."
 
   - id: "RKEG-EMP-004"
+    tier: 1
     domain: "EMP"
     severity: "HIGH"
     title: "Termination exists but employee record still indicates active employment"
@@ -49,7 +53,21 @@ rules:
       why_it_matters: "Termination events must be clearly reflected in employee records to substantiate payroll cessation and finalisation decisions. Conflicting records weaken audit defensibility."
       remediation: "Ensure employee master records are promptly updated following termination and reconcile termination events against employee status as part of offboarding controls."
 
+  - id: "RKEG-EMP-005"
+    tier: 2
+    domain: "EMP"
+    severity: "HIGH"
+    title: "Employees without a complete rate history record"
+    datasets:
+      primary: "employee_master"
+      references: ["rate_history"]
+    text:
+      finding: "Employees were identified without a corresponding rate history record covering their employment period."
+      why_it_matters: "Rate history records evidence how and when base rates were set or changed. Missing history weakens the employer’s ability to substantiate pay rates if audited."
+      remediation: "Ensure all employees have complete, date-effective rate history records from commencement to cessation and align payroll configuration to these records."
+
   - id: "RKEG-PAY-001"
+    tier: 1
     domain: "PAY"
     severity: "HIGH"
     title: "Pay events without a valid pay date"
@@ -61,6 +79,7 @@ rules:
       remediation: "Ensure all pay events include a valid pay date and enforce validation in payroll processes so events cannot be processed or exported without this field populated."
 
   - id: "RKEG-PAY-002"
+    tier: 1
     domain: "PAY"
     severity: "HIGH"
     title: "Pay events without a valid gross amount"
@@ -72,6 +91,7 @@ rules:
       remediation: "Ensure all pay events include a valid gross amount and enforce validation in payroll exports and downstream reporting so incomplete records cannot be used for decision-making."
 
   - id: "RKEG-PAY-003"
+    tier: 1
     domain: "PAY"
     severity: "MEDIUM"
     title: "Pay events without a pay run reference"
@@ -83,6 +103,7 @@ rules:
       remediation: "Ensure all pay events include a pay run or batch reference and align exported payroll data structures with the underlying run identifiers used in the payroll system."
 
   - id: "RKEG-PAY-004"
+    tier: 1
     domain: "PAY"
     severity: "HIGH"
     title: "Pay events not linked to an employee master record"
@@ -93,3 +114,187 @@ rules:
       finding: "Pay events were identified for individuals not present in the employee master records."
       why_it_matters: "All pay events should be traceable to a valid employee record to support payroll accuracy and audit defensibility. Payments without a corresponding employee record weaken the evidential trail."
       remediation: "Reconcile pay events to employee master records and ensure all individuals paid through payroll are properly recorded and retained in employee data."
+
+  - id: "RKEG-PAY-005"
+    tier: 1
+    domain: "PAY"
+    severity: "HIGH"
+    title: "Earnings adjustment without proportional super recalculation"
+    datasets:
+      primary: "pay_events"
+      references: ["employee_master"]
+    text:
+      finding: "Pay adjustments were detected where ordinary earnings increased without a proportional movement in superannuation."
+      why_it_matters: "Superannuation must be recalculated when ordinary earnings are adjusted. Failure to do so may result in underpayment exposure."
+      remediation: "Review adjustment processing to ensure superannuation is recalculated on all superable earnings adjustments."
+
+  - id: "RKEG-PAY-006"
+    tier: 1
+    domain: "PAY"
+    severity: "MEDIUM"
+    title: "Ordinary earnings present without recorded base rate"
+    datasets:
+      primary: "pay_events"
+      references: ["employee_master"]
+    text:
+      finding: "Ordinary earnings were recorded for one or more employees without an associated base rate value."
+      why_it_matters: "Missing or inconsistent rate information reduces payroll reconstruction ability and weakens audit defensibility."
+      remediation: "Ensure base rate fields are populated and aligned with earnings calculations."
+
+  - id: "RKEG-PAY-007"
+    tier: 1
+    domain: "PAY"
+    severity: "MEDIUM"
+    title: "Negative gross pay identified outside expected adjustment patterns"
+    datasets:
+      primary: "pay_events"
+      references: ["employee_master"]
+    text:
+      finding: "Negative gross pay amounts were identified that may indicate configuration errors or payroll reversals."
+      why_it_matters: "Uncontrolled negative payroll entries may distort financial reporting and create reconciliation inconsistencies."
+      remediation: "Review payroll adjustment controls and ensure negative entries are properly authorised and documented."
+
+  - id: "RKEG-PAY-008"
+    tier: 2
+    domain: "PAY"
+    severity: "HIGH"
+    title: "Pay events cannot be matched to a valid rate history record"
+    datasets:
+      primary: "pay_events"
+      references: ["rate_history", "employee_master"]
+    text:
+      finding: "Pay events were identified that could not be matched to a valid rate history record for the employee at the time of payment."
+      why_it_matters: "If pay cannot be traced back to an approved rate history, it is difficult to evidence that employees were paid at the correct rate for the relevant period."
+      remediation: "Reconcile pay events to rate history records and ensure all pay periods fall within clearly defined effective date ranges for each employee."
+
+  - id: "RKEG-PAY-009"
+    tier: 2
+    domain: "PAY"
+    severity: "MEDIUM"
+    title: "Rate history records contain gaps or overlapping effective dates"
+    datasets:
+      primary: "rate_history"
+      references: ["employee_master"]
+    text:
+      finding: "Rate history records were identified with gaps or overlapping effective date ranges for one or more employees."
+      why_it_matters: "Gaps and overlaps in rate history make it difficult to determine which rate applied at a point in time and increase the risk of incorrect or inconsistent pay outcomes."
+      remediation: "Normalise rate history so that each employee has a continuous sequence of non-overlapping effective date ranges that clearly show when each rate applied."
+
+  - id: "RKEG-TERM-001"
+    tier: 1
+    domain: "TERM"
+    severity: "HIGH"
+    title: "Final pay processed outside termination timing threshold"
+    datasets:
+      primary: "terminations"
+      references: ["pay_events", "employee_master"]
+    config:
+      max_days_after_termination: 7
+    text:
+      finding: "One or more terminated employees appear to have received final pay outside the configured statutory timeframe."
+      why_it_matters: "Late final payments may breach Fair Work timing obligations and increase regulatory and dispute exposure."
+      remediation: "Review termination processing workflows and ensure final pay is calculated and processed within the required statutory timeframe."
+
+  - id: "RKEG-SUP-001"
+    tier: 1
+    domain: "PAY"
+    severity: "HIGH"
+    title: "Superannuation rate outside expected tolerance band"
+    datasets:
+      primary: "pay_events"
+      references: ["employee_master"]
+    text:
+      finding: "Superannuation amounts were identified that fall outside the expected percentage tolerance range of ordinary earnings."
+      why_it_matters: "Superannuation underpayments or overpayments may create ATO exposure, employee disputes, and financial misstatement risk."
+      remediation: "Validate super configuration rates and ensure correct super calculations are applied to ordinary time earnings."
+  
+  - id: "RKEG-SUP-002"
+    tier: 2
+    domain: "SUP"
+    severity: "HIGH"
+    title: "Superannuation accrued does not reconcile to superannuation paid"
+    datasets:
+      primary: "super_payments"
+      references: ["pay_events", "employee_master"]
+    text:
+      finding: "Superannuation payments do not reconcile to superannuation accrued in payroll within the defined tolerance for one or more employees or periods."
+      why_it_matters: "Unreconciled superannuation may indicate underpayments, late payments or misdirected contributions, increasing ATO and director exposure."
+      remediation: "Reconcile superannuation accruals in payroll to clearing house or bank payment records and investigate all unexplained variances above the defined tolerance."
+
+  - id: "RKEG-SUP-003"
+    tier: 2
+    domain: "SUP"
+    severity: "HIGH"
+    title: "Superannuation contributions paid after statutory due date"
+    datasets:
+      primary: "super_payments"
+      references: []
+    text:
+      finding: "Superannuation payments were identified with payment dates after the statutory due date for the relevant contribution period."
+      why_it_matters: "Late superannuation contributions may incur penalties and interest, and increase director exposure under ATO director penalty regimes."
+      remediation: "Review superannuation payment scheduling and ensure contributions are processed and cleared before statutory due dates for all future periods."
+
+  - id: "RKEG-SUP-004"
+    tier: 2
+    domain: "SUP"
+    severity: "MEDIUM"
+    title: "Employees without a recorded default superannuation fund"
+    datasets:
+      primary: "employee_super"
+      references: ["employee_master"]
+    text:
+      finding: "Employees were identified without a recorded default superannuation fund in the data provided."
+      why_it_matters: "Missing default fund information makes it harder to evidence that contributions were directed to the correct fund and may indicate weaknesses in onboarding and super choice processes."
+      remediation: "Ensure all employees have a recorded default superannuation fund and align payroll configuration and onboarding processes to capture and maintain this information."
+
+  - id: "RKEG-LEAVE-001"
+    tier: 1
+    domain: "LEAVE"
+    severity: "HIGH"
+    title: "Leave ledger movement without corresponding pay event"
+    datasets:
+      primary: "leave_ledger"
+      references: ["pay_events", "employee_master"]
+    text:
+      finding: "Leave balance adjustments were detected without corresponding payroll transactions."
+      why_it_matters: "Unlinked leave adjustments weaken entitlement traceability and may indicate manual manipulation or incomplete processing."
+      remediation: "Reconcile leave ledger movements to payroll transactions and ensure all leave adjustments are system-generated and documented."
+
+  - id: "RKEG-GOV-001"
+    tier: 2
+    domain: "GOVERNANCE"
+    severity: "MEDIUM"
+    title: "No structured payroll override log provided"
+    datasets:
+      primary: "pay_events"
+      references: []
+    text:
+      finding: "No structured override or exception log was provided for manual payroll adjustments."
+      why_it_matters: "Without an override log it is difficult to evidence who changed what, when and why, which weakens fraud and error controls and complicates dispute resolution."
+      remediation: "Introduce a basic override register or system-based workflow to record all manual payroll changes, including who made the change, when, and for what reason."
+
+  - id: "RKEG-GOV-002"
+    tier: 2
+    domain: "GOVERNANCE"
+    severity: "MEDIUM"
+    title: "Payroll overrides missing reason or approval information"
+    datasets:
+      primary: "pay_overrides"
+      references: ["employee_master"]
+    text:
+      finding: "Payroll overrides were identified with missing or incomplete reason or approval information."
+      why_it_matters: "Overrides without documented rationale or approval weaken governance and make it harder to defend payroll outcomes if challenged."
+      remediation: "Enforce mandatory reason and approval fields for payroll overrides and ensure incomplete records cannot be finalised."
+
+  - id: "RKEG-GOV-003"
+    tier: 2
+    domain: "GOVERNANCE"
+    severity: "MEDIUM"
+    title: "High volume of manual payroll overrides relative to pay events"
+    datasets:
+      primary: "pay_overrides"
+      references: ["pay_events"]
+    text:
+      finding: "A high volume of manual overrides was identified relative to the total number of pay events processed."
+      why_it_matters: "Frequent manual overrides may indicate underlying configuration issues, process weaknesses or an over-reliance on manual intervention, increasing error and fraud risk."
+      remediation: "Review the drivers of manual overrides, address underlying configuration or process issues, and reduce reliance on manual adjustments where possible."

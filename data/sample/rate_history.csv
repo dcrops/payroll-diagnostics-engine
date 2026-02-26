@@ -1,0 +1,4 @@
+employee_id,effective_from,effective_to,base_rate,employment_type,classification,pay_cycle,change_reason
+E001,2018-01-01,2022-06-30,32.50,FULL_TIME,Level_3,FORTNIGHTLY,ANNUAL_REVIEW
+E001,2022-07-01,,35.00,FULL_TIME,Level_4,FORTNIGHTLY,PROMOTION
+E002,2023-03-01,,28.00,PART_TIME,Level_2,FORTNIGHTLY,COMMENCEMENT

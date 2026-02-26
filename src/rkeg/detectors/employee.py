@@ -22,6 +22,11 @@ def run_rule(rule: dict, datasets: dict[str, pd.DataFrame]) -> List[Finding]:
         return _emp_003_missing_or_invalid_status(rule, datasets)
     if rule_id == "RKEG-EMP-004":
         return _emp_004_terminated_but_active(rule, datasets)
+    if rule_id == "RKEG-EMP-005":
+        # Tier 2 – Employees without a complete rate history record
+        # Placeholder for now so enabling Tier 2 doesn't break the engine.
+        # We'll implement the actual logic when rate_history rules are ready.
+        return []
 
 
     # Unknown EMP rule -> no findings
