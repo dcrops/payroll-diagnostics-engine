@@ -23,6 +23,8 @@ def run_rule(rule: dict, datasets: dict[str, pd.DataFrame]) -> List[Finding]:
         return _pay_003_missing_pay_run_reference(rule, datasets)
     if rule_id == "RKEG-PAY-004":
         return _pay_004_pay_without_employee_record(rule, datasets)
+    if rule_id == "RKEG-PAY-008":
+        return _run_pay_008(rule, datasets)
 
     # Unknown PAY rule -> no findings
     return []
@@ -290,6 +292,104 @@ def _pay_004_pay_without_employee_record(
                 next_action=remediation,
             )
         )
+
+    return findings
+
+def _run_pay_008(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[Finding]:
+    """
+    RKEG-PAY-008
+    Pay events cannot be matched to a valid rate history record.
+    """
+
+    pay_events = datasets.get("pay_events")
+    rate_history = datasets.get("rate_history")
+
+    if pay_events is None or pay_events.empty:
+        return []
+    if rate_history is None or rate_history.empty:
+        return []
+
+    pe = pay_events.copy()
+    rh = rate_history.copy()
+
+    # Required columns
+    required_pe_cols = {"employee_id", "pay_date"}
+    required_rh_cols = {"employee_id", "effective_from"}
+
+    if not required_pe_cols.issubset(pe.columns):
+        return []
+    if not required_rh_cols.issubset(rh.columns):
+        return []
+
+    # Coerce dates
+    pe["pay_date"] = pd.to_datetime(pe["pay_date"], errors="coerce")
+    rh["effective_from"] = pd.to_datetime(rh["effective_from"], errors="coerce")
+
+    if "effective_to" in rh.columns:
+        rh["effective_to"] = pd.to_datetime(rh["effective_to"], errors="coerce")
+    else:
+        rh["effective_to"] = pd.NaT
+
+    # Treat NULL effective_to as open-ended
+    rh["effective_to"] = rh["effective_to"].fillna(pd.Timestamp.max)
+
+    findings = []
+
+    text_block = rule.get("text", {})
+    base_finding_text = text_block.get(
+        "finding",
+        "Pay events could not be matched to a valid rate history record.",
+    )
+    remediation_text = text_block.get(
+        "remediation",
+        "Reconcile pay events to rate history and ensure effective date coverage.",
+    )
+    severity = rule.get("severity", "HIGH")
+
+    for _, pay_row in pe.iterrows():
+        employee_id = pay_row["employee_id"]
+        pay_date = pay_row["pay_date"]
+
+        if pd.isna(pay_date) or pd.isna(employee_id):
+            continue
+
+        emp_rates = rh[rh["employee_id"] == employee_id]
+
+        if emp_rates.empty:
+            continue  # EMP-005 handles no history at all
+
+        match = emp_rates[
+            (emp_rates["effective_from"] <= pay_date)
+            & (emp_rates["effective_to"] >= pay_date)
+        ]
+
+        if match.empty:
+            message = (
+                f"{base_finding_text} Employee {employee_id}, "
+                f"pay date {pay_date.date()} is outside any "
+                f"effective rate history window."
+            )
+
+            evidence = (
+                f"employee_id={employee_id}, "
+                f"pay_date={pay_date.date()}, "
+                f"rate_history_rows={len(emp_rates)}"
+            )
+
+            findings.append(
+                Finding(
+                    employee_id=str(employee_id),
+                    leave_type=None,
+                    as_of_date=pay_date.date().isoformat(),
+                    rule_code=rule["id"],
+                    severity=severity,
+                    message=message,
+                    diff_units=None,
+                    evidence=evidence,
+                    finding_id=uuid4().hex[:12],
+                    next_action=remediation_text,
+                )
+            )
 
     return findings
 

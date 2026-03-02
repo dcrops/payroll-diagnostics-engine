@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from uuid import uuid4
-from typing import List
+from typing import Dict, Iterable, List
 import pandas as pd
 
 from rkeg.rules import Finding
@@ -22,11 +22,12 @@ def run_rule(rule: dict, datasets: dict[str, pd.DataFrame]) -> List[Finding]:
         return _emp_003_missing_or_invalid_status(rule, datasets)
     if rule_id == "RKEG-EMP-004":
         return _emp_004_terminated_but_active(rule, datasets)
-    if rule_id == "RKEG-EMP-005":
+    elif rule_id == "RKEG-EMP-005":
+        return _run_emp_005(rule, datasets)
         # Tier 2 – Employees without a complete rate history record
         # Placeholder for now so enabling Tier 2 doesn't break the engine.
         # We'll implement the actual logic when rate_history rules are ready.
-        return []
+    return []
 
 
     # Unknown EMP rule -> no findings
@@ -327,6 +328,88 @@ def _emp_004_terminated_but_active(
                     next_action=rule["text"]["remediation"],
                 )
             )
+
+    return findings
+
+def _run_emp_005(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]:
+    employee_master = datasets.get("employee_master")
+    rate_history = datasets.get("rate_history")
+    pay_events = datasets.get("pay_events")  # NEW
+
+    if employee_master is None or employee_master.empty:
+        return []
+    if rate_history is None or rate_history.empty:
+        return []
+
+    emp_df = employee_master.copy()
+    rh_df = rate_history.copy()
+
+    emp_cols = {c.lower(): c for c in emp_df.columns}
+    rh_cols = {c.lower(): c for c in rh_df.columns}
+
+    emp_id_col_emp = emp_cols.get("employee_id", "employee_id")
+    emp_id_col_rh = rh_cols.get("employee_id", "employee_id")
+
+    # Start from employees who actually appear in pay_events (if provided)
+    emp_ids = emp_df[emp_id_col_emp].astype(str)
+
+    if pay_events is not None and not pay_events.empty:
+        pe_cols = {c.lower(): c for c in pay_events.columns}
+        emp_id_col_pe = pe_cols.get("employee_id", "employee_id")
+        paid_emp_ids = set(pay_events[emp_id_col_pe].astype(str).unique())
+        emp_ids = emp_ids[emp_ids.isin(paid_emp_ids)]
+
+    # If no one’s been paid in this window, nothing to do
+    if emp_ids.empty:
+        return []
+
+    rh_emp_ids = rh_df[emp_id_col_rh].astype(str)
+    emp_ids_with_history = set(rh_emp_ids.unique())
+
+    # Employees we pay, but with no rate history rows
+    mask_no_history = ~emp_ids.isin(emp_ids_with_history)
+
+    missing = emp_df[emp_df[emp_id_col_emp].astype(str).isin(emp_ids[mask_no_history])].copy()
+    if missing.empty:
+        return []
+
+    text_block = rule.get("text", {})
+    base_finding_text = text_block.get(
+        "finding",
+        "Employees were identified without a corresponding rate history record.",
+    )
+    remediation_text = text_block.get(
+        "remediation",
+        "Ensure all employees have rate history records that evidence how their base rates were set or changed.",
+    )
+    severity = rule.get("severity", "HIGH")
+
+    findings: List[Finding] = []
+
+    for _, row in missing.iterrows():
+        employee_id = str(row[emp_id_col_emp])
+
+        message = (
+            f"{base_finding_text} Employee {employee_id} has no rate history "
+            f"records in the data provided."
+        )
+
+        evidence = f"employee_id={employee_id}, rate_history_records=0"
+
+        findings.append(
+            Finding(
+                employee_id=employee_id,
+                leave_type=None,
+                as_of_date=None,
+                rule_code=rule["id"],
+                severity=severity,
+                message=message,
+                diff_units=None,
+                evidence=evidence,
+                finding_id=uuid4().hex[:12],
+                next_action=remediation_text,
+            )
+        )
 
     return findings
 

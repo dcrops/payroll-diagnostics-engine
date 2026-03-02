@@ -10,7 +10,7 @@ rules:
     title: "Pay or leave records exist without an employee master record"
     datasets:
       primary: "employee_master"
-      references: ["pay_events", "leave_ledger", "balance_snapshot", "terminations"]
+      references: ["pay_events", "leave_ledger", "leave_snapshot", "terminations"]
     text:
       finding: "Payroll and/or leave records were identified for individuals who do not have a corresponding employee master record."
       why_it_matters: "Regulators expect employers to clearly identify who was paid and on what basis. Payments without an underlying employee record cannot be substantiated if audited."
@@ -142,7 +142,7 @@ rules:
       remediation: "Ensure base rate fields are populated and aligned with earnings calculations."
 
   - id: "RKEG-PAY-007"
-    tier: 1
+    tier: 2
     domain: "PAY"
     severity: "MEDIUM"
     title: "Negative gross pay identified outside expected adjustment patterns"
@@ -225,14 +225,16 @@ rules:
     tier: 2
     domain: "SUP"
     severity: "HIGH"
-    title: "Superannuation contributions paid after statutory due date"
+    title: "Superannuation contributions paid after expected due date"
     datasets:
       primary: "super_payments"
       references: []
     text:
-      finding: "Superannuation payments were identified with payment dates after the statutory due date for the relevant contribution period."
-      why_it_matters: "Late superannuation contributions may incur penalties and interest, and increase director exposure under ATO director penalty regimes."
-      remediation: "Review superannuation payment scheduling and ensure contributions are processed and cleared before statutory due dates for all future periods."
+      finding: "Superannuation payments were identified with payment dates after the expected due date for the relevant contribution period, based on the configured payment window."
+      why_it_matters: "Superannuation must be paid by required deadlines to avoid SG charge exposure and ATO scrutiny. Payments processed significantly after the end of the contribution period may indicate process or cashflow issues and weaken defensibility."
+      remediation: "Review superannuation payment processes and ensure contributions are uploaded and cleared within the agreed payment window. Where payments are close to statutory deadlines, confirm alignment with current SG rules and consult your advisor as needed."
+    config:
+      days_after_period_end: 30
 
   - id: "RKEG-SUP-004"
     tier: 2
@@ -260,6 +262,36 @@ rules:
       why_it_matters: "Unlinked leave adjustments weaken entitlement traceability and may indicate manual manipulation or incomplete processing."
       remediation: "Reconcile leave ledger movements to payroll transactions and ensure all leave adjustments are system-generated and documented."
 
+  - id: "RKEG-LEAVE-002"
+    tier: 2
+    domain: "LEAVE"
+    severity: "HIGH"
+    title: "Leave snapshot balances do not reconcile to ledger movements"
+    datasets:
+      primary: "leave_snapshot"
+      references: ["leave_ledger"]
+    config:
+      tolerance_units: 2.0   # allowed difference between snapshot and reconstructed balance
+    text:
+      finding: "Leave snapshot balances do not reconcile to transactional leave ledger movements within the configured tolerance for one or more employees."
+      why_it_matters: "If leave balances cannot be reconstructed from the underlying ledger, the organisation’s ability to evidence entitlement accuracy is weakened. This increases the risk of disputes, remediation costs and auditor challenge."
+      remediation: "Reconcile leave snapshots to the transactional leave ledger, investigate discrepancies above the tolerance threshold and address configuration or processing gaps that prevent balances from being reconstructed from system movements."
+
+  - id: "RKEG-LEAVE-003"
+    tier: 2
+    domain: "LEAVE"
+    severity: "HIGH"
+    title: "Leave snapshot balances have no matching ledger history"
+    datasets:
+      primary: "leave_snapshot"
+      references: ["leave_ledger"]
+    config:
+      min_balance_units: 10.0  # only flag if snapshot balance is at least this large
+    text:
+      finding: "Leave snapshot balances were identified with no corresponding transactional leave ledger history for the employee and leave type."
+      why_it_matters: "Where leave balances cannot be traced to underlying transactional history, the organisation’s ability to evidence entitlement accuracy is weakened. This is often caused by system migrations or incomplete data retention and increases the risk of audit challenge and disputes."
+      remediation: "Confirm the source of opening leave balances and ensure that either transactional history is retained or that migration and opening balance documentation is available to evidence how current balances were derived."
+      
   - id: "RKEG-GOV-001"
     tier: 2
     domain: "GOVERNANCE"

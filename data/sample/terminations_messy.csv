@@ -1,15 +1,2 @@
 employee_id,termination_date,termination_reason
-E040,2024-02-15,Resignation
-E041,15/02/2024,resignation
-E042,2024/02/15,REDUNDANCY
-E043,,Redundancy
-E044,2024-02-30,Resignation
-E045,2024-02-15,
-E046,2024-02-15, redundancy 
-E047,2024-02-15,Termination - performance
-E048,2024-02-15,End of Contract
-E048,2024-02-15,Redundancy
-E049,notadate,Resignation
-E050,2024-02-15,REDUNDENCY
-E060,2024-03-15,Resignation
-E061,2024-04-30,Redundancy
+E003,2024-02-15,Redundancy
