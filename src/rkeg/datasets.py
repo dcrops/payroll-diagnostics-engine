@@ -13,10 +13,10 @@ DATASET_FILE_MAP: dict[str, str] = {
     "leave_ledger": "leave_ledger.csv",
     "leave_snapshot": "balances_snapshot.csv",
     "terminations": "terminations.csv",
-    # new ones:
     "super_payments": "super_payments.csv",
     "rate_history": "rate_history.csv",
     "pay_overrides": "pay_overrides.csv",
+    "employee_super": "employee_super.csv", 
 }
 
 
@@ -54,3 +54,4 @@ def load_all_datasets(base_path: Path) -> Dict[str, pd.DataFrame]:
         datasets[logical_name] = pd.read_csv(file_path)
 
     return datasets
+

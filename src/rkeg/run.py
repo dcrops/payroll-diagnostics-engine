@@ -80,20 +80,16 @@ def main() -> int:
     for name, df in datasets.items():
         print(f"[RKEG] {name}: shape={df.shape}")
 
-    # Extract individual dataframes for convenience
+    # Pull out the core ones for convenience / validation
     employees = datasets.get("employee_master", pd.DataFrame())
     pay_events = datasets.get("pay_events", pd.DataFrame())
     leave_ledger = datasets.get("leave_ledger", pd.DataFrame())
     leave_snapshot = datasets.get("leave_snapshot", pd.DataFrame())
     terminations = datasets.get("terminations", pd.DataFrame())
+    employee_super = datasets.get("employee_super", pd.DataFrame())
 
-    # New Tier 2 datasets (optional)
-    super_payments = datasets.get("super_payments", pd.DataFrame())
-    rate_history = datasets.get("rate_history", pd.DataFrame())
-    pay_overrides = datasets.get("pay_overrides", pd.DataFrame())
-
-    # Normalise employee_id
-    for df in (employees, pay_events, leave_ledger, leave_snapshot, terminations, super_payments, rate_history, pay_overrides):
+    # Normalise employee_id across all employee-level datasets
+    for df in (employees, pay_events, leave_ledger, leave_snapshot, terminations, employee_super):
         if not df.empty and "employee_id" in df.columns:
             df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
@@ -140,24 +136,17 @@ def main() -> int:
     else:
         print("[RKEG] No usable dates found for data window – rkeg_data_window.csv not written")
 
-        # ----------------------------
+    # ----------------------------
     # Run RKEG engine
     # ----------------------------
-    engine_datasets: dict[str, pd.DataFrame] = {
-        "employee_master": employees,
-        "pay_events": pay_events,
-        "leave_ledger": leave_ledger,
-        "leave_snapshot": leave_snapshot,
-        "terminations": terminations,
-    }
-
-    # Include Tier 2 datasets if present
-    if not super_payments.empty:
-        engine_datasets["super_payments"] = super_payments
-    if not rate_history.empty:
-        engine_datasets["rate_history"] = rate_history
-    if not pay_overrides.empty:
-        engine_datasets["pay_overrides"] = pay_overrides
+    # Update the central dict with the cleaned dataframes
+    engine_datasets = dict(datasets)
+    engine_datasets["employee_master"] = employees
+    engine_datasets["pay_events"] = pay_events
+    engine_datasets["leave_ledger"] = leave_ledger
+    engine_datasets["leave_snapshot"] = leave_snapshot
+    engine_datasets["terminations"] = terminations
+    engine_datasets["employee_super"] = employee_super  # <- important one for SUP-004
 
     findings: list[Finding] = list(
         run_rkeg_engine(engine_datasets, enabled_tiers={1, 2})

@@ -124,9 +124,9 @@ rules:
       primary: "pay_events"
       references: ["employee_master"]
     text:
-      finding: "Pay adjustments were detected where ordinary earnings increased without a proportional movement in superannuation."
-      why_it_matters: "Superannuation must be recalculated when ordinary earnings are adjusted. Failure to do so may result in underpayment exposure."
-      remediation: "Review adjustment processing to ensure superannuation is recalculated on all superable earnings adjustments."
+      finding: "Earnings adjustment was identified without a corresponding proportional adjustment to superannuation."
+      why_it_matters: "Failure to recalculate superannuation on earnings adjustments may result in underpayment exposure and compliance risk."
+      remediation: "Review payroll adjustment processes and ensure superannuation is recalculated on earnings corrections."
 
   - id: "RKEG-PAY-006"
     tier: 1
@@ -197,12 +197,15 @@ rules:
 
   - id: "RKEG-SUP-001"
     tier: 1
-    domain: "PAY"
+    domain: "SUP"
     severity: "HIGH"
     title: "Superannuation rate outside expected tolerance band"
     datasets:
       primary: "pay_events"
       references: ["employee_master"]
+    config:
+      target_rate: 0.11
+      tolerance: 0.01
     text:
       finding: "Superannuation amounts were identified that fall outside the expected percentage tolerance range of ordinary earnings."
       why_it_matters: "Superannuation underpayments or overpayments may create ATO exposure, employee disputes, and financial misstatement risk."

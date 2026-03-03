@@ -31,6 +31,8 @@ def _filter_rules_by_tier(
     if not enabled_tiers:
         return rules
 
+    print("Loaded rule IDs:", [r["id"] for r in rules])
+
     filtered: list[dict] = []
     for rule in rules:
         rule_tier = int(rule.get("tier", 1))
