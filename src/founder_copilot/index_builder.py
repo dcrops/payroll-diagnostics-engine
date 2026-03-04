@@ -164,6 +164,7 @@ def rule_record_to_chunk(record: RuleRecord) -> Chunk:
     metadata: Dict[str, Any] = {
         "module": record.module,
         "rule_id": record.rule_id,
+        "title": record.title,    
         "tier": record.tier,
         "severity": record.severity,
         "risk_dimension": record.risk_dimensions,
