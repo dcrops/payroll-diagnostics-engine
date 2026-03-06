@@ -25,7 +25,7 @@ RKEG_RULES_YAML = PROJECT_ROOT / "src" / "rkeg" / "config" / "rkeg_rules.yml"
 RKEG_DESIGN_MD = PROJECT_ROOT / "src" / "reporting" / "rkeg_text.py"  # placeholder
 RISK_FRAMEWORK_MD = PROJECT_ROOT / "src" / "reporting" / "context.py"  # or a dedicated md later
 
-# Where we’ll persist our built index (simple JSONL for now)
+# Where we'll persist our built index (simple JSONL for now)
 RAG_INDEX_JSONL = FOUNDER_RAG_DIR / "crc_founder_index.jsonl"
 
 
