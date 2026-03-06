@@ -1,6 +1,6 @@
 version: '1.0'
 module: RKEG
-description: Record-Keeping & Evidence Gaps – core payroll evidence spine
+description: Record-Keeping & Evidence Gaps - core payroll evidence spine
 rules:
 - id: RKEG-EMP-001
   tier: 1
@@ -99,9 +99,9 @@ rules:
   text:
     finding: 'Employees were identified without a corresponding rate history record
       covering their employment period.'
-    why_it_matters: 'Rate history records evidence how and when base rates were set
-      or changed. Missing history weakens the employer’s ability to substantiate pay
-      rates if audited.'
+    why_it_matters: "Rate history records evidence how and when base rates were set
+      or changed. Missing history weakens the employer's ability to substantiate pay
+      rates if audited."
     remediation: 'Ensure all employees have complete, date-effective rate history
       records from commencement to cessation and align payroll configuration to these
       records.'
@@ -119,9 +119,9 @@ rules:
     primary: pay_events
   text:
     finding: 'Pay events were identified without a valid pay date.'
-    why_it_matters: 'Pay dates establish when wages were paid and how they align with
+    why_it_matters: "Pay dates establish when wages were paid and how they align with
       employment periods, terminations and entitlements. Missing or invalid dates
-      weaken the employer’s ability to evidence the timing of payments if audited.'
+      weaken the employer's ability to evidence the timing of payments if audited."
     remediation: 'Ensure all pay events include a valid pay date and enforce validation
       in payroll processes so events cannot be processed or exported without this
       field populated.'
@@ -192,23 +192,20 @@ rules:
 
 - id: RKEG-PAY-005
   tier: 1
-  domain: PAY
-  severity: HIGH
-  title: Earnings adjustment without proportional super recalculation
+  domain: "PAY"
+  severity: "HIGH"
+  title: "Earnings adjustment without proportional super recalculation"
   datasets:
-    primary: pay_events
-    references:
-      - employee_master
+    primary: "pay_events"
+    references: ["employee_master"]
   text:
-    finding: 'Pay adjustments were detected where ordinary earnings increased without
-      a proportional movement in superannuation.'
-    why_it_matters: 'Superannuation must be recalculated when ordinary earnings are
-      adjusted. Failure to do so may result in underpayment exposure.'
-    remediation: 'Review adjustment processing to ensure superannuation is recalculated
-      on all superable earnings adjustments.'
+    finding: "Earnings adjustment was identified without a corresponding proportional adjustment to superannuation."
+    why_it_matters: "Failure to recalculate superannuation on earnings adjustments may result in underpayment exposure and compliance risk."
+    remediation: "Review payroll adjustment processes and ensure superannuation is recalculated on earnings corrections."
   risk_dimension:
     - calculation_integrity
-    - governance_exposure
+    - governance_monitoring_exposure
+    - cross_module_linkage_risk
 
 - id: RKEG-PAY-006
   tier: 1
@@ -295,6 +292,42 @@ rules:
   risk_dimension:
     - data_anomaly_sanity
     - timing_integrity
+
+- id: RKEG-PAY-010
+  tier: 2
+  domain: PAY
+  severity: HIGH
+  title: Pay events recorded outside employment period
+  datasets:
+    primary: pay_events
+    references:
+      - employee_master
+      - terminations
+  text:
+    finding: "Pay events were identified that fall outside the employee's recorded employment period."
+    why_it_matters: "Payments before commencement or after termination may indicate configuration errors, delayed offboarding updates or manual payroll overrides."
+    remediation: "Reconcile pay events against employment start and termination dates and investigate any payments recorded outside valid employment periods."
+  risk_dimension:
+    - timing_integrity
+    - cross_module_linkage_risk
+    - governance_exposure
+
+- id: RKEG-PAY-011
+  tier: 2
+  domain: PAY
+  severity: HIGH
+  title: Rate history record missing effective date fields
+  datasets:
+    primary: rate_history
+    references:
+      - employee_master
+  text:
+    finding: "Rate history records were identified without valid effective date fields."
+    why_it_matters: "Rate history records must include effective date ranges to evidence when pay rates applied. Missing dates weaken the employer's ability to substantiate payroll calculations."
+    remediation: "Ensure all rate history records include valid effective from and effective to dates and enforce validation in payroll configuration processes."
+  risk_dimension:
+    - structural_completeness
+    - evidence_traceability
 
 - id: RKEG-TERM-001
   tier: 1
@@ -412,6 +445,39 @@ rules:
     - structural_completeness
     - governance_exposure
 
+- id: RKEG-SUP-005
+  tier: 2
+  domain: SUP
+  severity: HIGH
+  title: Super payment record missing payment date
+  datasets:
+    primary: super_payments
+    references: []
+  text:
+    finding: "Superannuation payment records were identified without a valid payment date."
+    why_it_matters: "Payment dates are required to evidence when contributions were made and whether statutory deadlines were met."
+    remediation: "Ensure all super payment records include valid payment dates and enforce validation before exporting super contribution data."
+  risk_dimension:
+    - structural_completeness
+    - evidence_traceability
+
+- id: RKEG-SUP-006
+  tier: 2
+  domain: SUP
+  severity: MEDIUM
+  title: Multiple default super funds recorded for an employee
+  datasets:
+    primary: employee_super
+    references:
+      - employee_master
+  text:
+    finding: "Employees were identified with multiple default superannuation fund records."
+    why_it_matters: "Multiple default funds increase the risk that super contributions are directed to incorrect accounts."
+    remediation: "Ensure each employee has a single valid default super fund and reconcile conflicting records."
+  risk_dimension:
+    - data_anomaly_sanity
+    - governance_exposure
+
 - id: RKEG-LEAVE-001
   tier: 1
   domain: LEAVE
@@ -450,9 +516,9 @@ rules:
   text:
     finding: 'Leave snapshot balances do not reconcile to transactional leave ledger
       movements within the configured tolerance for one or more employees.'
-    why_it_matters: 'If leave balances cannot be reconstructed from the underlying
-      ledger, the organisation’s ability to evidence entitlement accuracy is weakened.
-      This increases the risk of disputes, remediation costs and auditor challenge.'
+    why_it_matters: "If leave balances cannot be reconstructed from the underlying
+      ledger, the organisation's ability to evidence entitlement accuracy is weakened.
+      This increases the risk of disputes, remediation costs and auditor challenge."
     remediation: 'Reconcile leave snapshots to the transactional leave ledger, investigate
       discrepancies above the tolerance threshold and address configuration or processing
       gaps that prevent balances from being reconstructed from system movements.'
@@ -471,16 +537,34 @@ rules:
   text:
     finding: 'Leave snapshot balances were identified with no corresponding transactional
       leave ledger history for the employee and leave type.'
-    why_it_matters: 'Where leave balances cannot be traced to underlying transactional
-      history, the organisation’s ability to evidence entitlement accuracy is weakened.
+    why_it_matters: "Where leave balances cannot be traced to underlying transactional
+      history, the organisation's ability to evidence entitlement accuracy is weakened.
       This is often caused by system migrations or incomplete data retention and increases
-      the risk of audit challenge and disputes.'
+      the risk of audit challenge and disputes."
     remediation: 'Confirm the source of opening leave balances and ensure that either
       transactional history is retained or that migration and opening balance documentation
       is available to evidence how current balances were derived.'
   risk_dimension:
     - evidence_traceability
     - data_anomaly_sanity
+
+- id: RKEG-LEAVE-004
+  tier: 2
+  domain: LEAVE
+  severity: HIGH
+  title: Leave ledger entry missing event date
+  datasets:
+    primary: leave_ledger
+    references:
+      - employee_master
+  text:
+    finding: "Leave ledger records were identified without a valid event date."
+    why_it_matters: "Leave movements must include event dates to reconstruct entitlement balances and support audit evidence."
+    remediation: "Ensure all leave ledger transactions include valid event dates and enforce validation in payroll exports."
+  risk_dimension:
+    - structural_completeness
+    - timing_integrity
+    - evidence_traceability
 
 - id: RKEG-GOV-001
   tier: 2
@@ -543,3 +627,19 @@ rules:
   risk_dimension:
     - governance_exposure
     - exception_handling
+
+- id: RKEG-GOV-004
+  tier: 2
+  domain: GOVERNANCE
+  severity: MEDIUM
+  title: Payroll overrides missing timestamp information
+  datasets:
+    primary: pay_overrides
+    references: []
+  text:
+    finding: "Payroll override records were identified without a valid timestamp."
+    why_it_matters: "Without timestamps it is difficult to determine when payroll adjustments occurred, weakening audit trails and governance monitoring."
+    remediation: "Ensure override records include timestamps and enforce system controls to prevent incomplete override records."
+  risk_dimension:
+    - evidence_traceability
+    - governance_exposure

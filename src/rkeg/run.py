@@ -12,6 +12,20 @@ from rkeg.engine import run_rkeg_engine
 from common.data_window import write_data_window
 from rkeg.datasets import load_all_datasets
 
+EVIDENCE_LAYER_MAP = {
+    "structural_completeness": "Workforce Identity",
+    "evidence_traceability": "Workforce Identity",
+
+    "calculation_integrity": "Pay Construction",
+    "data_anomaly_sanity": "Pay Construction",
+
+    "timing_integrity": "Entitlement Evidence",
+    "cross_module_linkage_risk": "Entitlement Evidence",
+
+    "exception_handling": "Governance & Controls",
+    "governance_exposure": "Governance & Controls",
+    "governance_monitoring_exposure": "Governance & Controls",
+}
 
 REQUIRED_EMP = {"employee_id"}
 REQUIRED_PAY = {"employee_id"}          # we'll tighten this later
@@ -133,20 +147,30 @@ def main() -> int:
     for name, df in datasets.items():
         print(f"[RKEG] {name}: shape={df.shape}")
 
+    # Pull out key datasets for convenience / validation
     employees = datasets.get("employee_master", pd.DataFrame())
     pay_events = datasets.get("pay_events", pd.DataFrame())
     leave_ledger = datasets.get("leave_ledger", pd.DataFrame())
     leave_snapshot = datasets.get("leave_snapshot", pd.DataFrame())
     terminations = datasets.get("terminations", pd.DataFrame())
 
+    # Optional Tier 2 / extended datasets
+    employee_super = datasets.get("employee_super", pd.DataFrame())
     super_payments = datasets.get("super_payments", pd.DataFrame())
     rate_history = datasets.get("rate_history", pd.DataFrame())
     pay_overrides = datasets.get("pay_overrides", pd.DataFrame())
 
-    # Normalise employee_id
+    # Normalise employee_id across all employee-level datasets
     for df in (
-        employees, pay_events, leave_ledger, leave_snapshot, terminations,
-        super_payments, rate_history, pay_overrides
+        employees,
+        pay_events,
+        leave_ledger,
+        leave_snapshot,
+        terminations,
+        employee_super,
+        super_payments,
+        rate_history,
+        pay_overrides,
     ):
         if not df.empty and "employee_id" in df.columns:
             df["employee_id"] = df["employee_id"].astype(str).str.strip()
@@ -169,32 +193,34 @@ def main() -> int:
     rkeg_dates += _collect_dates_from_df(pay_events, ["pay_date", "period_start", "period_end"])
     rkeg_dates += _collect_dates_from_df(leave_ledger, ["as_of_date", "event_date"])
     rkeg_dates += _collect_dates_from_df(leave_snapshot, ["as_of_date"])
-    rkeg_dates += _collect_dates_from_df(terminations, ["termination_date", "final_pay_date", "term_date", "pay_date"])
+    rkeg_dates += _collect_dates_from_df(
+        terminations,
+        ["termination_date", "final_pay_date", "term_date", "pay_date"],
+    )
 
     if rkeg_dates:
         rkeg_window_path = modules_dir / "rkeg_data_window.csv"
         write_data_window(rkeg_window_path, rkeg_dates)
-        print(f"[RKEG] Wrote data window to {rkeg_window_path} ({min(rkeg_dates)} → {max(rkeg_dates)})")
+        print(
+            f"[RKEG] Wrote data window to {rkeg_window_path} "
+            f"({min(rkeg_dates)} → {max(rkeg_dates)})"
+        )
     else:
         print("[RKEG] No usable dates found for data window - rkeg_data_window.csv not written")
 
     # ----------------------------
-    # Run engine
+    # Run RKEG engine
     # ----------------------------
-    engine_datasets: dict[str, pd.DataFrame] = {
-        "employee_master": employees,
-        "pay_events": pay_events,
-        "leave_ledger": leave_ledger,
-        "leave_snapshot": leave_snapshot,
-        "terminations": terminations,
-    }
-
-    if not super_payments.empty:
-        engine_datasets["super_payments"] = super_payments
-    if not rate_history.empty:
-        engine_datasets["rate_history"] = rate_history
-    if not pay_overrides.empty:
-        engine_datasets["pay_overrides"] = pay_overrides
+    engine_datasets = dict(datasets)
+    engine_datasets["employee_master"] = employees
+    engine_datasets["pay_events"] = pay_events
+    engine_datasets["leave_ledger"] = leave_ledger
+    engine_datasets["leave_snapshot"] = leave_snapshot
+    engine_datasets["terminations"] = terminations
+    engine_datasets["employee_super"] = employee_super
+    engine_datasets["super_payments"] = super_payments
+    engine_datasets["rate_history"] = rate_history
+    engine_datasets["pay_overrides"] = pay_overrides
 
     findings: list[Finding] = list(run_rkeg_engine(engine_datasets, enabled_tiers={1, 2}))
 
@@ -290,11 +316,36 @@ def main() -> int:
             pivot["TOTAL"] = pivot.sum(axis=1)
             pivot = pivot.sort_values("TOTAL", ascending=False).reset_index()
 
+
+        # ----------------------------
+    # Payroll Evidence Integrity Map
+    # ----------------------------
+    layer_summary_path = modules_dir / "rkeg_evidence_integrity_map.csv"
+
+    layer_df = pd.DataFrame(columns=["layer", "finding_count"])
+
+    if len(findings_df) > 0:
+
+        exploded = findings_df.explode("risk_dimension")
+        exploded = exploded[exploded["risk_dimension"].notna()]
+
+        exploded["evidence_layer"] = exploded["risk_dimension"].map(EVIDENCE_LAYER_MAP)
+
+        layer_df = (
+            exploded.groupby("evidence_layer", as_index=False)
+            .size()
+            .rename(columns={"size": "finding_count"})
+            .sort_values("finding_count", ascending=False)
+        )
+
+    layer_df.to_csv(layer_summary_path, index=False)
+
+    print(f"Wrote: {layer_summary_path}")
     # ----------------------------
     # Exec narrative (ALWAYS define exec_md)
     # ----------------------------
     if len(findings_df) == 0:
-        exec_md = "# RKEG – Executive Risk Summary\n\nNo findings were generated.\n"
+        exec_md = "# RKEG - Executive Risk Summary\n\nNo findings were generated.\n"
     else:
         total_findings = int(len(findings_df))
         risk_score, risk_rating = _risk_score_and_rating(findings_df)
@@ -334,6 +385,26 @@ def main() -> int:
             ]
         ) or "- (no actions)"
 
+        layer_lines = ""
+
+        if len(layer_df) > 0:
+            max_count = int(layer_df["finding_count"].max())
+            max_bar_width = 24
+            label_width = 22   # <- controls alignment
+
+            def _bar(count: int) -> str:
+                filled = max(1, round((count / max_count) * max_bar_width))
+                return "█" * filled
+
+            layer_lines = "\n".join(
+                [
+                    f"- **{row['evidence_layer']:<{label_width}}** {_bar(int(row['finding_count']))} {int(row['finding_count'])}"
+                    for _, row in layer_df.iterrows()
+                ]
+            )
+        else:
+            layer_lines = "- (no evidence layer findings)"
+
         exec_md = f"""# RKEG – Executive Risk Summary
 
 ## Overview
@@ -343,17 +414,21 @@ RKEG produced **{total_findings} findings** across the payroll evidence spine.
 - **Risk score:** **{risk_score}**
 - **Severity distribution:** **{sev_line}**
 
+## Payroll Evidence Integrity Map
+{layer_lines}
+
 ## Top risk dimensions (by linked findings)
 {top_lines}
 
 ## Interpretation
-The dominant exposure is **{top_dimension}**, indicating gaps in the organisation's ability to reconstruct and substantiate payroll outcomes from underlying records. Elevated **calculation integrity** and **governance exposure** signals suggest heightened risk of miscalculation, weak control evidence, or insufficient approval trails.
+The dominant exposure is **{top_dimension}**, indicating gaps in the organisation's ability to reconstruct and substantiate payroll outcomes.
 
 ## Most frequently triggered rules
 {rule_lines}
 
 ## Recommended actions
 {action_lines}
+
 
 ## Notes
 - Linked findings counts may exceed total findings because a single finding can map to multiple risk dimensions.

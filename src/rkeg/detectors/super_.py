@@ -65,6 +65,39 @@ def _pick_date_column(df: pd.DataFrame, preferred: List[str]) -> Optional[str]:
 
     return None
 
+def _pick_earnings_column(pay_events: pd.DataFrame) -> Optional[str]:
+    """
+    Try to identify the 'superable earnings' column in pay_events.
+
+    Prefer OTE/base earnings style columns, but fall back to gross_amount
+    or any earnings-like column if needed.
+    """
+    if pay_events is None or pay_events.empty:
+        return None
+
+    candidates = [
+        "ote_amount",
+        "ordinary_earnings",
+        "ote",
+        "base_earnings",
+        "superable_earnings",
+        "gross_amount",   # common fallback
+    ]
+
+    lower_cols = {c.lower(): c for c in pay_events.columns}
+
+    for logical in candidates:
+        if logical in lower_cols:
+            return lower_cols[logical]
+
+    # Fallback: anything that smells like earnings
+    for c in pay_events.columns:
+        name = c.lower()
+        if "gross" in name or "earn" in name or "wages" in name:
+            return c
+
+    return None
+
 
 def _coerce_month_series(df: pd.DataFrame, col: str) -> pd.Series:
     """
@@ -74,6 +107,129 @@ def _coerce_month_series(df: pd.DataFrame, col: str) -> pd.Series:
     dt = pd.to_datetime(df[col], errors="coerce")
     return dt.dt.to_period("M").astype(str)
 
+def _run_sup_001(
+    rule: dict,
+    datasets: Dict[str, pd.DataFrame],
+) -> Iterable[Finding]:
+    """
+    RKEG-SUP-001:
+    Superannuation rate outside expected tolerance band.
+
+    For each pay_events row, compare super amount vs earnings.
+    Flag rows where the effective super rate is outside
+    target_rate ± tolerance from the YAML config.
+    """
+    pay_events = datasets.get("pay_events")
+    if pay_events is None or pay_events.empty:
+        return []
+
+    super_col = _pick_super_column(pay_events)
+    earnings_col = _pick_earnings_column(pay_events)
+
+    # Can't run the rule without both pieces
+    if super_col is None or earnings_col is None:
+        return []
+
+    cfg = rule.get("config", {})
+    target_rate = float(cfg.get("target_rate", 0.11))   # default 11%
+    tolerance = float(cfg.get("tolerance", 0.01))       # default ±1%
+
+    min_rate = max(0.0, target_rate - tolerance)
+    max_rate = target_rate + tolerance
+
+    df = pay_events.copy()
+
+    # Coerce to numeric
+    df[super_col] = pd.to_numeric(df[super_col], errors="coerce")
+    df[earnings_col] = pd.to_numeric(df[earnings_col], errors="coerce")
+
+    # Only rows with positive earnings and non-null super
+    mask_valid = (df[earnings_col] > 0) & df[super_col].notna()
+    df = df[mask_valid]
+
+    if df.empty:
+        return []
+
+    # Effective rate = super / earnings
+    df["__sup_rate"] = df[super_col] / df[earnings_col]
+
+    # Flag rows outside band (ignore zero super – that's a different rule)
+    mask_outside = (
+        (df[super_col] > 0)
+        & ((df["__sup_rate"] < min_rate) | (df["__sup_rate"] > max_rate))
+    )
+    flagged = df[mask_outside]
+
+    print(
+        f"[SUP-001] candidate rows={len(df)}, "
+        f"flagged_out_of_band={len(flagged)}"
+    )
+
+    if flagged.empty:
+        return []
+
+    text = rule.get("text", {})
+    base_msg = text.get(
+        "finding",
+        "Superannuation amounts were identified that fall outside the expected tolerance range.",
+    )
+    remediation = text.get(
+        "remediation",
+        "Validate super configuration and ensure the correct super rate is applied to earnings.",
+    )
+    severity = rule.get("severity", "HIGH")
+
+    # Optional: pick a date for evidence
+    pay_date_col = _pick_date_column(flagged, ["pay_date", "period_end", "period_start"])
+    employee_col = "employee_id" if "employee_id" in flagged.columns else None
+
+    findings: list[Finding] = []
+
+    for _, row in flagged.iterrows():
+        emp_id = (
+            str(row[employee_col])
+            if employee_col and pd.notna(row[employee_col])
+            else None
+        )
+        pay_date = (
+            str(row[pay_date_col])
+            if pay_date_col and pd.notna(row[pay_date_col])
+            else None
+        )
+
+        earnings = float(row[earnings_col])
+        sup_amt = float(row[super_col])
+        rate = float(row["__sup_rate"])
+
+        evidence_str = (
+            f"employee_id={emp_id}, pay_date={pay_date}, "
+            f"earnings={earnings:.2f}, super_amount={sup_amt:.2f}, "
+            f"effective_rate={rate:.4f}, "
+            f"expected_band={min_rate:.4f}-{max_rate:.4f}"
+        )
+
+        message = (
+            f"{base_msg} Effective super rate {rate:.2%} on "
+            f"earnings {earnings:.2f} with super {sup_amt:.2f} "
+            f"(expected between {min_rate:.2%} and {max_rate:.2%})."
+        )
+
+        findings.append(
+            Finding(
+                employee_id=emp_id,
+                leave_type=None,
+                as_of_date=pay_date,
+                rule_code=rule["id"],
+                severity=severity,
+                message=message,
+                diff_units=None,
+                evidence=evidence_str,
+                finding_id=uuid4().hex[:12],
+                next_action=remediation,
+            )
+        )
+
+    return findings
 
 def _run_sup_002(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]:
     """
@@ -371,21 +527,126 @@ def _run_sup_003(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]
 
     return findings
 
+def _run_sup_004(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]:
+    """
+    RKEG-SUP-004
+    Employees without a recorded default superannuation fund.
+    """
+    print("[SUP-004] Running RKEG-SUP-004 detector")
+
+    employee_master = datasets.get("employee_master")
+    employee_super = datasets.get("employee_super")
+
+    if (
+        employee_master is None
+        or employee_master.empty
+        or employee_super is None
+        or employee_super.empty
+    ):
+        print("[SUP-004] Missing employee_master or employee_super; skipping")
+        return []
+
+    df_master = employee_master.copy()
+    df_super = employee_super.copy()
+
+    if "employee_id" not in df_master.columns or "employee_id" not in df_super.columns:
+        print("[SUP-004] employee_id column missing; skipping")
+        return []
+
+    # Normalise IDs
+    df_master["employee_id"] = df_master["employee_id"].astype(str).str.strip()
+    df_super["employee_id"] = df_super["employee_id"].astype(str).str.strip()
+
+    # Find a 'fund'-like column
+    fund_col = None
+    for c in df_super.columns:
+        if "fund" in c.lower():
+            fund_col = c
+            break
+
+    if fund_col is None:
+        print("[SUP-004] No fund column found in employee_super; skipping")
+        return []
+
+    # Left join so employees with no employee_super row show up with NaN fund
+    merged = df_master.merge(
+        df_super[["employee_id", fund_col]],
+        on="employee_id",
+        how="left",
+    )
+
+    # Missing or blank fund
+    flagged = merged[
+        merged[fund_col].isna()
+        | (merged[fund_col].astype(str).str.strip() == "")
+    ].copy()
+
+    print(
+        f"[SUP-004] candidate employees={len(merged)}, "
+        f"flagged_missing_fund={len(flagged)}"
+    )
+
+    if flagged.empty:
+        return []
+
+    text = rule.get("text", {})
+    base_msg = text.get(
+        "finding",
+        "Employees were identified without a recorded default superannuation fund in the data provided.",
+    )
+    remediation = text.get(
+        "remediation",
+        "Ensure all employees have a recorded default superannuation fund and align payroll configuration and onboarding processes.",
+    )
+    severity = rule.get("severity", "MEDIUM")
+
+    findings: List[Finding] = []
+
+    for _, row in flagged.iterrows():
+        emp_id = str(row["employee_id"])
+
+        findings.append(
+            Finding(
+                employee_id=emp_id,
+                leave_type=None,
+                as_of_date=None,
+                rule_code=rule["id"],
+                severity=severity,
+                message=base_msg,
+                diff_units=None,
+                evidence=f"employee_id={emp_id}, fund_missing_or_blank=True",
+                finding_id=uuid4().hex[:12],
+                next_action=remediation,
+            )
+        )
+
+    return findings
+
 
 def run_rule(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[Finding]:
     """
     Entry point for SUP domain rules.
 
     Currently implements:
+    - RKEG-SUP-001: superannuation rate outside expected tolerance band
     - RKEG-SUP-002: accrued vs paid reconciliation (employee + month)
     - RKEG-SUP-003: late contributions vs period end + grace days
+    - RKEG-SUP-004: employees without a recorded default fund
     """
     rule_id = rule["id"]
 
+    if rule_id == "RKEG-SUP-001":
+        print("[SUP-001] Running RKEG-SUP-001 detector")
+        return _run_sup_001(rule, datasets)
+
     if rule_id == "RKEG-SUP-002":
         return _run_sup_002(rule, datasets)
-    elif rule_id == "RKEG-SUP-003":
+
+    if rule_id == "RKEG-SUP-003":
         return _run_sup_003(rule, datasets)
+
+    if rule_id == "RKEG-SUP-004":
+        return _run_sup_004(rule, datasets)
 
     # Other SUP rules can be added here later
     return []

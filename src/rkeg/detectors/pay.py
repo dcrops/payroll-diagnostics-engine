@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, Iterable, Dict
 from uuid import uuid4
 
 import pandas as pd
@@ -23,12 +23,40 @@ def run_rule(rule: dict, datasets: dict[str, pd.DataFrame]) -> List[Finding]:
         return _pay_003_missing_pay_run_reference(rule, datasets)
     if rule_id == "RKEG-PAY-004":
         return _pay_004_pay_without_employee_record(rule, datasets)
+    if rule_id == "RKEG-PAY-005":
+        return _pay_005_earnings_adjustment_without_proportional_super_recalculation(rule, datasets)
+    if rule_id == "RKEG-PAY-006":
+        return _pay_006_ordinary_earnings_without_base_rate(rule, datasets)
+    if rule_id == "RKEG-PAY-007":
+        return _pay_007_negative_gross_pay_outside_expected_adjustment_patterns(rule, datasets)
     if rule_id == "RKEG-PAY-008":
-        return _run_pay_008(rule, datasets)
+        return _pay_008_unmatched_rate_history(rule, datasets)
+    if rule_id == "RKEG-PAY-009":
+        return _pay_009_rate_history_gaps_or_overlaps(rule, datasets)
 
     # Unknown PAY rule -> no findings
     return []
 
+def _pick_rate_history_date_columns(df: pd.DataFrame) -> tuple[str | None, str | None]:
+    """
+    Pick effective start / end columns for rate history.
+    Supports either:
+    - effective_from / effective_to
+    - start_date / end_date
+    """
+    cols = {c.lower(): c for c in df.columns}
+
+    start_col = (
+        cols.get("effective_from")
+        or cols.get("start_date")
+    )
+
+    end_col = (
+        cols.get("effective_to")
+        or cols.get("end_date")
+    )
+
+    return start_col, end_col
 
 def _pay_001_missing_or_invalid_pay_date(
     rule: dict,
@@ -295,7 +323,309 @@ def _pay_004_pay_without_employee_record(
 
     return findings
 
-def _run_pay_008(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[Finding]:
+def _pay_005_earnings_adjustment_without_proportional_super_recalculation(rule: dict, datasets: dict) -> List[Finding]:
+    """
+    RKEG-PAY-005
+    Earnings adjustment without proportional super recalculation.
+    """
+
+    print("[PAY-005] Running RKEG-PAY-005 detector")
+
+    pay_events = datasets.get("pay_events")
+
+    if pay_events is None or pay_events.empty:
+        return []
+
+    df = pay_events.copy()
+
+    if "gross_amount" not in df.columns:
+        return []
+
+    # Identify super column
+    super_col = None
+    for c in df.columns:
+        if "super" in c.lower():
+            super_col = c
+            break
+
+    if super_col is None:
+        return []
+
+    # Coerce numeric
+    df["gross_amount"] = pd.to_numeric(df["gross_amount"], errors="coerce")
+    df[super_col] = pd.to_numeric(df[super_col], errors="coerce")
+
+    # Negative earnings but zero super adjustment
+    flagged = df[
+        (df["gross_amount"] < 0) &
+        (df[super_col].fillna(0) == 0)
+    ]
+
+    if flagged.empty:
+        return []
+
+    text = rule.get("text", {})
+    base_msg = text.get(
+        "finding",
+        "Earnings adjustment without proportional super recalculation detected."
+    )
+    remediation = text.get(
+        "remediation",
+        "Review adjustment logic and ensure super recalculation occurs."
+    )
+    severity = rule.get("severity", "HIGH")
+
+    findings: List[Finding] = []
+
+    for _, row in flagged.iterrows():
+        emp_id = str(row.get("employee_id", ""))
+
+        evidence = (
+            f"employee_id={emp_id}, "
+            f"gross_amount={row['gross_amount']}, "
+            f"{super_col}={row[super_col]}"
+        )
+
+        findings.append(
+            Finding(
+                employee_id=emp_id,
+                leave_type=None,
+                as_of_date=None,
+                rule_code=rule["id"],
+                severity=severity,
+                message=base_msg,
+                diff_units=None,
+                evidence=evidence,
+                finding_id=uuid4().hex[:12],
+                next_action=remediation,
+            )
+        )
+
+    return findings
+
+def _pay_006_ordinary_earnings_without_base_rate(rule: dict, datasets: dict) -> List[Finding]:
+    """
+    RKEG-PAY-006
+    Ordinary earnings present without recorded base rate.
+
+    Logic:
+    - Find employees with positive gross_amount in pay_events.
+    - Join to employee_master.
+    - Flag employees where base_rate is missing/blank.
+    """
+    print("[PAY-006] Running RKEG-PAY-006 detector")
+
+    pay_events = datasets.get("pay_events")
+    employees = datasets.get("employee_master")
+
+    if pay_events is None or pay_events.empty:
+        return []
+    if employees is None or employees.empty:
+        return []
+
+    if "gross_amount" not in pay_events.columns:
+        return []
+    if "employee_id" not in employees.columns:
+        return []
+    if "base_rate" not in employees.columns:
+        # In v1 we just skip if the column isn't there at all
+        return []
+
+    pe = pay_events.copy()
+    emps = employees.copy()
+
+    # Normalise IDs
+    pe["employee_id"] = pe["employee_id"].astype(str).str.strip()
+    emps["employee_id"] = emps["employee_id"].astype(str).str.strip()
+
+    # Coerce numeric
+    pe["gross_amount"] = pd.to_numeric(pe["gross_amount"], errors="coerce")
+    emps["base_rate"] = emps["base_rate"].astype(str)
+
+    # Employees who actually have earnings
+    earners = (
+        pe[pe["gross_amount"] > 0]
+        .dropna(subset=["employee_id"])
+        .groupby("employee_id", as_index=False)["gross_amount"]
+        .sum()
+        .rename(columns={"gross_amount": "total_gross"})
+    )
+
+    if earners.empty:
+        return []
+
+    merged = earners.merge(
+        emps[["employee_id", "base_rate"]],
+        on="employee_id",
+        how="left",
+    )
+
+    # base_rate missing or blank
+    missing_mask = merged["base_rate"].isna() | (merged["base_rate"].str.strip() == "")
+    flagged = merged[missing_mask]
+
+    if flagged.empty:
+        return []
+
+    text_block = rule.get("text", {})
+    base_msg = text_block.get(
+        "finding",
+        "Ordinary earnings were recorded without an associated base rate value.",
+    )
+    remediation = text_block.get(
+        "remediation",
+        "Ensure base rate fields are populated and aligned with earnings calculations.",
+    )
+    severity = rule.get("severity", rule.get("severity", "MEDIUM"))
+
+    findings: List[Finding] = []
+
+    for _, row in flagged.iterrows():
+        emp_id = str(row["employee_id"])
+        total_gross = float(row["total_gross"])
+
+        evidence_str = (
+            f"employee_id={emp_id}, total_gross={total_gross:.2f}, "
+            f"base_rate={row['base_rate']!r}"
+        )
+
+        message = (
+            f"{base_msg} Employee {emp_id} received ordinary earnings "
+            f"totalling {total_gross:.2f} but has no recorded base rate."
+        )
+
+        findings.append(
+            Finding(
+                employee_id=emp_id,
+                leave_type=None,
+                as_of_date=None,
+                rule_code=rule["id"],
+                severity=severity,
+                message=message,
+                diff_units=None,
+                evidence=evidence_str,
+                finding_id=uuid4().hex[:12],
+                next_action=remediation,
+            )
+        )
+
+    return findings
+
+def _pay_007_negative_gross_pay_outside_expected_adjustment_patterns(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]:
+    """
+    RKEG-PAY-007
+    Negative gross pay identified outside expected adjustment patterns.
+
+    Approach:
+    - Look for rows with gross_amount < 0.
+    - Group by (employee_id, run_id) and see if the *net* gross for that
+      employee+run is effectively zero (i.e. clean reversal).
+    - If the net is not ~0, treat that negative as suspicious.
+    """
+    print("[PAY-007] Running RKEG-PAY-007 detector")
+
+    pay_events = datasets.get("pay_events")
+    if pay_events is None or pay_events.empty:
+        return []
+
+    if "gross_amount" not in pay_events.columns:
+        return []
+    if "employee_id" not in pay_events.columns:
+        return []
+
+    df = pay_events.copy()
+
+    # Normalise and coerce
+    df["employee_id"] = df["employee_id"].astype("string").str.strip()
+    df["gross_amount"] = pd.to_numeric(df["gross_amount"], errors="coerce")
+
+    # Only rows with a numeric gross
+    df = df[df["gross_amount"].notna()]
+    if df.empty:
+        return []
+
+    # Identify negative rows
+    neg = df[df["gross_amount"] < 0].copy()
+    if neg.empty:
+        return []
+
+    # We use run_id if present, otherwise just group by employee_id
+    key_cols: list[str] = ["employee_id"]
+    if "run_id" in df.columns:
+        key_cols.append("run_id")
+
+    # Net gross per employee/run
+    net_by_group = (
+        df.groupby(key_cols, as_index=False)["gross_amount"]
+        .sum()
+        .rename(columns={"gross_amount": "__net_gross"})
+    )
+
+    merged = neg.merge(net_by_group, on=key_cols, how="left")
+
+    # Anything with net gross effectively 0 (within tiny epsilon) looks like
+    # an intentional reversal; we ignore those.
+    EPS = 0.01
+    suspicious = merged[merged["__net_gross"].abs() > EPS]
+
+    if suspicious.empty:
+        return []
+
+    text_block = rule.get("text", {})
+    base_msg = text_block.get(
+        "finding",
+        "Negative gross pay amounts were identified that may indicate configuration errors or payroll reversals.",
+    )
+    remediation = text_block.get(
+        "remediation",
+        "Review payroll adjustment controls and ensure negative entries are properly authorised and documented.",
+    )
+    severity = rule.get("severity", "MEDIUM")
+
+    pay_date_col = "pay_date" if "pay_date" in suspicious.columns else None
+
+    findings: List[Finding] = []
+
+    for _, row in suspicious.iterrows():
+        emp_id = str(row["employee_id"])
+        gross = float(row["gross_amount"])
+        net = float(row["__net_gross"])
+        run_id = str(row["run_id"]) if "run_id" in row and pd.notna(row["run_id"]) else None
+        pay_date = (
+            str(row[pay_date_col]) if pay_date_col and pd.notna(row[pay_date_col]) else None
+        )
+
+        run_label = f", run_id={run_id}" if run_id else ""
+        date_label = f", pay_date={pay_date}" if pay_date else ""
+
+        evidence_str = (
+            f"employee_id={emp_id}{run_label}{date_label}, "
+            f"gross_amount={gross:.2f}, net_gross_for_run={net:.2f}"
+        )
+
+        message = (
+            f"{base_msg} Employee {emp_id}{run_label} has a negative gross "
+            f"amount {gross:.2f} with net gross for that run {net:.2f}."
+        )
+
+        findings.append(
+            Finding(
+                employee_id=emp_id,
+                leave_type=None,
+                as_of_date=pay_date,
+                rule_code=rule["id"],
+                severity=severity,
+                message=message,
+                diff_units=None,
+                evidence=evidence_str,
+                finding_id=uuid4().hex[:12],
+                next_action=remediation,
+            )
+        )
+
+    return findings
+
+def _pay_008_unmatched_rate_history(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[Finding]:
     """
     RKEG-PAY-008
     Pay events cannot be matched to a valid rate history record.
@@ -391,6 +721,145 @@ def _run_pay_008(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[Find
                 )
             )
 
+    return findings
+
+def _pay_009_rate_history_gaps_or_overlaps(rule, datasets):
+    """
+    RKEG-PAY-009
+    Rate history records contain gaps or overlapping effective dates.
+    """
+    rate_history = datasets.get("rate_history")
+
+    if rate_history is None or rate_history.empty:
+        return []
+
+    df = rate_history.copy()
+
+    if "employee_id" not in df.columns:
+        return []
+
+    start_col, end_col = _pick_rate_history_date_columns(df)
+    if start_col is None or end_col is None:
+        return []
+
+    df["employee_id"] = df["employee_id"].astype(str).str.strip()
+    df[start_col] = pd.to_datetime(df[start_col], errors="coerce")
+    df[end_col] = pd.to_datetime(df[end_col], errors="coerce")
+
+    findings = []
+    text = rule.get("text", {})
+    severity = rule.get("severity", "MEDIUM")
+
+    for employee_id, grp in df.groupby("employee_id"):
+        grp = grp.sort_values(start_col).reset_index(drop=True)
+
+        # 1) Invalid ranges
+        invalid = grp[
+            grp[start_col].isna()
+            | grp[end_col].isna()
+            | (grp[end_col] < grp[start_col])
+        ]
+
+        for _, row in invalid.iterrows():
+            evidence = (
+                f"employee_id={employee_id}, "
+                f"{start_col}={row[start_col]}, "
+                f"{end_col}={row[end_col]}, "
+                f"issue=invalid_date_range"
+            )
+
+            findings.append(
+                Finding(
+                    employee_id=employee_id,
+                    leave_type=None,
+                    as_of_date=None,
+                    rule_code=rule["id"],
+                    severity=severity,
+                    message=(
+                        f"{text.get('finding')} Employee {employee_id} has an invalid "
+                        f"rate history effective date range."
+                    ),
+                    diff_units=None,
+                    evidence=evidence,
+                    finding_id=uuid4().hex[:12],
+                    next_action=text.get("remediation", ""),
+                )
+            )
+
+        # 2) Gaps / overlaps between adjacent records
+        for i in range(1, len(grp)):
+            prev = grp.iloc[i - 1]
+            curr = grp.iloc[i]
+
+            if pd.isna(prev[start_col]) or pd.isna(prev[end_col]):
+                continue
+            if pd.isna(curr[start_col]) or pd.isna(curr[end_col]):
+                continue
+            if prev[end_col] < prev[start_col]:
+                continue
+            if curr[end_col] < curr[start_col]:
+                continue
+
+            # Overlap: current starts on/before previous ends
+            if curr[start_col] <= prev[end_col]:
+                evidence = (
+                    f"employee_id={employee_id}, "
+                    f"previous_start={prev[start_col].date()}, "
+                    f"previous_end={prev[end_col].date()}, "
+                    f"current_start={curr[start_col].date()}, "
+                    f"current_end={curr[end_col].date()}, "
+                    f"issue=overlap"
+                )
+
+                findings.append(
+                    Finding(
+                        employee_id=employee_id,
+                        leave_type=None,
+                        as_of_date=None,
+                        rule_code=rule["id"],
+                        severity=severity,
+                        message=(
+                            f"{text.get('finding')} Employee {employee_id} has overlapping "
+                            f"rate history periods."
+                        ),
+                        diff_units="days",
+                        evidence=evidence,
+                        finding_id=uuid4().hex[:12],
+                        next_action=text.get("remediation", ""),
+                    )
+                )
+
+            # Gap: current starts more than 1 day after previous ends
+            elif curr[start_col] > (prev[end_col] + pd.Timedelta(days=1)):
+                gap_days = (curr[start_col] - prev[end_col]).days - 1
+
+                evidence = (
+                    f"employee_id={employee_id}, "
+                    f"previous_start={prev[start_col].date()}, "
+                    f"previous_end={prev[end_col].date()}, "
+                    f"current_start={curr[start_col].date()}, "
+                    f"current_end={curr[end_col].date()}, "
+                    f"issue=gap, "
+                    f"gap_days={gap_days}"
+                )
+
+                findings.append(
+                    Finding(
+                        employee_id=employee_id,
+                        leave_type=None,
+                        as_of_date=None,
+                        rule_code=rule["id"],
+                        severity=severity,
+                        message=(
+                            f"{text.get('finding')} Employee {employee_id} has a gap of "
+                            f"{gap_days} day(s) between adjacent rate history periods."
+                        ),
+                        diff_units="days",
+                        evidence=evidence,
+                        finding_id=uuid4().hex[:12],
+                        next_action=text.get("remediation", ""),
+                    )
+                )
     return findings
 
 
