@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import csv
 import json
+import yaml
 from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, List, Any
 
-from termination_exposure.rules import run_all_term_rules
+from termination_exposure.rules import run_rule
 from common.data_window import write_data_window
 
 # ---------- Paths ----------
@@ -23,6 +24,8 @@ EMPLOYEES_CSV = DATA_DIR / "employees.csv"
 TERM_FINDINGS_CSV = MODULES_DIR / "term_findings.csv"
 TERM_SUMMARY_BY_SEVERITY_CSV = MODULES_DIR / "term_summary_by_severity.csv"
 TERM_SUMMARY_CSV = MODULES_DIR / "term_summary.csv"
+
+TERM_RULES_YML = BASE_DIR / "src" / "termination_exposure" / "config" / "term_rules.yml"
 
 
 # ---------- CSV helpers ----------
@@ -68,6 +71,11 @@ def load_csv(path: Path) -> List[Dict[str, str]]:
     with path.open("r", newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         return list(reader)
+
+def load_rules(path: Path) -> List[Dict[str, Any]]:
+    with path.open("r", encoding="utf-8") as f:
+        payload = yaml.safe_load(f)
+    return payload.get("rules", [])
 
 
 def write_term_findings(path: Path, rows: List[Dict[str, Any]]) -> None:
@@ -242,12 +250,17 @@ def run_termination_exposure_review() -> None:
     else:
         print("[TERM] No usable dates found for data window – term_data_window.csv not written")
 
-    findings = run_all_term_rules(
-        terminations=terminations,
-        pay_events=pay_events,
-        employees=employees,
-        max_gap_days=35,
-    )
+    rules = load_rules(TERM_RULES_YML)
+
+    datasets = {
+        "terminations": terminations,
+        "pay_events": pay_events,
+        "employee_master": employees,
+    }
+
+    findings = []
+    for rule in rules:
+        findings.extend([f.__dict__ for f in run_rule(rule, datasets)])
 
     print(f"[TERM] Generated {len(findings)} findings")
 

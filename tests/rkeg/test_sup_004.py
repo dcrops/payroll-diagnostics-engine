@@ -9,7 +9,7 @@ def _load_sample_datasets():
     """
     Helper to load the sample CSVs using the same loader as rkeg.run.
     """
-    repo_root = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[2]
     data_dir = repo_root / "data" / "sample"
     return load_all_datasets(data_dir)
 

@@ -1,0 +1,115 @@
+version: "1.0"
+module: TERM
+description: Termination Exposure - final pay timing and termination evidence controls
+
+rules:
+  - id: TERM-001
+    tier: 1
+    domain: TERM
+    severity: HIGH
+    title: Termination recorded with no final pay event
+    datasets:
+      primary: terminations
+      references:
+        - pay_events
+    text:
+      finding: "Termination records were identified with no pay event on or after the recorded termination date."
+      why_it_matters: "A termination without any corresponding final pay event weakens evidence that final entitlements were processed and may indicate missed or delayed payroll action."
+      remediation: "Review termination processing records and confirm whether final pay was processed. If it was, ensure the relevant pay event is clearly identifiable in payroll data."
+    risk_dimension:
+      - evidence_traceability
+      - timing_integrity
+      - cross_module_linkage_risk
+
+  - id: TERM-002
+    tier: 1
+    domain: TERM
+    severity: HIGH
+    title: Final pay processed before termination date
+    datasets:
+      primary: terminations
+      references:
+        - pay_events
+    text:
+      finding: "Final pay events were identified with pay dates before the recorded termination date."
+      why_it_matters: "Final pay dated before termination may indicate date errors, processing control issues or misidentified finalisation events."
+      remediation: "Confirm the termination date and final pay date, and ensure finalisation events are dated and flagged consistently."
+    risk_dimension:
+      - timing_integrity
+      - evidence_traceability
+      - data_anomaly_sanity
+
+  - id: TERM-003
+    tier: 2
+    domain: TERM
+    severity: MEDIUM
+    title: Significant gap between last pay and termination date
+    datasets:
+      primary: terminations
+      references:
+        - pay_events
+    config:
+      max_gap_days: 35
+    text:
+      finding: "Termination records were identified where the gap between the last pay event and termination date exceeded the configured threshold."
+      why_it_matters: "A large gap between last pay and termination may indicate stale employee status, missing pay events or inconsistent termination processing."
+      remediation: "Review the final pay timeline and confirm whether the employee ceased work, remained unpaid for a period, or whether payroll records are incomplete."
+    risk_dimension:
+      - timing_integrity
+      - governance_exposure
+      - evidence_traceability
+
+  - id: TERM-004
+    tier: 1
+    domain: TERM
+    severity: MEDIUM
+    title: Missing or inconsistent termination type or reason
+    datasets:
+      primary: terminations
+      references:
+        - employee_master
+    text:
+      finding: "Termination records were identified with missing or inconsistent termination type or reason information."
+      why_it_matters: "Termination type and reason help evidence how and why employment ceased. Missing or conflicting values weaken defensibility and downstream payroll treatment."
+      remediation: "Ensure termination type and reason are captured consistently across HR and payroll data and reconcile conflicting values."
+    risk_dimension:
+      - structural_completeness
+      - evidence_traceability
+      - data_anomaly_sanity
+
+  - id: TERM-005
+    tier: 1
+    domain: TERM
+    severity: HIGH
+    title: Missing supporting termination evidence reference
+    datasets:
+      primary: terminations
+      references: []
+    text:
+      finding: "Termination records were identified without a supporting evidence reference."
+      why_it_matters: "Without a reference to supporting artefacts such as resignation notices or termination letters, it is harder to substantiate why and when employment ceased."
+      remediation: "Record and retain a supporting evidence reference for each termination, such as a resignation notice, termination letter or document identifier."
+    risk_dimension:
+      - evidence_traceability
+      - structural_completeness
+
+  - id: TERM-006
+    tier: 2
+    domain: TERM
+    severity: MEDIUM
+    title: Final pay event not clearly identifiable
+    datasets:
+      primary: terminations
+      references:
+        - pay_events
+    config:
+      window_before_days: 14
+      window_after_days: 30
+    text:
+      finding: "Termination records were identified with nearby pay events but no clearly flagged final pay event."
+      why_it_matters: "Where candidate pay events exist around termination but none is clearly identified as final pay, payroll finalisation is harder to evidence and review."
+      remediation: "Ensure final pay events are clearly flagged in payroll outputs and reconcile pay events around termination dates to confirm which event represents finalisation."
+    risk_dimension:
+      - evidence_traceability
+      - governance_exposure
+      - exception_handling

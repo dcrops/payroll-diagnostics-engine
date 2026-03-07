@@ -1,0 +1,94 @@
+version: "1.0"
+module: LEAVE
+description: Leave & Entitlement Leakage - leave balance integrity and leave event controls
+
+rules:
+  - id: LEAVE-001
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Negative leave balance in snapshot
+    datasets:
+      primary: leave_snapshot
+      references: []
+    text:
+      finding: "Leave snapshot balances were identified with negative balance values."
+      why_it_matters: "Negative leave balances may indicate processing errors, timing issues, or unauthorised leave arrangements, and weaken confidence in entitlement accuracy."
+      remediation: "Review the employee’s leave ledger and recent payroll adjustments to confirm whether the negative balance reflects a data error, timing difference, or an approved leave arrangement."
+    risk_dimension:
+      - data_anomaly_sanity
+      - evidence_traceability
+      - calculation_integrity
+
+  - id: LEAVE-002
+    tier: 1
+    domain: LEAVE
+    severity: MEDIUM
+    title: Leave event sign inconsistent with event type
+    datasets:
+      primary: leave_ledger
+      references: []
+    text:
+      finding: "Leave ledger events were identified with unit signs that are inconsistent with the event type."
+      why_it_matters: "Unexpected sign conventions may indicate configuration issues, import mapping errors or incorrect manual adjustments, weakening confidence in ledger integrity."
+      remediation: "Review the leave ledger configuration and data ingestion rules to confirm expected sign conventions for TAKEN and ACCRUAL events. Check whether the entry reflects a system configuration issue, import mapping error, or manual adjustment."
+    risk_dimension:
+      - data_anomaly_sanity
+      - structural_completeness
+      - evidence_traceability
+
+  - id: LEAVE-003
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Leave taken before employee start date
+    datasets:
+      primary: leave_ledger
+      references:
+        - employee_master
+    text:
+      finding: "Leave taken events were identified with event dates before the employee's recorded start date."
+      why_it_matters: "Leave taken before employment commencement may indicate incorrect employee dates, migration issues, backdated adjustments or control failures in leave processing."
+      remediation: "Verify the employee start date in HR/payroll and the leave event date in the ledger. If either is incorrect due to migration or backdating, correct the source record and re-run. If intentional, document the reason and approval."
+    risk_dimension:
+      - timing_integrity
+      - cross_module_linkage_risk
+      - evidence_traceability
+
+  - id: LEAVE-004
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Casual employee has leave accrual
+    datasets:
+      primary: leave_ledger
+      references:
+        - employee_master
+    text:
+      finding: "Leave accrual events were identified for employees recorded as casual."
+      why_it_matters: "Casual employees would not normally accrue standard annual or personal leave. Such accruals may indicate configuration or classification issues."
+      remediation: "Confirm the employee’s employment type in HR/payroll and review leave accrual configuration. If the employee is incorrectly classified as casual, correct the classification. If the accrual is unintended, disable or reverse the accrual and document the remediation."
+    risk_dimension:
+      - calculation_integrity
+      - cross_module_linkage_risk
+      - governance_exposure
+
+  - id: LEAVE-005
+    tier: 2
+    domain: LEAVE
+    severity: HIGH
+    title: Leave ledger-derived balance does not reconcile to snapshot
+    datasets:
+      primary: leave_snapshot
+      references:
+        - leave_ledger
+    config:
+      tolerance_units: 0.01
+    text:
+      finding: "Leave ledger-derived balances do not reconcile to leave snapshot balances within the configured tolerance."
+      why_it_matters: "If leave balances cannot be reconstructed from the underlying ledger, entitlement accuracy and audit defensibility are weakened."
+      remediation: "Reconcile the ledger period and snapshot as-of date for this leave type. Check for missing or duplicate ledger events, timing cut-offs, or manual adjustments, then confirm which source is authoritative for reporting."
+    risk_dimension:
+      - calculation_integrity
+      - evidence_traceability
+      - data_anomaly_sanity

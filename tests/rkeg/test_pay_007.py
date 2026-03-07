@@ -6,7 +6,7 @@ from rkeg.engine import run_rkeg_engine
 
 
 def _load_sample():
-    repo_root = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[2]
     data_dir = repo_root / "data" / "sample"
     return load_all_datasets(data_dir)
 

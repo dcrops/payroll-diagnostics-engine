@@ -3,17 +3,12 @@ from __future__ import annotations
 from datetime import datetime, date
 from pathlib import Path
 import pandas as pd
+import yaml
 
 from common.data_window import write_data_window
 
-from leave_leakage.rules import (
-    Finding,
-    rule_negative_balance,
-    rule_event_sign_anomaly,
-    rule_taken_before_start_date,
-    rule_casual_accrual_present,
-    rule_balance_mismatch,
-)
+from leave_leakage.rules import Finding, run_rule
+
 
 
 REQUIRED_EMP = {"employee_id", "employment_type", "fte", "start_date"}
@@ -72,11 +67,17 @@ def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
     if missing:
         raise ValueError(f"{name} missing required columns: {missing}")
 
+def _load_rules(rules_path: Path) -> list[dict]:
+    with rules_path.open("r", encoding="utf-8") as f:
+        payload = yaml.safe_load(f)
+    return payload.get("rules", [])
+
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
     data_dir = repo_root / "data" / "sample"
     out_dir = repo_root / "outputs"
     modules_dir = out_dir / "modules"
+    rules_path = Path(__file__).resolve().parent / "config" / "leave_rules.yml"
 
     out_dir.mkdir(parents=True, exist_ok=True)
     modules_dir.mkdir(parents=True, exist_ok=True)
@@ -113,23 +114,23 @@ def main() -> int:
     _require_cols(snapshot, REQUIRED_SNAP, "balances_snapshot.csv")
 
     # Parse dates
-    ledger["event_date"] = pd.to_datetime(ledger["event_date"], errors="coerce", dayfirst=True)
-    snapshot["as_of_date"] = pd.to_datetime(snapshot["as_of_date"], errors="coerce", dayfirst=True)
+    ledger["event_date"] = pd.to_datetime(ledger["event_date"], errors="coerce")
+    snapshot["as_of_date"] = pd.to_datetime(snapshot["as_of_date"], errors="coerce")
 
     bad_ledger_dates = ledger["event_date"].isna().sum()
     bad_snapshot_dates = snapshot["as_of_date"].isna().sum()
     print(f"[input] Unparseable ledger event_date rows: {bad_ledger_dates}")
     print(f"[input] Unparseable snapshot as_of_date rows: {bad_snapshot_dates}")
 
+       # ----------------------------
+    # Load rule metadata
+    # ----------------------------
+    rules = _load_rules(rules_path)
+
     # ----------------------------
     # Run rules
     # ----------------------------
     findings: list[Finding] = []
-
-    findings.extend(rule_negative_balance(snapshot))
-    findings.extend(rule_event_sign_anomaly(ledger))
-    findings.extend(rule_taken_before_start_date(employees, ledger))
-    findings.extend(rule_casual_accrual_present(employees, ledger))
 
     # Join ledger to snapshot on employee + leave_type, then keep events up to as_of_date
     merged = snapshot.merge(
@@ -156,7 +157,14 @@ def main() -> int:
     report["ledger_balance_units"] = report["ledger_balance_units"].round(2)
     report["diff_units"] = report["diff_units"].round(2)
 
-    findings.extend(rule_balance_mismatch(snapshot, report))
+    datasets = {
+        "employee_master": employees,
+        "leave_ledger": ledger,
+        "leave_snapshot": snapshot,
+    }
+
+    for rule in rules:
+        findings.extend(run_rule(rule, datasets, ledger_recon=report))
 
     # ----------------------------
     # Write findings output (module-level)
