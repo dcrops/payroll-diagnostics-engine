@@ -30,9 +30,6 @@ def run_rule(rule: dict, datasets: dict[str, pd.DataFrame]) -> List[Finding]:
     return []
 
 
-    # Unknown EMP rule -> no findings
-    raise ValueError(f"Unknown EMP rule: {rule_id}")
-
 def _emp_001_missing_employee_master(
     rule: dict,
     datasets: dict[str, pd.DataFrame],

@@ -16,7 +16,7 @@ DATA_DIR = BASE_DIR / "data" / "sample"
 OUTPUTS_DIR = BASE_DIR / "outputs"
 MODULES_DIR = OUTPUTS_DIR / "modules"
 
-TERMINATIONS_CSV = DATA_DIR / "terminations_messy.csv"
+TERMINATIONS_CSV = DATA_DIR / "terminations.csv"
 PAY_EVENTS_CSV = DATA_DIR / "pay_events.csv"
 EMPLOYEES_CSV = DATA_DIR / "employees.csv"
 

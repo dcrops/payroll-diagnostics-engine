@@ -428,6 +428,101 @@ def _run_leave_003(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Findin
 
     return findings
 
+def _run_leave_004(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]:
+    """
+    RKEG-LEAVE-004
+    Leave ledger entry missing event date.
+    """
+    leave_ledger = datasets.get("leave_ledger")
+
+    if leave_ledger is None or leave_ledger.empty:
+        return []
+
+    df = leave_ledger.copy()
+
+    ll_cols = {c.lower(): c for c in df.columns}
+
+    emp_col = ll_cols.get("employee_id", "employee_id")
+    leave_type_col = ll_cols.get("leave_type", "leave_type")
+    event_type_col = ll_cols.get("event_type", "event_type")
+
+    event_date_col = (
+        ll_cols.get("event_date")
+        or ll_cols.get("leave_date")
+        or ll_cols.get("transaction_date")
+        or ll_cols.get("posted_date")
+    )
+
+    if event_date_col is None:
+        return []
+
+    if emp_col not in df.columns:
+        return []
+
+    raw_event_date = df[event_date_col]
+    parsed_event_date = pd.to_datetime(raw_event_date, errors="coerce")
+
+    blank_mask = raw_event_date.isna() | (raw_event_date.astype(str).str.strip() == "")
+    invalid_mask = (~blank_mask) & parsed_event_date.isna()
+
+    flagged = df[blank_mask | invalid_mask].copy()
+
+    if flagged.empty:
+        return []
+
+    text_block = rule.get("text", {})
+    base_finding_text = text_block.get(
+        "finding",
+        "Leave ledger records were identified without a valid event date.",
+    )
+    remediation_text = text_block.get(
+        "remediation",
+        "Ensure all leave ledger transactions include valid event dates and enforce validation in payroll exports.",
+    )
+    severity = rule.get("severity", "HIGH")
+
+    findings: List[Finding] = []
+
+    for idx, row in flagged.iterrows():
+        employee_id = str(row[emp_col]) if pd.notna(row[emp_col]) else ""
+        leave_type = str(row.get(leave_type_col, "") or "")
+        event_type = str(row.get(event_type_col, "") or "")
+
+        if blank_mask.loc[idx]:
+            issue = f"missing {event_date_col}"
+        else:
+            issue = f"invalid {event_date_col}"
+
+        evidence_obj = {
+            "sources": ["leave_ledger.csv"],
+            "primary_keys": {"employee_id": employee_id},
+            "values": {
+                event_date_col: "" if pd.isna(row[event_date_col]) else str(row[event_date_col]),
+                "leave_type": leave_type,
+                "event_type": event_type,
+                "units": "" if pd.isna(row.get("units")) else str(row.get("units")),
+            },
+            "explanation": issue,
+        }
+        evidence_str = str(evidence_obj).replace("'", '"')
+
+        findings.append(
+            Finding(
+                employee_id=employee_id,
+                leave_type=leave_type if leave_type else None,
+                as_of_date=None,
+                rule_code=rule["id"],
+                severity=severity,
+                message=base_finding_text,
+                diff_units=None,
+                evidence=evidence_str,
+                finding_id=uuid4().hex[:12],
+                next_action=remediation_text,
+            )
+        )
+
+    return findings
+
 
 def run_rule(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[Finding]:
     """
@@ -443,6 +538,9 @@ def run_rule(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[Finding]
 
     if rule_id == "RKEG-LEAVE-003":
         return _run_leave_003(rule, datasets)
+
+    if rule_id == "RKEG-LEAVE-004":
+        return _run_leave_004(rule, datasets)
 
     # Unknown rule: be conservative and return no findings rather than crash the engine.
     return []

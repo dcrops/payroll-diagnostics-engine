@@ -622,6 +622,229 @@ def _run_sup_004(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]
 
     return findings
 
+def _run_sup_005(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]:
+    """
+    RKEG-SUP-005
+    Super payment record missing payment date.
+    """
+    print("[SUP-005] Running RKEG-SUP-005 detector")
+
+    super_payments = datasets.get("super_payments")
+
+    if super_payments is None or super_payments.empty:
+        return []
+
+    df = super_payments.copy()
+
+    payment_date_col = _pick_date_column(df, ["payment_date", "paid_date", "transaction_date"])
+    if payment_date_col is None:
+        print("[SUP-005] No payment date column found; skipping")
+        return []
+
+    if "employee_id" not in df.columns:
+        print("[SUP-005] employee_id column missing; skipping")
+        return []
+
+    df["employee_id"] = df["employee_id"].astype(str).str.strip()
+
+    raw_payment = df[payment_date_col]
+    parsed_payment = pd.to_datetime(raw_payment, errors="coerce")
+
+    blank_mask = raw_payment.isna() | (raw_payment.astype(str).str.strip() == "")
+    invalid_mask = (~blank_mask) & parsed_payment.isna()
+
+    flagged = df[blank_mask | invalid_mask].copy()
+
+    if flagged.empty:
+        return []
+
+    text = rule.get("text", {})
+    base_msg = text.get(
+        "finding",
+        "Superannuation payment records were identified without a valid payment date.",
+    )
+    remediation = text.get(
+        "remediation",
+        "Ensure all super payment records include valid payment dates and enforce validation before exporting super contribution data.",
+    )
+    severity = rule.get("severity", "HIGH")
+
+    findings: List[Finding] = []
+
+    for idx, row in flagged.iterrows():
+        emp_id = str(row["employee_id"]).strip()
+
+        if blank_mask.loc[idx]:
+            issue = f"missing {payment_date_col}"
+        else:
+            issue = f"invalid {payment_date_col}"
+
+        evidence_obj = {
+            "sources": ["super_payments.csv"],
+            "primary_keys": {"employee_id": emp_id},
+            "values": {
+                payment_date_col: "" if pd.isna(row[payment_date_col]) else str(row[payment_date_col]),
+                "period_end_date": "" if pd.isna(row.get("period_end_date")) else str(row.get("period_end_date")),
+                "super_amount": "" if pd.isna(row.get("super_amount")) else str(row.get("super_amount")),
+            },
+            "explanation": issue,
+        }
+        evidence_str = str(evidence_obj).replace("'", '"')
+
+        findings.append(
+            Finding(
+                employee_id=emp_id,
+                leave_type=None,
+                as_of_date=None,
+                rule_code=rule["id"],
+                severity=severity,
+                message=base_msg,
+                diff_units=None,
+                evidence=evidence_str,
+                finding_id=uuid4().hex[:12],
+                next_action=remediation,
+            )
+        )
+
+    return findings
+
+def _run_sup_006(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]:
+    """
+    RKEG-SUP-006
+    Multiple default super funds recorded for an employee.
+    """
+    print("[SUP-006] Running RKEG-SUP-006 detector")
+
+    employee_super = datasets.get("employee_super")
+
+    if employee_super is None or employee_super.empty:
+        return []
+
+    df = employee_super.copy()
+
+    if "employee_id" not in df.columns:
+        print("[SUP-006] employee_id column missing; skipping")
+        return []
+
+    df["employee_id"] = df["employee_id"].astype(str).str.strip()
+
+    # Find the most likely fund identifier column
+    fund_col = None
+    preferred_fund_cols = [
+        "default_fund_name",
+        "fund_name",
+        "super_fund_name",
+        "fund_id",
+    ]
+    lower_cols = {c.lower(): c for c in df.columns}
+
+    for logical in preferred_fund_cols:
+        if logical.lower() in lower_cols:
+            fund_col = lower_cols[logical.lower()]
+            break
+
+    if fund_col is None:
+        for c in df.columns:
+            if "fund" in c.lower():
+                fund_col = c
+                break
+
+    if fund_col is None:
+        print("[SUP-006] No fund column found; skipping")
+        return []
+
+    # Optional narrowing to active/default-looking records only
+    filtered = df.copy()
+
+    status_col = lower_cols.get("status") or lower_cols.get("record_status")
+    if status_col is not None:
+        filtered = filtered[
+            filtered[status_col].astype(str).str.strip().str.upper().isin(["ACTIVE", "CURRENT", "OPEN"])
+        ]
+
+    default_col = (
+        lower_cols.get("is_default")
+        or lower_cols.get("default_flag")
+        or lower_cols.get("fund_type")
+    )
+
+    if default_col is not None:
+        if default_col.lower() in {"is_default", "default_flag"}:
+            filtered = filtered[
+                filtered[default_col].astype(str).str.strip().str.upper().isin(["Y", "YES", "TRUE", "1"])
+            ]
+        elif default_col.lower() == "fund_type":
+            filtered = filtered[
+                filtered[default_col].astype(str).str.strip().str.upper().eq("DEFAULT")
+            ]
+
+    if filtered.empty:
+        return []
+
+    grouped = (
+        filtered.groupby("employee_id")[fund_col]
+        .apply(
+            lambda s: sorted(
+                {
+                    str(v).strip()
+                    for v in s
+                    if pd.notna(v) and str(v).strip() != ""
+                }
+            )
+        )
+        .reset_index(name="distinct_funds")
+    )
+
+    grouped["fund_count"] = grouped["distinct_funds"].apply(len)
+    flagged = grouped[grouped["fund_count"] > 1].copy()
+
+    if flagged.empty:
+        return []
+
+    text = rule.get("text", {})
+    base_msg = text.get(
+        "finding",
+        "Employees were identified with multiple default superannuation fund records.",
+    )
+    remediation = text.get(
+        "remediation",
+        "Ensure each employee has a single valid default super fund and reconcile conflicting records.",
+    )
+    severity = rule.get("severity", "MEDIUM")
+
+    findings: List[Finding] = []
+
+    for _, row in flagged.iterrows():
+        emp_id = str(row["employee_id"]).strip()
+        funds = row["distinct_funds"]
+
+        evidence_obj = {
+            "sources": ["employee_super.csv"],
+            "primary_keys": {"employee_id": emp_id},
+            "values": {
+                "fund_count": int(row["fund_count"]),
+                "funds": ", ".join(funds),
+            },
+            "explanation": "Multiple distinct default super fund records were identified for the employee.",
+        }
+        evidence_str = str(evidence_obj).replace("'", '"')
+
+        findings.append(
+            Finding(
+                employee_id=emp_id,
+                leave_type=None,
+                as_of_date=None,
+                rule_code=rule["id"],
+                severity=severity,
+                message=base_msg,
+                diff_units=None,
+                evidence=evidence_str,
+                finding_id=uuid4().hex[:12],
+                next_action=remediation,
+            )
+        )
+
+    return findings
 
 def run_rule(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[Finding]:
     """
@@ -632,6 +855,8 @@ def run_rule(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[Finding]
     - RKEG-SUP-002: accrued vs paid reconciliation (employee + month)
     - RKEG-SUP-003: late contributions vs period end + grace days
     - RKEG-SUP-004: employees without a recorded default fund
+    - RKEG-SUP-005: Super payment record missing payment date
+    - RKEG-SUP-006: Multiple default super funds recorded for an employee
     """
     rule_id = rule["id"]
 
@@ -647,6 +872,12 @@ def run_rule(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[Finding]
 
     if rule_id == "RKEG-SUP-004":
         return _run_sup_004(rule, datasets)
+
+    if rule_id == "RKEG-SUP-005":
+        return _run_sup_005(rule, datasets)
+
+    if rule_id == "RKEG-SUP-006":
+        return _run_sup_006(rule, datasets)
 
     # Other SUP rules can be added here later
     return []

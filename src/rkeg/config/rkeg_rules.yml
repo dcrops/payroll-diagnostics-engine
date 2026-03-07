@@ -204,7 +204,7 @@ rules:
     remediation: "Review payroll adjustment processes and ensure superannuation is recalculated on earnings corrections."
   risk_dimension:
     - calculation_integrity
-    - governance_monitoring_exposure
+    - governance_exposure
     - cross_module_linkage_risk
 
 - id: RKEG-PAY-006
@@ -361,6 +361,9 @@ rules:
     primary: pay_events
     references:
       - employee_master
+  config:
+    target_rate: 0.11
+    tolerance: 0.01
   text:
     finding: 'Superannuation amounts were identified that fall outside the expected
       percentage tolerance range of ordinary earnings.'
@@ -567,13 +570,14 @@ rules:
     - evidence_traceability
 
 - id: RKEG-GOV-001
-  tier: 2
+  tier: 1
   domain: GOVERNANCE
   severity: MEDIUM
   title: No structured payroll override log provided
   datasets:
-    primary: pay_events
-    references: []
+    primary: pay_overrides
+    references:
+      - pay_events
   text:
     finding: 'No structured override or exception log was provided for manual payroll
       adjustments.'
@@ -616,6 +620,8 @@ rules:
     primary: pay_overrides
     references:
       - pay_events
+  config:
+    threshold_ratio: 0.10
   text:
     finding: 'A high volume of manual overrides was identified relative to the total
       number of pay events processed.'

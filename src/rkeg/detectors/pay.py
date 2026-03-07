@@ -33,6 +33,10 @@ def run_rule(rule: dict, datasets: dict[str, pd.DataFrame]) -> List[Finding]:
         return _pay_008_unmatched_rate_history(rule, datasets)
     if rule_id == "RKEG-PAY-009":
         return _pay_009_rate_history_gaps_or_overlaps(rule, datasets)
+    if rule_id == "RKEG-PAY-010":
+        return _pay_010_pay_events_outside_employment_period(rule, datasets)
+    if rule_id == "RKEG-PAY-011":
+        return _pay_011_rate_history_missing_effective_date_fields(rule, datasets)
 
     # Unknown PAY rule -> no findings
     return []
@@ -57,6 +61,22 @@ def _pick_rate_history_date_columns(df: pd.DataFrame) -> tuple[str | None, str |
     )
 
     return start_col, end_col
+
+def _pick_first_existing_column(df: pd.DataFrame, candidates: list[str]) -> str | None:
+    """
+    Return the first matching column from candidates, case-insensitive.
+    """
+    cols = {c.lower(): c for c in df.columns}
+    for candidate in candidates:
+        if candidate.lower() in cols:
+            return cols[candidate.lower()]
+    return None
+
+
+def _is_blank(value: object) -> bool:
+    if pd.isna(value):
+        return True
+    return str(value).strip() == ""
 
 def _pay_001_missing_or_invalid_pay_date(
     rule: dict,
@@ -860,6 +880,265 @@ def _pay_009_rate_history_gaps_or_overlaps(rule, datasets):
                         next_action=text.get("remediation", ""),
                     )
                 )
+    return findings
+
+def _pay_010_pay_events_outside_employment_period(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+) -> list[Finding]:
+    """
+    RKEG-PAY-010:
+    Pay events recorded before employee commencement or after termination.
+    """
+
+    pay_events = datasets.get("pay_events", pd.DataFrame())
+    employees = datasets.get("employee_master", pd.DataFrame())
+    terminations = datasets.get("terminations", pd.DataFrame())
+
+    findings: list[Finding] = []
+
+    if pay_events.empty or employees.empty:
+        return findings
+
+    if "employee_id" not in pay_events.columns or "employee_id" not in employees.columns:
+        return findings
+
+    pay_date_col = _pick_first_existing_column(
+        pay_events,
+        ["pay_date", "payment_date", "event_date"],
+    )
+    start_date_col = _pick_first_existing_column(
+        employees,
+        ["start_date", "commencement_date", "employment_start_date"],
+    )
+    employee_term_col = _pick_first_existing_column(
+        employees,
+        ["termination_date", "end_date", "employment_end_date"],
+    )
+
+    if pay_date_col is None or start_date_col is None:
+        return findings
+
+    pe = pay_events.copy()
+    emps = employees.copy()
+
+    pe["employee_id"] = pe["employee_id"].astype(str).str.strip()
+    emps["employee_id"] = emps["employee_id"].astype(str).str.strip()
+
+    pe["_pay_date"] = pd.to_datetime(pe[pay_date_col], errors="coerce")
+    emps["_start_date"] = pd.to_datetime(emps[start_date_col], errors="coerce")
+
+    if employee_term_col is not None:
+        emps["_termination_date"] = pd.to_datetime(emps[employee_term_col], errors="coerce")
+    else:
+        emps["_termination_date"] = pd.NaT
+
+    merged = pe.merge(
+        emps[["employee_id", "_start_date", "_termination_date"]],
+        on="employee_id",
+        how="left",
+    )
+
+    # If employee master has no termination date, optionally fill from terminations dataset
+    if not terminations.empty and "employee_id" in terminations.columns:
+        term_date_col = _pick_first_existing_column(
+            terminations,
+            ["termination_date", "end_date", "termination_effective_date"],
+        )
+
+        if term_date_col is not None:
+            terms = terminations.copy()
+            terms["employee_id"] = terms["employee_id"].astype(str).str.strip()
+            terms["_term_from_terminations"] = pd.to_datetime(terms[term_date_col], errors="coerce")
+
+            terms = (
+                terms[["employee_id", "_term_from_terminations"]]
+                .drop_duplicates(subset=["employee_id"], keep="first")
+            )
+
+            merged = merged.merge(terms, on="employee_id", how="left")
+            merged["_termination_date"] = merged["_termination_date"].combine_first(
+                merged["_term_from_terminations"]
+            )
+
+    findings_mask = (
+        (
+            merged["_pay_date"].notna()
+            & merged["_start_date"].notna()
+            & (merged["_pay_date"] < merged["_start_date"])
+        )
+        |
+        (
+            merged["_pay_date"].notna()
+            & merged["_termination_date"].notna()
+            & (merged["_pay_date"] > merged["_termination_date"])
+        )
+    )
+
+    flagged = merged[findings_mask].copy()
+
+    print("[PAY-010] dataset keys:", list(datasets.keys()))
+    print("[PAY-010] pay_events shape:", pe.shape)
+    print("[PAY-010] employee_master shape:", emps.shape)
+    print("[PAY-010] terminations shape:", terminations.shape if terminations is not None else None)
+
+    debug_cols = ["employee_id", "_pay_date", "_start_date", "_termination_date"]
+    print("[PAY-010] merged rows:")
+    print(merged[debug_cols].to_string(index=False))
+
+    print("[PAY-010] before-start matches:")
+    print(
+        merged[
+            merged["_pay_date"].notna()
+            & merged["_start_date"].notna()
+            & (merged["_pay_date"] < merged["_start_date"])
+        ][debug_cols].to_string(index=False)
+    )
+
+    print("[PAY-010] after-termination matches:")
+    print(
+        merged[
+            merged["_pay_date"].notna()
+            & merged["_termination_date"].notna()
+            & (merged["_pay_date"] > merged["_termination_date"])
+        ][debug_cols].to_string(index=False)
+    )
+
+    if flagged.empty:
+        return findings
+
+    finding_msg = rule["text"]["finding"]
+    remediation = rule["text"]["remediation"]
+
+    for _, row in flagged.iterrows():
+        emp_id = str(row["employee_id"]).strip()
+
+        if pd.notna(row["_termination_date"]) and row["_pay_date"] > row["_termination_date"]:
+            explanation = "Pay event occurred after recorded termination date."
+        else:
+            explanation = "Pay event occurred before recorded employment start date."
+
+        evidence_obj = {
+            "sources": ["pay_events.csv", "employees.csv", "terminations.csv"],
+            "primary_keys": {"employee_id": emp_id},
+            "values": {
+                "pay_date": row["_pay_date"].date().isoformat() if pd.notna(row["_pay_date"]) else "",
+                "start_date": row["_start_date"].date().isoformat() if pd.notna(row["_start_date"]) else "",
+                "termination_date": (
+                    row["_termination_date"].date().isoformat()
+                    if pd.notna(row["_termination_date"])
+                    else ""
+                ),
+            },
+            "explanation": explanation,
+        }
+        evidence_str = str(evidence_obj).replace("'", '"')
+
+        findings.append(
+            Finding(
+                employee_id=emp_id,
+                leave_type=None,
+                as_of_date=row["_pay_date"].date().isoformat() if pd.notna(row["_pay_date"]) else None,
+                rule_code=rule["id"],
+                severity=rule["severity"],
+                message=finding_msg,
+                diff_units=None,
+                evidence=evidence_str,
+                finding_id=uuid4().hex[:12],
+                next_action=remediation,
+            )
+        )
+    print("[PAY-010] findings returned:", len(findings))
+    for f in findings:
+        print("[PAY-010] finding:", f.rule_code, f.employee_id, f.as_of_date)
+
+    return findings
+
+def _pay_011_rate_history_missing_effective_date_fields(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+) -> list[Finding]:
+    """
+    RKEG-PAY-011:
+    Rate history record missing effective date fields.
+    """
+
+    rate_history = datasets.get("rate_history", pd.DataFrame())
+    findings: list[Finding] = []
+
+    if rate_history.empty:
+        return findings
+
+    if "employee_id" not in rate_history.columns:
+        return findings
+
+    start_col, end_col = _pick_rate_history_date_columns(rate_history)
+    if start_col is None or end_col is None:
+        return findings
+
+    df = rate_history.copy()
+    df["employee_id"] = df["employee_id"].astype(str).str.strip()
+
+    parsed_start = pd.to_datetime(df[start_col], errors="coerce")
+    parsed_end = pd.to_datetime(df[end_col], errors="coerce")
+
+    start_blank = df[start_col].map(_is_blank)
+    end_blank = df[end_col].map(_is_blank)
+
+    start_invalid = (~start_blank) & parsed_start.isna()
+    end_invalid = (~end_blank) & parsed_end.isna()
+
+    flagged = df[start_blank | end_blank | start_invalid | end_invalid].copy()
+
+    if flagged.empty:
+        return findings
+
+    finding_msg = rule["text"]["finding"]
+    remediation = rule["text"]["remediation"]
+
+    for idx, row in flagged.iterrows():
+        emp_id = str(row["employee_id"]).strip()
+
+        issues: list[str] = []
+
+        if start_blank.loc[idx]:
+            issues.append(f"missing {start_col}")
+        elif start_invalid.loc[idx]:
+            issues.append(f"invalid {start_col}")
+
+        if end_blank.loc[idx]:
+            issues.append(f"missing {end_col}")
+        elif end_invalid.loc[idx]:
+            issues.append(f"invalid {end_col}")
+
+        evidence_obj = {
+            "sources": ["rate_history.csv"],
+            "primary_keys": {"employee_id": emp_id},
+            "values": {
+                start_col: "" if pd.isna(row[start_col]) else str(row[start_col]),
+                end_col: "" if pd.isna(row[end_col]) else str(row[end_col]),
+                "base_rate": "" if pd.isna(row.get("base_rate")) else str(row.get("base_rate")),
+                "classification": "" if pd.isna(row.get("classification")) else str(row.get("classification")),
+            },
+            "explanation": ", ".join(issues),
+        }
+        evidence_str = str(evidence_obj).replace("'", '"')
+
+        findings.append(
+            Finding(
+                employee_id=emp_id,
+                leave_type=None,
+                as_of_date=None,
+                rule_code=rule["id"],
+                severity=rule["severity"],
+                message=finding_msg,
+                diff_units=None,
+                evidence=evidence_str,
+                finding_id=uuid4().hex[:12],
+                next_action=remediation,
+            )
+        )
+
     return findings
 
 
