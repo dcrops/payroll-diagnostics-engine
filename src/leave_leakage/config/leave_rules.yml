@@ -92,3 +92,127 @@ rules:
       - calculation_integrity
       - evidence_traceability
       - data_anomaly_sanity
+
+  - id: LEAVE-006
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Missing leave ledger for employee with leave balance
+    datasets:
+      primary: leave_snapshot
+      references:
+        - leave_ledger
+    text:
+      finding: Leave balances exist without corresponding ledger history.
+      why_it_matters: Without ledger records the balance cannot be reconstructed or audited.
+      remediation: Verify ledger retention settings and reconstruct historical entries where required.
+    risk_dimension:
+      - structural_completeness
+      - evidence_traceability
+
+  - id: LEAVE-007
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Leave transaction after employee termination
+    datasets:
+      primary: leave_ledger
+      references:
+        - employees
+    text:
+      finding: Leave transactions were recorded after the employee termination date.
+      why_it_matters: Leave should not be taken or accrued once employment has ended.
+      remediation: Review termination processing and correct any invalid leave transactions.
+    risk_dimension:
+      - timing_integrity
+      - cross_module_linkage
+
+  - id: LEAVE-008
+    tier: 2
+    domain: LEAVE
+    severity: MEDIUM
+    title: Duplicate leave ledger entries detected
+    datasets:
+      primary: leave_ledger
+    text:
+      finding: Multiple identical leave ledger entries were detected.
+      why_it_matters: Duplicate entries can inflate or distort leave balances.
+      remediation: Review payroll processing logs and remove duplicate transactions where necessary.
+    risk_dimension:
+      - data_anomaly_sanity
+      - calculation_integrity
+
+  - id: LEAVE-009
+    tier: 2
+    domain: LEAVE
+    severity: MEDIUM
+    title: Extremely high leave balance
+    datasets:
+      primary: leave_snapshot
+    text:
+      finding: Leave balances significantly exceed expected thresholds.
+      why_it_matters: Very large balances may indicate accrual configuration errors or unit inconsistencies.
+      remediation: Validate accrual rules and confirm leave units are recorded correctly.
+    risk_dimension:
+      - data_anomaly_sanity
+
+  - id: LEAVE-010
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Leave ledger entry missing leave type
+    datasets:
+      primary: leave_ledger
+    text:
+      finding: Leave ledger entries were identified without a leave type classification.
+      why_it_matters: Leave transactions must be categorised to ensure correct accrual and reporting.
+      remediation: Review source payroll records and assign appropriate leave types.
+    risk_dimension:
+      - structural_completeness
+      - evidence_traceability
+
+  - id: LEAVE-011
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Leave ledger entry missing timestamp
+    datasets:
+      primary: leave_ledger
+    text:
+      finding: Leave ledger events were detected without timestamps.
+      why_it_matters: Payroll records must include event timestamps to reconstruct the sequence of transactions.
+      remediation: Review payroll export configuration to ensure timestamps are retained.
+    risk_dimension:
+      - evidence_traceability
+
+  - id: LEAVE-012
+    tier: 2
+    domain: LEAVE
+    severity: MEDIUM
+    title: High volume of manual leave adjustments
+    datasets:
+      primary: leave_ledger
+    text:
+      finding: A high proportion of leave transactions were recorded as manual adjustments.
+      why_it_matters: Excessive manual adjustments may indicate weak payroll controls or system configuration issues.
+      remediation: Review adjustment activity and consider strengthening approval processes.
+    risk_dimension:
+      - governance_monitoring
+      - exception_handling
+
+  - id: LEAVE-013
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Leave accrual recorded after termination
+    datasets:
+      primary: leave_ledger
+      references:
+        - employees
+    text:
+      finding: Leave accrual events occurred after the employee termination date.
+      why_it_matters: Accruals should cease once employment ends.
+      remediation: Review payroll configuration to ensure accrual processes stop upon termination.
+    risk_dimension:
+      - timing_integrity
+      - cross_module_linkage

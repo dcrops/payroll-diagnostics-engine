@@ -28,3 +28,10 @@ data/*
 outputs/*
 !outputs/.gitkeep
 
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# pytest cache
+.pytest_cache/
