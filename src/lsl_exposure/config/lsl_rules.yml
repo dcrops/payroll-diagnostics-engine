@@ -1,0 +1,83 @@
+version: "1.0"
+module: LSL
+description: Long Service Leave Exposure - LSL balance presence, integrity and indicative exposure review
+
+rules:
+  - id: LSL-001
+    tier: 1
+    domain: LSL
+    severity: HIGH
+    title: Missing LSL balance for eligible employee
+    datasets:
+      primary: leave_snapshot
+      references:
+        - employee_master
+    config:
+      eligibility_years: 7.0
+    text:
+      finding: "Employees were identified as meeting the configured LSL eligibility threshold without a corresponding LSL balance record."
+      why_it_matters: "Eligible employees should normally have an identifiable LSL balance or equivalent tracking record. Missing balances may indicate that LSL is not being tracked correctly."
+      remediation: "Confirm whether LSL is being tracked outside the payroll system. If not, review historical service records and determine appropriate LSL accruals or provisions."
+    risk_dimension:
+      - structural_completeness
+      - evidence_traceability
+      - calculation_integrity
+
+  - id: LSL-002
+    tier: 1
+    domain: LSL
+    severity: HIGH
+    title: Negative LSL balance
+    datasets:
+      primary: leave_snapshot
+      references:
+        - employee_master
+    text:
+      finding: "Negative LSL balances were identified in the leave snapshot."
+      why_it_matters: "Negative LSL balances are usually invalid and may indicate data errors, posting issues or incorrect configuration."
+      remediation: "Review LSL configuration and any manual adjustments. Correct posting or mapping issues and re-run."
+    risk_dimension:
+      - data_anomaly_sanity
+      - evidence_traceability
+      - calculation_integrity
+
+  - id: LSL-003
+    tier: 1
+    domain: LSL
+    severity: HIGH
+    title: Zero LSL balance for eligible employee
+    datasets:
+      primary: leave_snapshot
+      references:
+        - employee_master
+    config:
+      eligibility_years: 7.0
+    text:
+      finding: "Employees meeting the configured LSL eligibility threshold were identified with an LSL balance of zero."
+      why_it_matters: "Eligible employees would usually accumulate some LSL over time. A zero balance may indicate missing configuration, incomplete history or non-tracking."
+      remediation: "Confirm whether LSL has been intentionally excluded or whether accruals have not been configured correctly for this employee."
+    risk_dimension:
+      - calculation_integrity
+      - evidence_traceability
+      - data_anomaly_sanity
+
+  - id: LSL-004
+    tier: 2
+    domain: LSL
+    severity: MEDIUM
+    title: LSL balance suspiciously low for long-tenured employee
+    datasets:
+      primary: leave_snapshot
+      references:
+        - employee_master
+    config:
+      full_years: 10.0
+      low_floor_units: 20.0
+    text:
+      finding: "Long-tenured employees were identified with LSL balances below the configured low-balance floor."
+      why_it_matters: "Very low LSL balances for long-tenured employees may indicate configuration issues, incomplete history or incorrect balance treatment."
+      remediation: "Review LSL accrual rules and historical balances to confirm whether the low LSL balance is expected for this employee."
+    risk_dimension:
+      - data_anomaly_sanity
+      - calculation_integrity
+      - evidence_traceability
