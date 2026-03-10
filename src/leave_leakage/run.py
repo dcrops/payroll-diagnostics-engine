@@ -11,10 +11,26 @@ from leave_leakage.models import Finding
 from leave_leakage.detectors.registry import run_rule
 
 
-
-REQUIRED_EMP = {"employee_id", "employment_type", "fte", "start_date"}
+REQUIRED_EMP = {"employee_id", "employment_type", "fte", "start_date", "termination_date"}
 REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units", "event_type"}
 REQUIRED_SNAP = {"employee_id", "leave_type", "as_of_date", "balance_units"}
+REQUIRED_REQUESTS = {
+    "request_id",
+    "employee_id",
+    "leave_type",
+    "request_start_date",
+    "request_end_date",
+    "units_requested",
+    "approval_status",
+    "approval_date",
+    "approved_by",
+}
+REQUIRED_TIMESHEETS = {
+    "employee_id",
+    "work_date",
+    "hours_worked",
+    "timesheet_status",
+}
 
 
 def _extract_dates_from_leave_ledger_df(df) -> list[date]:
@@ -27,8 +43,6 @@ def _extract_dates_from_leave_ledger_df(df) -> list[date]:
     if df is None or df.empty:
         return []
 
-    # If you know the real column name (e.g. 'as_of_date'), you can
-    # just use that; this list is defensive.
     candidate_cols = [
         "as_of_date",
         "ledger_date",
@@ -63,15 +77,18 @@ def _extract_dates_from_leave_ledger_df(df) -> list[date]:
 
     return dates
 
+
 def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
     missing = sorted(required - set(df.columns))
     if missing:
         raise ValueError(f"{name} missing required columns: {missing}")
 
+
 def _load_rules(rules_path: Path) -> list[dict]:
     with rules_path.open("r", encoding="utf-8") as f:
         payload = yaml.safe_load(f)
     return payload.get("rules", [])
+
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
@@ -93,11 +110,28 @@ def main() -> int:
         dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
     )
 
-    # NEW: derive LEAVE data window from client ledger
+    leave_requests = pd.read_csv(
+        data_dir / "leave_requests.csv",
+        dtype={
+            "request_id": "string",
+            "employee_id": "string",
+            "leave_type": "string",
+            "approval_status": "string",
+            "approved_by": "string",
+        },
+    )
+
+    timesheets = pd.read_csv(
+        data_dir / "timesheets.csv",
+        dtype={
+            "employee_id": "string",
+            "timesheet_status": "string",
+        },
+    )
+
+    # Derive LEAVE data window from client ledger
     dates = _extract_dates_from_leave_ledger_df(ledger)
     if dates:
-        # Use the same outputs/modules structure as reporting.
-        # This assumes you're running from repo root (which you are).
         modules_dir = Path("outputs") / "modules"
         window_path = modules_dir / "leave_data_window.csv"
         write_data_window(window_path, dates)
@@ -107,23 +141,43 @@ def main() -> int:
         dtype={"employee_id": "string", "leave_type": "string"},
     )
 
-    for df in (employees, ledger, snapshot):
+    for df in (employees, ledger, snapshot, leave_requests, timesheets):
         df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
     _require_cols(employees, REQUIRED_EMP, "employees.csv")
     _require_cols(ledger, REQUIRED_LEDGER, "leave_ledger.csv")
     _require_cols(snapshot, REQUIRED_SNAP, "balances_snapshot.csv")
+    _require_cols(leave_requests, REQUIRED_REQUESTS, "leave_requests.csv")
+    _require_cols(timesheets, REQUIRED_TIMESHEETS, "timesheets.csv")
 
     # Parse dates
+    employees["start_date"] = pd.to_datetime(employees["start_date"], errors="coerce")
+    employees["termination_date"] = pd.to_datetime(employees["termination_date"], errors="coerce")
+
     ledger["event_date"] = pd.to_datetime(ledger["event_date"], errors="coerce")
     snapshot["as_of_date"] = pd.to_datetime(snapshot["as_of_date"], errors="coerce")
 
+    leave_requests["request_start_date"] = pd.to_datetime(leave_requests["request_start_date"], errors="coerce")
+    leave_requests["request_end_date"] = pd.to_datetime(leave_requests["request_end_date"], errors="coerce")
+    leave_requests["approval_date"] = pd.to_datetime(leave_requests["approval_date"], errors="coerce")
+
+    timesheets["work_date"] = pd.to_datetime(timesheets["work_date"], errors="coerce")
+
     bad_ledger_dates = ledger["event_date"].isna().sum()
     bad_snapshot_dates = snapshot["as_of_date"].isna().sum()
+    bad_request_start_dates = leave_requests["request_start_date"].isna().sum()
+    bad_request_end_dates = leave_requests["request_end_date"].isna().sum()
+    bad_request_approval_dates = leave_requests["approval_date"].isna().sum()
+    bad_timesheet_dates = timesheets["work_date"].isna().sum()
+
     print(f"[input] Unparseable ledger event_date rows: {bad_ledger_dates}")
     print(f"[input] Unparseable snapshot as_of_date rows: {bad_snapshot_dates}")
+    print(f"[input] Unparseable leave request start rows: {bad_request_start_dates}")
+    print(f"[input] Unparseable leave request end rows: {bad_request_end_dates}")
+    print(f"[input] Unparseable leave request approval rows: {bad_request_approval_dates}")
+    print(f"[input] Unparseable timesheet work_date rows: {bad_timesheet_dates}")
 
-       # ----------------------------
+    # ----------------------------
     # Load rule metadata
     # ----------------------------
     rules = _load_rules(rules_path)
@@ -162,6 +216,8 @@ def main() -> int:
         "employee_master": employees,
         "leave_ledger": ledger,
         "leave_snapshot": snapshot,
+        "leave_requests": leave_requests,
+        "timesheets": timesheets,
     }
 
     context = {"ledger_recon": report}

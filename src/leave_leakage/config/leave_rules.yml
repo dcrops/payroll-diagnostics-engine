@@ -314,3 +314,77 @@ rules:
     risk_dimension:
       - data_anomaly_sanity
       - evidence_traceability
+
+  - id: LEAVE-020
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Leave taken without approved leave request
+    datasets:
+      primary: leave_ledger
+      references:
+        - leave_requests
+    text:
+      finding: Leave taken events were identified without a matching approved leave request.
+      why_it_matters: Leave posted without an approved request weakens workflow controls and may indicate unauthorised leave processing or incomplete request records.
+      remediation: Confirm whether a valid approved leave request exists for the leave event date and leave type. If not, investigate approval controls and reconcile the missing workflow evidence.
+    risk_dimension:
+      - governance_exposure
+      - evidence_traceability
+      - structural_completeness
+
+  - id: LEAVE-021
+    tier: 2
+    domain: LEAVE
+    severity: MEDIUM
+    title: Leave recorded before request approval date
+    datasets:
+      primary: leave_ledger
+      references:
+        - leave_requests
+    text:
+      finding: Leave ledger events were identified with event dates earlier than the recorded approval date.
+      why_it_matters: Leave recorded before approval may indicate retrospective approval practices or weak workflow timing controls.
+      remediation: Review approval timing and confirm whether the leave was properly authorised before being posted to payroll.
+    risk_dimension:
+      - timing_integrity
+      - governance_exposure
+      - evidence_traceability
+
+  - id: LEAVE-022
+    tier: 2
+    domain: LEAVE
+    severity: MEDIUM
+    title: Leave and worked hours recorded on same day
+    datasets:
+      primary: leave_ledger
+      references:
+        - timesheets
+    text:
+      finding: Leave events were identified on days where worked hours were also recorded.
+      why_it_matters: Concurrent leave and worked hours may indicate duplicate recording, timesheet issues, or payroll processing errors.
+      remediation: Review the leave event and timesheet entry for the same day to confirm whether both records are valid.
+    risk_dimension:
+      - data_anomaly_sanity
+      - cross_module_linkage_risk
+      - governance_exposure
+
+  - id: LEAVE-023
+    tier: 2
+    domain: LEAVE
+    severity: MEDIUM
+    title: Combined leave and worked hours exceed daily threshold
+    datasets:
+      primary: leave_ledger
+      references:
+        - timesheets
+    config:
+      max_combined_units: 12.0
+    text:
+      finding: Combined leave units and worked hours exceeded the configured daily threshold.
+      why_it_matters: Excessive combined daily hours may indicate duplicate recording, leave overlap with worked time, or incorrect units.
+      remediation: Review leave entries and timesheet records for the day and confirm whether units and hours are correctly recorded.
+    risk_dimension:
+      - data_anomaly_sanity
+      - calculation_integrity
+      - governance_exposure

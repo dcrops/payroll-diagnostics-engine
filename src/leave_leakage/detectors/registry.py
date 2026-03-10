@@ -34,6 +34,12 @@ from leave_leakage.detectors.governance_rules import (
     _run_leave_004_casual_accrual_present,
     _run_leave_012_manual_adjustments,
 )
+from leave_leakage.detectors.workflow_rules import (
+    _run_leave_020_taken_without_approved_request,
+    _run_leave_021_taken_before_approval_date,
+    _run_leave_022_leave_and_work_same_day,
+    _run_leave_023_combined_leave_and_work_exceeds_threshold,
+)
 
 
 Detector = Callable[[dict, dict[str, pd.DataFrame], dict], list[Finding]]
@@ -181,6 +187,37 @@ def _detect_leave_019(rule: dict, datasets: dict[str, pd.DataFrame], context: di
         return []
     return _run_leave_019_invalid_event_type(rule, leave_ledger)
 
+def _detect_leave_020(rule: dict, datasets: dict[str, pd.DataFrame], context: dict) -> list[Finding]:
+    leave_ledger = datasets.get("leave_ledger", pd.DataFrame())
+    leave_requests = datasets.get("leave_requests", pd.DataFrame())
+    if leave_ledger.empty or leave_requests.empty:
+        return []
+    return _run_leave_020_taken_without_approved_request(rule, leave_ledger, leave_requests)
+
+
+def _detect_leave_021(rule: dict, datasets: dict[str, pd.DataFrame], context: dict) -> list[Finding]:
+    leave_ledger = datasets.get("leave_ledger", pd.DataFrame())
+    leave_requests = datasets.get("leave_requests", pd.DataFrame())
+    if leave_ledger.empty or leave_requests.empty:
+        return []
+    return _run_leave_021_taken_before_approval_date(rule, leave_ledger, leave_requests)
+
+
+def _detect_leave_022(rule: dict, datasets: dict[str, pd.DataFrame], context: dict) -> list[Finding]:
+    leave_ledger = datasets.get("leave_ledger", pd.DataFrame())
+    timesheets = datasets.get("timesheets", pd.DataFrame())
+    if leave_ledger.empty or timesheets.empty:
+        return []
+    return _run_leave_022_leave_and_work_same_day(rule, leave_ledger, timesheets)
+
+
+def _detect_leave_023(rule: dict, datasets: dict[str, pd.DataFrame], context: dict) -> list[Finding]:
+    leave_ledger = datasets.get("leave_ledger", pd.DataFrame())
+    timesheets = datasets.get("timesheets", pd.DataFrame())
+    if leave_ledger.empty or timesheets.empty:
+        return []
+    return _run_leave_023_combined_leave_and_work_exceeds_threshold(rule, leave_ledger, timesheets)
+
 
 RULE_REGISTRY: dict[str, Detector] = {
     "LEAVE-001": _detect_leave_001,
@@ -202,6 +239,10 @@ RULE_REGISTRY: dict[str, Detector] = {
     "LEAVE-017": _detect_leave_017,
     "LEAVE-018": _detect_leave_018,
     "LEAVE-019": _detect_leave_019,
+    "LEAVE-020": _detect_leave_020,
+    "LEAVE-021": _detect_leave_021,
+    "LEAVE-022": _detect_leave_022,
+    "LEAVE-023": _detect_leave_023,
 }
 
 
