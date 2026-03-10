@@ -7,7 +7,8 @@ import yaml
 
 from common.data_window import write_data_window
 
-from leave_leakage.rules import Finding, run_rule
+from leave_leakage.models import Finding
+from leave_leakage.detectors.registry import run_rule
 
 
 
@@ -163,8 +164,10 @@ def main() -> int:
         "leave_snapshot": snapshot,
     }
 
+    context = {"ledger_recon": report}
+
     for rule in rules:
-        findings.extend(run_rule(rule, datasets, ledger_recon=report))
+        findings.extend(run_rule(rule, datasets, context=context))
 
     # ----------------------------
     # Write findings output (module-level)
