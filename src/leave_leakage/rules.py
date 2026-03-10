@@ -320,6 +320,578 @@ def _run_leave_005_balance_mismatch(rule: dict, snapshot: pd.DataFrame, ledger_r
 
     return findings
 
+def _run_leave_006_missing_ledger(rule: dict, snapshot: pd.DataFrame, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    ledger_pairs = set(zip(ledger["employee_id"], ledger["leave_type"]))
+
+    for _, row in snapshot.iterrows():
+        key = (str(row["employee_id"]), str(row["leave_type"]))
+
+        if key not in ledger_pairs and float(row["balance_units"]) != 0:
+            evidence_str = json.dumps(
+                {
+                    "sources": ["balances_snapshot.csv", "leave_ledger.csv"],
+                    "primary_keys": {
+                        "employee_id": str(row["employee_id"]),
+                        "leave_type": str(row["leave_type"]),
+                        "as_of_date": str(row["as_of_date"].date()) if pd.notna(row["as_of_date"]) else None,
+                    },
+                    "values": {
+                        "snapshot_balance_units": float(row["balance_units"]),
+                        "ledger_records_found": False,
+                    },
+                    "explanation": "Snapshot balance exists but no ledger records were found.",
+                },
+                ensure_ascii=False,
+            )
+
+            findings.append(
+                _build_finding(
+                    rule,
+                    str(row["employee_id"]),
+                    str(row["leave_type"]),
+                    str(row["as_of_date"].date()) if pd.notna(row["as_of_date"]) else None,
+                    rule["text"]["finding"],
+                    evidence_str,
+                )
+            )
+
+    return findings
+
+def _run_leave_007_after_termination(rule: dict, employees: pd.DataFrame, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    emp = employees[["employee_id", "termination_date"]].copy()
+    emp["termination_date"] = pd.to_datetime(emp["termination_date"], errors="coerce")
+
+    merged = ledger.merge(emp, on="employee_id", how="left")
+
+    bad = merged[
+        (merged["termination_date"].notna()) &
+        (merged["event_date"] > merged["termination_date"])
+    ]
+
+    for _, row in bad.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["leave_ledger.csv", "employees.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": str(row["leave_type"]),
+                    "event_date": str(row["event_date"].date()),
+                },
+                "values": {
+                    "termination_date": str(row["termination_date"].date()),
+                    "units": float(row["units"]),
+                },
+                "explanation": "Leave transaction occurred after termination date.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                str(row["leave_type"]),
+                str(row["event_date"].date()),
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_008_duplicate_entries(rule: dict, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    dup = ledger[ledger.duplicated(
+        subset=["employee_id", "leave_type", "event_date", "units", "event_type"],
+        keep=False
+    )]
+
+    for _, row in dup.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["leave_ledger.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": str(row["leave_type"]),
+                    "event_date": str(row["event_date"].date()),
+                },
+                "values": {
+                    "units": float(row["units"]),
+                    "event_type": str(row["event_type"]),
+                },
+                "explanation": "Duplicate ledger event detected.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                str(row["leave_type"]),
+                str(row["event_date"].date()),
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_009_extreme_balance(rule: dict, snapshot: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    threshold = 500
+
+    bad = snapshot[snapshot["balance_units"] > threshold]
+
+    for _, row in bad.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["balances_snapshot.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": str(row["leave_type"]),
+                    "as_of_date": str(row["as_of_date"].date()),
+                },
+                "values": {
+                    "balance_units": float(row["balance_units"]),
+                    "threshold": threshold,
+                },
+                "explanation": "Leave balance exceeds expected threshold.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                str(row["leave_type"]),
+                str(row["as_of_date"].date()),
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_010_missing_leave_type(rule: dict, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    bad = ledger[ledger["leave_type"].isna()]
+
+    for _, row in bad.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["leave_ledger.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "event_date": str(row["event_date"].date()),
+                },
+                "values": {
+                    "units": float(row["units"]),
+                    "event_type": str(row["event_type"]),
+                },
+                "explanation": "Ledger entry missing leave type.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                None,
+                str(row["event_date"].date()),
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_011_missing_timestamp(rule: dict, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    bad = ledger[ledger["event_date"].isna()]
+
+    for _, row in bad.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["leave_ledger.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": str(row["leave_type"]),
+                },
+                "values": {
+                    "units": float(row["units"]),
+                    "event_type": str(row["event_type"]),
+                },
+                "explanation": "Ledger event missing timestamp.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                str(row["leave_type"]),
+                None,
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_012_manual_adjustments(rule: dict, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    if "event_type" not in ledger.columns:
+        return findings
+
+    adj = ledger[ledger["event_type"] == "ADJUSTMENT"].copy()
+
+    if adj.empty:
+        return findings
+
+    counts = adj.groupby("employee_id").size()
+    bad = counts[counts > 5]
+
+    for emp_id, adjustment_count in bad.items():
+        evidence_str = json.dumps(
+            {
+                "sources": ["leave_ledger.csv"],
+                "primary_keys": {
+                    "employee_id": str(emp_id),
+                },
+                "values": {
+                    "adjustment_count": int(adjustment_count),
+                },
+                "thresholds": {
+                    "rule": "adjustment_count > 5",
+                },
+                "explanation": "High number of manual leave adjustments detected for employee.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule=rule,
+                employee_id=str(emp_id),
+                leave_type=None,
+                as_of_date=None,
+                message=rule["text"]["finding"],
+                evidence_str=evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_013_accrual_after_termination(rule: dict, employees: pd.DataFrame, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    emp = employees[["employee_id", "termination_date"]].copy()
+    emp["termination_date"] = pd.to_datetime(emp["termination_date"], errors="coerce")
+
+    merged = ledger.merge(emp, on="employee_id", how="left")
+
+    bad = merged[
+        (merged["event_type"] == "ACCRUAL") &
+        (merged["termination_date"].notna()) &
+        (merged["event_date"] > merged["termination_date"])
+    ]
+
+    for _, row in bad.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["leave_ledger.csv", "employees.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": str(row["leave_type"]),
+                    "event_date": str(row["event_date"].date()),
+                },
+                "values": {
+                    "termination_date": str(row["termination_date"].date()),
+                    "units": float(row["units"]),
+                },
+                "explanation": "Leave accrual posted after employee termination.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                str(row["leave_type"]),
+                str(row["event_date"].date()),
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_014_taken_exceeds_balance(rule: dict, snapshot: pd.DataFrame, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    merged = ledger.merge(
+        snapshot[["employee_id", "leave_type", "balance_units"]],
+        on=["employee_id", "leave_type"],
+        how="left"
+    )
+
+    bad = merged[
+        (merged["event_type"] == "TAKEN") &
+        (merged["units"] < 0) &
+        (merged["balance_units"].notna()) &
+        (abs(merged["units"]) > merged["balance_units"])
+    ]
+
+    for _, row in bad.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["leave_ledger.csv", "balances_snapshot.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": str(row["leave_type"]),
+                    "event_date": str(row["event_date"].date()) if pd.notna(row["event_date"]) else None,
+                },
+                "values": {
+                    "leave_taken_units": float(row["units"]),
+                    "available_balance": float(row["balance_units"]),
+                },
+                "thresholds": {
+                    "rule": "abs(units_taken) <= balance_units"
+                },
+                "explanation": "Leave taken exceeds the available balance.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                str(row["leave_type"]),
+                str(row["event_date"].date()) if pd.notna(row["event_date"]) else None,
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_015_zero_unit_event(rule: dict, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    bad = ledger[ledger["units"] == 0]
+
+    for _, row in bad.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["leave_ledger.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": str(row["leave_type"]),
+                    "event_date": str(row["event_date"].date()) if pd.notna(row["event_date"]) else None,
+                },
+                "values": {
+                    "event_type": str(row["event_type"]),
+                    "units": float(row["units"]),
+                },
+                "explanation": "Leave ledger event recorded with zero units.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                str(row["leave_type"]),
+                str(row["event_date"].date()) if pd.notna(row["event_date"]) else None,
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_016_snapshot_type_not_in_ledger(rule: dict, snapshot: pd.DataFrame, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    ledger_types = set(ledger["leave_type"].dropna().unique())
+
+    bad = snapshot[~snapshot["leave_type"].isin(ledger_types)]
+
+    for _, row in bad.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["balances_snapshot.csv", "leave_ledger.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": str(row["leave_type"]),
+                    "as_of_date": str(row["as_of_date"].date()) if pd.notna(row["as_of_date"]) else None,
+                },
+                "values": {
+                    "snapshot_leave_type": str(row["leave_type"]),
+                    "ledger_leave_types": list(sorted(ledger_types)),
+                },
+                "explanation": "Leave type present in snapshot but absent from ledger dataset.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                str(row["leave_type"]),
+                str(row["as_of_date"].date()) if pd.notna(row["as_of_date"]) else None,
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_017_unknown_employee_ledger(rule: dict, employees: pd.DataFrame, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    known_ids = set(employees["employee_id"].astype(str).str.strip())
+
+    bad = ledger[~ledger["employee_id"].astype(str).str.strip().isin(known_ids)]
+
+    for _, row in bad.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["leave_ledger.csv", "employees.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": str(row["leave_type"]),
+                    "event_date": str(row["event_date"].date()) if pd.notna(row["event_date"]) else None,
+                },
+                "values": {
+                    "event_type": str(row["event_type"]),
+                    "units": float(row["units"]) if pd.notna(row["units"]) else None,
+                },
+                "explanation": "Leave ledger event references an employee not present in the employee master dataset.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                str(row["leave_type"]),
+                str(row["event_date"].date()) if pd.notna(row["event_date"]) else None,
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_018_unknown_employee_snapshot(rule: dict, employees: pd.DataFrame, snapshot: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    known_ids = set(employees["employee_id"].astype(str).str.strip())
+
+    bad = snapshot[~snapshot["employee_id"].astype(str).str.strip().isin(known_ids)]
+
+    for _, row in bad.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["balances_snapshot.csv", "employees.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": str(row["leave_type"]),
+                    "as_of_date": str(row["as_of_date"].date()) if pd.notna(row["as_of_date"]) else None,
+                },
+                "values": {
+                    "balance_units": float(row["balance_units"]),
+                },
+                "explanation": "Leave balance exists for an employee not present in the employee master dataset.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                str(row["leave_type"]),
+                str(row["as_of_date"].date()) if pd.notna(row["as_of_date"]) else None,
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
+def _run_leave_019_invalid_event_type(rule: dict, ledger: pd.DataFrame) -> list[Finding]:
+    findings: list[Finding] = []
+
+    allowed = {"ACCRUAL", "TAKEN", "ADJUSTMENT"}
+
+    bad = ledger[~ledger["event_type"].astype(str).str.upper().isin(allowed)]
+
+    for _, row in bad.iterrows():
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["leave_ledger.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": str(row["leave_type"]),
+                    "event_date": str(row["event_date"].date()) if pd.notna(row["event_date"]) else None,
+                },
+                "values": {
+                    "event_type": str(row["event_type"]),
+                    "units": float(row["units"]) if pd.notna(row["units"]) else None,
+                },
+                "thresholds": {
+                    "allowed_event_types": list(sorted(allowed)),
+                },
+                "explanation": "Leave ledger event type is not recognised.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule,
+                str(row["employee_id"]),
+                str(row["leave_type"]),
+                str(row["event_date"].date()) if pd.notna(row["event_date"]) else None,
+                rule["text"]["finding"],
+                evidence_str,
+            )
+        )
+
+    return findings
+
 
 def run_rule(rule: dict, datasets: dict[str, pd.DataFrame], ledger_recon: pd.DataFrame | None = None) -> list[Finding]:
     rule_id = rule["id"]
@@ -352,5 +924,75 @@ def run_rule(rule: dict, datasets: dict[str, pd.DataFrame], ledger_recon: pd.Dat
         if leave_snapshot.empty or ledger_recon is None or ledger_recon.empty:
             return []
         return _run_leave_005_balance_mismatch(rule, leave_snapshot, ledger_recon)
+
+    if rule_id == "LEAVE-006":
+        if leave_snapshot.empty or leave_ledger.empty:
+            return []
+        return _run_leave_006_missing_ledger(rule, leave_snapshot, leave_ledger)
+
+    if rule_id == "LEAVE-007":
+        if employee_master.empty or leave_ledger.empty or "termination_date" not in employee_master.columns:
+            return []
+        return _run_leave_007_after_termination(rule, employee_master, leave_ledger)
+
+    if rule_id == "LEAVE-008":
+        if leave_ledger.empty:
+            return []
+        return _run_leave_008_duplicate_entries(rule, leave_ledger)
+
+    if rule_id == "LEAVE-009":
+        if leave_snapshot.empty:
+            return []
+        return _run_leave_009_extreme_balance(rule, leave_snapshot)
+
+    if rule_id == "LEAVE-010":
+        if leave_ledger.empty:
+            return []
+        return _run_leave_010_missing_leave_type(rule, leave_ledger)
+
+    if rule_id == "LEAVE-011":
+        if leave_ledger.empty:
+            return []
+        return _run_leave_011_missing_timestamp(rule, leave_ledger)
+
+    if rule_id == "LEAVE-012":
+        if leave_ledger.empty:
+            return []
+        return _run_leave_012_manual_adjustments(rule, leave_ledger)
+
+    if rule_id == "LEAVE-013":
+        if employee_master.empty or leave_ledger.empty or "termination_date" not in employee_master.columns:
+            return []
+        return _run_leave_013_accrual_after_termination(rule, employee_master, leave_ledger)
+
+    if rule_id == "LEAVE-014":
+        if leave_snapshot.empty or leave_ledger.empty:
+            return []
+        return _run_leave_014_taken_exceeds_balance(rule, leave_snapshot, leave_ledger)
+
+    if rule_id == "LEAVE-015":
+        if leave_ledger.empty:
+            return []
+        return _run_leave_015_zero_unit_event(rule, leave_ledger)
+
+    if rule_id == "LEAVE-016":
+        if leave_snapshot.empty or leave_ledger.empty:
+            return []
+        return _run_leave_016_snapshot_type_not_in_ledger(rule, leave_snapshot, leave_ledger)
+
+    if rule_id == "LEAVE-017":
+        if employee_master.empty or leave_ledger.empty:
+            return []
+        return _run_leave_017_unknown_employee_ledger(rule, employee_master, leave_ledger)
+
+    if rule_id == "LEAVE-018":
+        if employee_master.empty or leave_snapshot.empty:
+            return []
+        return _run_leave_018_unknown_employee_snapshot(rule, employee_master, leave_snapshot)
+
+    if rule_id == "LEAVE-019":
+        if leave_ledger.empty:
+            return []
+        return _run_leave_019_invalid_event_type(rule, leave_ledger)
 
     return []

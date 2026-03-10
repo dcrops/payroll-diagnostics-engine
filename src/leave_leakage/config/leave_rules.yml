@@ -21,7 +21,7 @@ rules:
       - calculation_integrity
 
   - id: LEAVE-002
-    tier: 1
+    tier: 2
     domain: LEAVE
     severity: MEDIUM
     title: Leave event sign inconsistent with event type
@@ -125,7 +125,7 @@ rules:
       remediation: Review termination processing and correct any invalid leave transactions.
     risk_dimension:
       - timing_integrity
-      - cross_module_linkage
+      - cross_module_linkage_risk
 
   - id: LEAVE-008
     tier: 2
@@ -197,7 +197,7 @@ rules:
       why_it_matters: Excessive manual adjustments may indicate weak payroll controls or system configuration issues.
       remediation: Review adjustment activity and consider strengthening approval processes.
     risk_dimension:
-      - governance_monitoring
+      - governance_exposure
       - exception_handling
 
   - id: LEAVE-013
@@ -215,4 +215,102 @@ rules:
       remediation: Review payroll configuration to ensure accrual processes stop upon termination.
     risk_dimension:
       - timing_integrity
-      - cross_module_linkage
+      - cross_module_linkage_risk
+
+  - id: LEAVE-014
+    tier: 2
+    domain: LEAVE
+    severity: MEDIUM
+    title: Leave taken exceeds available balance
+    datasets:
+      primary: leave_ledger
+      references:
+        - leave_snapshot
+    text:
+      finding: Leave taken events were identified where the leave taken exceeded the available balance.
+      why_it_matters: Leave taken beyond available balances may indicate configuration issues, approval failures, or payroll timing inconsistencies.
+      remediation: Review the employee's leave balance and event history to confirm whether the leave was approved or whether balances are incorrect.
+    risk_dimension:
+      - calculation_integrity
+      - governance_exposure
+
+  - id: LEAVE-015
+    tier: 2
+    domain: LEAVE
+    severity: LOW
+    title: Leave ledger event recorded with zero units
+    datasets:
+      primary: leave_ledger
+    text:
+      finding: Leave ledger events were recorded with zero units.
+      why_it_matters: Zero-unit events may indicate ingestion errors, configuration issues or placeholder transactions that weaken ledger integrity.
+      remediation: Review payroll export logic and remove or correct zero-unit leave events where they do not represent valid payroll activity.
+    risk_dimension:
+      - data_anomaly_sanity
+      - evidence_traceability
+
+  - id: LEAVE-016
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Leave type present in snapshot but absent from ledger dataset
+    datasets:
+      primary: leave_snapshot
+      references:
+        - leave_ledger
+    text:
+      finding: Leave balances were identified for leave types that do not appear in the leave ledger dataset.
+      why_it_matters: If leave types appear in balances but not in ledger records, entitlement balances may not be reconstructable.
+      remediation: Verify payroll configuration and ensure ledger exports include all leave types used in balance reporting.
+    risk_dimension:
+      - structural_completeness
+      - evidence_traceability
+
+  - id: LEAVE-017
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Leave transaction recorded for unknown employee
+    datasets:
+      primary: leave_ledger
+      references:
+        - employee_master
+    text:
+      finding: Leave ledger events were identified for employees not present in the employee master dataset.
+      why_it_matters: Payroll transactions referencing unknown employees weaken payroll integrity and may indicate incomplete data extracts or system inconsistencies.
+      remediation: Confirm that the employee master dataset contains all relevant employees and reconcile any missing records.
+    risk_dimension:
+      - structural_completeness
+      - cross_module_linkage_risk
+
+  - id: LEAVE-018
+    tier: 1
+    domain: LEAVE
+    severity: HIGH
+    title: Leave balance recorded for unknown employee
+    datasets:
+      primary: leave_snapshot
+      references:
+        - employee_master
+    text:
+      finding: Leave balances were identified for employees not present in the employee master dataset.
+      why_it_matters: Leave balances without a corresponding employee record weaken payroll integrity and may indicate incomplete data extracts.
+      remediation: Confirm that employee master records are complete and reconcile any missing employee records.
+    risk_dimension:
+      - structural_completeness
+      - cross_module_linkage_risk
+
+  - id: LEAVE-019
+    tier: 2
+    domain: LEAVE
+    severity: MEDIUM
+    title: Leave ledger event contains invalid event type
+    datasets:
+      primary: leave_ledger
+    text:
+      finding: Leave ledger events were identified with event types not recognised by the CRC rule framework.
+      why_it_matters: Unexpected event types may indicate data ingestion issues or configuration inconsistencies.
+      remediation: Review the payroll export configuration and ensure event types are correctly mapped.
+    risk_dimension:
+      - data_anomaly_sanity
+      - evidence_traceability
