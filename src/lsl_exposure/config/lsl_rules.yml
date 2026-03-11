@@ -81,3 +81,220 @@ rules:
       - data_anomaly_sanity
       - calculation_integrity
       - evidence_traceability
+
+  - id: LSL-005
+    tier: 1
+    domain: LSL
+    severity: HIGH
+    title: LSL balance present below eligibility threshold
+    datasets:
+      primary: leave_snapshot
+      references:
+        - employee_master
+    config:
+      eligibility_years: 7.0
+    text:
+      finding: "Employees were identified with an LSL balance despite appearing below the configured eligibility threshold."
+      why_it_matters: "LSL balances recorded before the eligibility threshold may indicate incorrect service dates or configuration issues."
+      remediation: "Review employee service commencement dates and LSL configuration logic."
+    risk_dimension:
+      - calculation_integrity
+      - cross_module_linkage_risk
+
+  - id: LSL-006
+    tier: 1
+    domain: LSL
+    severity: HIGH
+    title: Missing LSL balance record
+    datasets:
+      primary: employee_master
+      references:
+        - leave_snapshot
+    text:
+      finding: "Employees were identified without any corresponding LSL balance record."
+      why_it_matters: "Missing LSL records may indicate that LSL is not being tracked or was not migrated correctly."
+      remediation: "Confirm whether LSL tracking exists outside the payroll system or whether balances were not migrated."
+    risk_dimension:
+      - structural_completeness
+      - evidence_traceability
+
+  - id: LSL-007
+    tier: 1
+    domain: LSL
+    severity: MEDIUM
+    title: Extremely large LSL balance
+    datasets:
+      primary: leave_snapshot
+      references:
+        - employee_master
+    config:
+      extreme_units: 800.0
+    text:
+      finding: "LSL balances exceeding the configured extreme threshold were identified."
+      why_it_matters: "Extremely large balances may indicate configuration issues or incorrect historical accrual calculations."
+      remediation: "Review service history and LSL accrual calculations for affected employees."
+    risk_dimension:
+      - data_anomaly_sanity
+      - calculation_integrity
+
+  - id: LSL-008
+    tier: 1
+    domain: LSL
+    severity: MEDIUM
+    title: Multiple LSL leave types recorded
+    datasets:
+      primary: leave_snapshot
+      references: []
+    text:
+      finding: "Multiple LSL leave types were identified for individual employees."
+      why_it_matters: "Multiple LSL leave types may indicate configuration drift or duplicate entitlement categories."
+      remediation: "Review leave type configuration and consolidate duplicate LSL categories where appropriate."
+    risk_dimension:
+      - structural_completeness
+      - governance_exposure
+
+  - id: LSL-009
+    tier: 2
+    domain: LSL
+    severity: MEDIUM
+    title: Duplicate LSL balance records
+    datasets:
+      primary: leave_snapshot
+      references: []
+    text:
+      finding: "Duplicate LSL balance records were identified for the same employee."
+      why_it_matters: "Duplicate records may distort entitlement calculations or indicate data ingestion issues."
+      remediation: "Review payroll export logic and remove duplicated records."
+    risk_dimension:
+      - data_anomaly_sanity
+      - evidence_traceability
+
+  - id: LSL-010
+    tier: 2
+    domain: LSL
+    severity: LOW
+    title: LSL balances clustered near eligibility threshold
+    datasets:
+      primary: leave_snapshot
+      references:
+        - employee_master
+    config:
+      eligibility_years: 7.0
+      threshold_window_years: 1.0
+    text:
+      finding: "A high proportion of employees appear to accumulate LSL balances only near the eligibility threshold."
+      why_it_matters: "This may indicate configuration drift or delayed LSL tracking."
+      remediation: "Review whether LSL accrual tracking begins appropriately before the eligibility threshold."
+    risk_dimension:
+      - governance_monitoring_exposure
+      - data_anomaly_sanity
+
+  - id: LSL-011
+    tier: 2
+    domain: LSL
+    severity: LOW
+    title: LSL balance inconsistent with employee FTE
+    datasets:
+      primary: leave_snapshot
+      references:
+        - employee_master
+    config:
+      eligibility_years: 7.0
+      low_fte_threshold: 0.8
+      high_balance_units: 200.0
+    text:
+      finding: "LSL balances appear inconsistent with employee FTE levels."
+      why_it_matters: "FTE changes may not have been reflected correctly in LSL accrual logic."
+      remediation: "Review accrual calculations for employees with part-time or changing FTE profiles."
+    risk_dimension:
+      - calculation_integrity
+      - cross_module_linkage_risk
+
+  - id: LSL-012
+    tier: 1
+    domain: LSL
+    severity: HIGH
+    title: LSL balance exists without supporting ledger history
+    datasets:
+      primary: leave_snapshot
+      references:
+        - leave_ledger
+    text:
+      finding: "Employees were identified with LSL balances but no corresponding LSL ledger history."
+      why_it_matters: "Without supporting ledger history, long service leave balances cannot be reconstructed or defended."
+      remediation: "Confirm whether LSL movement history is retained elsewhere. If not, review migration and balance reconstruction logic."
+    risk_dimension:
+      - structural_completeness
+      - evidence_traceability
+
+  - id: LSL-013
+    tier: 1
+    domain: LSL
+    severity: HIGH
+    title: LSL taken before eligibility threshold
+    datasets:
+      primary: leave_ledger
+      references:
+        - employee_master
+    config:
+      eligibility_years: 7.0
+    text:
+      finding: "LSL taken events were identified before the configured eligibility threshold was reached."
+      why_it_matters: "Taking long service leave before minimum service eligibility may indicate incorrect service dates or policy failures."
+      remediation: "Review employee service dates and confirm whether the leave event was valid under the applicable LSL framework."
+    risk_dimension:
+      - timing_integrity
+      - calculation_integrity
+      - cross_module_linkage_risk
+
+  - id: LSL-014
+    tier: 1
+    domain: LSL
+    severity: HIGH
+    title: LSL ledger-derived balance does not reconcile to snapshot
+    datasets:
+      primary: leave_snapshot
+      references:
+        - leave_ledger
+    config:
+      tolerance_units: 0.01
+    text:
+      finding: "LSL ledger-derived balances did not reconcile to snapshot balances within the configured tolerance."
+      why_it_matters: "If LSL balances cannot be reconstructed from the underlying ledger, entitlement integrity is weakened."
+      remediation: "Reconcile LSL ledger movements against snapshot balances and investigate missing, duplicate or manual adjustment entries."
+    risk_dimension:
+      - calculation_integrity
+      - evidence_traceability
+
+  - id: LSL-015
+    tier: 1
+    domain: LSL
+    severity: HIGH
+    title: LSL movement recorded after termination
+    datasets:
+      primary: leave_ledger
+      references:
+        - employee_master
+    text:
+      finding: "LSL movements were identified after the employee termination date."
+      why_it_matters: "LSL should not continue to move after termination unless specifically justified and documented."
+      remediation: "Review termination dates and LSL processing logic for affected employees."
+    risk_dimension:
+      - timing_integrity
+      - cross_module_linkage_risk
+
+  - id: LSL-016
+    tier: 1
+    domain: LSL
+    severity: HIGH
+    title: Missing or invalid service start basis for LSL calculation
+    datasets:
+      primary: employee_master
+      references: []
+    text:
+      finding: "Employee records required to support LSL service calculations were incomplete or invalid."
+      why_it_matters: "Long service leave entitlement depends on defensible service history. Missing or invalid service basis weakens entitlement integrity."
+      remediation: "Confirm service commencement dates and any recognised service adjustments for affected employees."
+    risk_dimension:
+      - structural_completeness
+      - evidence_traceability

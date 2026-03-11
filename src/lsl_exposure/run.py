@@ -5,17 +5,16 @@ from datetime import date
 import pandas as pd
 import yaml
 
-from lsl_exposure.rules import (
-    Finding,
-    prepare_lsl_state,
-    run_rule,
-    compute_exposure_band,
-)
+from lsl_exposure.models import Finding
+from lsl_exposure.detectors.registry import run_rule
+from lsl_exposure.rules import prepare_lsl_state, compute_exposure_band
 
 from common.data_window import write_data_window
 
+
 REQUIRED_EMP = {"employee_id", "employment_type", "fte", "start_date"}
 REQUIRED_SNAP = {"employee_id", "leave_type", "as_of_date", "balance_units"}
+REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units", "event_type"}
 
 
 def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
@@ -40,13 +39,18 @@ def main() -> int:
     modules_dir.mkdir(parents=True, exist_ok=True)
 
     employees = pd.read_csv(
-        "data/sample/employees.csv",
+        repo_root / "data" / "sample" / "employees.csv",
         dtype={"employee_id": "string"},
     )
 
     snapshot = pd.read_csv(
-        "data/sample/balances_snapshot.csv",
+        repo_root / "data" / "sample" / "balances_snapshot.csv",
         dtype={"employee_id": "string", "leave_type": "string"},
+    )
+
+    ledger = pd.read_csv(
+        repo_root / "data" / "sample" / "leave_ledger.csv",
+        dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
     )
 
     pay_rates_path = repo_root / "data" / "sample" / "pay_rates.csv"
@@ -57,11 +61,12 @@ def main() -> int:
             dtype={"employee_id": "string"},
         )
 
-    for df in (employees, snapshot):
+    for df in (employees, snapshot, ledger):
         df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
     _require_cols(employees, REQUIRED_EMP, "employees.csv")
     _require_cols(snapshot, REQUIRED_SNAP, "balances_snapshot.csv")
+    _require_cols(ledger, REQUIRED_LEDGER, "leave_ledger.csv")
 
     employees["start_date"] = pd.to_datetime(
         employees["start_date"], errors="coerce"
@@ -69,21 +74,30 @@ def main() -> int:
     snapshot["as_of_date"] = pd.to_datetime(
         snapshot["as_of_date"], errors="coerce"
     )
+    ledger["event_date"] = pd.to_datetime(
+        ledger["event_date"], errors="coerce"
+    )
 
     bad_emp_dates = employees["start_date"].isna().sum()
     bad_snapshot_dates = snapshot["as_of_date"].isna().sum()
+    bad_ledger_dates = ledger["event_date"].isna().sum()
+
     print(f"[input] Unparseable employee start_date rows: {bad_emp_dates}")
     print(f"[input] Unparseable snapshot as_of_date rows: {bad_snapshot_dates}")
+    print(f"[input] Unparseable ledger event_date rows: {bad_ledger_dates}")
 
     window_dates: list[date] = []
 
     emp_dates = employees["start_date"].dropna()
     snap_dates = snapshot["as_of_date"].dropna()
+    ledger_dates = ledger["event_date"].dropna()
 
     if not emp_dates.empty:
         window_dates.extend(emp_dates.dt.date.tolist())
     if not snap_dates.empty:
         window_dates.extend(snap_dates.dt.date.tolist())
+    if not ledger_dates.empty:
+        window_dates.extend(ledger_dates.dt.date.tolist())
 
     write_data_window(modules_dir / "lsl_data_window.csv", window_dates)
 
@@ -102,10 +116,13 @@ def main() -> int:
     datasets = {
         "employee_master": employees,
         "leave_snapshot": snapshot,
+        "leave_ledger": ledger,
     }
 
+    context = {"state": state}
+
     for rule in rules:
-        findings.extend(run_rule(rule, datasets, state=state))
+        findings.extend(run_rule(rule, datasets, context=context))
 
     eligibility_years = 7.0
     full_years = 10.0
