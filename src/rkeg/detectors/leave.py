@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pandas as pd
 
-from rkeg.rules import Finding
+from rkeg.models import Finding
 
 
 def _run_leave_001(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[Finding]:

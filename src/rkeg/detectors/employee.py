@@ -4,7 +4,7 @@ from uuid import uuid4
 from typing import Dict, Iterable, List
 import pandas as pd
 
-from rkeg.rules import Finding
+from rkeg.models import Finding
 
 
 def run_rule(rule: dict, datasets: dict[str, pd.DataFrame]) -> List[Finding]:

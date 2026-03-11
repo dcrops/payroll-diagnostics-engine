@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from rkeg.schemas import RkegFinding
+from rkeg.models import Finding
 
 
 # You can tune this to whatever statutory / policy threshold you want

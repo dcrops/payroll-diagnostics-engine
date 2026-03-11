@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pandas as pd
 
-from rkeg.rules import Finding
+from rkeg.models import Finding
 
 # You can tweak these if you like
 ABS_TOLERANCE = 5.00      # $ difference threshold for SUP-002

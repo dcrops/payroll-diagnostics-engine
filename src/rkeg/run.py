@@ -7,8 +7,8 @@ from typing import Iterable
 import pandas as pd
 import yaml
 
-from rkeg.rules import Finding, write_findings_csv
-from rkeg.engine import run_rkeg_engine
+from rkeg.models import Finding, write_findings_csv
+from rkeg.detectors.registry import run_rule
 from common.data_window import write_data_window
 from rkeg.datasets import load_all_datasets
 
@@ -38,6 +38,11 @@ def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
     missing = sorted(required - set(df.columns))
     if missing:
         raise ValueError(f"{name} missing required columns: {missing}")
+
+def _load_rules(rules_path: Path) -> list[dict]:
+    with rules_path.open("r", encoding="utf-8") as f:
+        payload = yaml.safe_load(f)
+    return payload.get("rules", [])
 
 
 def _collect_dates_from_df(df: pd.DataFrame, candidate_cols: Iterable[str]) -> list[date]:
@@ -222,7 +227,14 @@ def main() -> int:
     engine_datasets["rate_history"] = rate_history
     engine_datasets["pay_overrides"] = pay_overrides
 
-    findings: list[Finding] = list(run_rkeg_engine(engine_datasets, enabled_tiers={1, 2}))
+    all_rules = _load_rules(rules_yaml_path)
+    rules = [r for r in all_rules if int(r.get("tier", 1)) in {1, 2}]
+
+    context: dict = {}
+
+    findings: list[Finding] = []
+    for rule in rules:
+        findings.extend(run_rule(rule, engine_datasets, context=context))
 
     # Write findings CSV (always)
     write_findings_csv(findings, findings_path)
