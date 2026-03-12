@@ -1,2 +1,7 @@
-employee_id,termination_date,termination_reason
-E003,2024-02-15,Redundancy
+employee_id,termination_date,termination_type,termination_reason,evidence_ref
+T001,2024-03-20,RESIGNATION,Personal,TERM_DOC_001
+T002,2024-03-20,RESIGNATION,Personal,TERM_DOC_002
+T003,2024-03-20,REDUNDANCY,Position removed,TERM_DOC_003
+T004,2024-03-20,,,
+T005,2024-03-20,RESIGNATION,Personal,
+T006,2024-03-20,RESIGNATION,Personal,TERM_DOC_006

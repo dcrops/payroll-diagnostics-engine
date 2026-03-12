@@ -27,6 +27,14 @@ RULE_REGISTRY: dict[str, Detector] = {
     "LSL-014": accrual_rules.detect_lsl_ledger_balance_mismatch,
     "LSL-015": structure_rules.detect_lsl_movement_after_termination,
     "LSL-016": structure_rules.detect_invalid_service_start_basis,
+    "LSL-017": structure_rules.detect_lsl_balance_with_missing_service_start,
+    "LSL-018": structure_rules.detect_lsl_ledger_history_without_snapshot_balance,
+    "LSL-019": structure_rules.detect_lsl_ledger_activity_after_snapshot_date,
+    "LSL-020": accrual_rules.detect_low_lsl_balance_after_full_entitlement,
+    "LSL-021": structure_rules.detect_lsl_balance_increase_without_supporting_accrual,
+    "LSL-022": structure_rules.detect_lsl_accrual_activity_without_balance_change,
+    "LSL-023": structure_rules.detect_invalid_or_future_dated_lsl_ledger_event,
+    "LSL-024": structure_rules.detect_terminated_employee_with_open_lsl_balance,
 }
 
 

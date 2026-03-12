@@ -1,277 +1,158 @@
 from __future__ import annotations
 
-import csv
-import json
-import yaml
-from datetime import datetime, date
 from pathlib import Path
-from typing import Dict, List, Any
+from datetime import date
+import pandas as pd
+import yaml
 
-from termination_exposure.rules import run_rule
+from termination_exposure.models import Finding
+from termination_exposure.detectors.registry import run_rule
+from termination_exposure.rules import prepare_term_state
+
 from common.data_window import write_data_window
 
-# ---------- Paths ----------
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-DATA_DIR = BASE_DIR / "data" / "sample"
-OUTPUTS_DIR = BASE_DIR / "outputs"
-MODULES_DIR = OUTPUTS_DIR / "modules"
-
-TERMINATIONS_CSV = DATA_DIR / "terminations.csv"
-PAY_EVENTS_CSV = DATA_DIR / "pay_events.csv"
-EMPLOYEES_CSV = DATA_DIR / "employees.csv"
-
-TERM_FINDINGS_CSV = MODULES_DIR / "term_findings.csv"
-TERM_SUMMARY_BY_SEVERITY_CSV = MODULES_DIR / "term_summary_by_severity.csv"
-TERM_SUMMARY_CSV = MODULES_DIR / "term_summary.csv"
-
-TERM_RULES_YML = BASE_DIR / "src" / "termination_exposure" / "config" / "term_rules.yml"
+REQUIRED_TERM = {"employee_id", "termination_date"}
+REQUIRED_PAY = {"employee_id", "pay_date"}
+REQUIRED_EMP = {"employee_id"}
 
 
-# ---------- CSV helpers ----------
+def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(f"{name} missing required columns: {missing}")
 
-def _extract_term_dates(rows: List[Dict[str, str]]) -> List[date]:
-    """
-    Collect valid dates from termination / pay event rows.
 
-    We look at termination and final-pay date columns, try common
-    formats, and ignore anything that won't parse cleanly.
-    """
-    if not rows:
-        return []
-
-    candidate_cols = [
-        "termination_date",
-        "term_date",
-        "final_pay_date",
-        "pay_date",
-    ]
-
-    dates: List[date] = []
-
-    for row in rows:
-        for col in candidate_cols:
-            raw = (row.get(col) or "").strip()
-            if not raw:
-                continue
-
-            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
-                try:
-                    d = datetime.strptime(raw, fmt).date()
-                    dates.append(d)
-                    break
-                except ValueError:
-                    continue
-
-    return dates
-
-def load_csv(path: Path) -> List[Dict[str, str]]:
-    if not path.exists():
-        return []
-    with path.open("r", newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        return list(reader)
-
-def load_rules(path: Path) -> List[Dict[str, Any]]:
-    with path.open("r", encoding="utf-8") as f:
+def _load_rules(rules_path: Path) -> list[dict]:
+    with rules_path.open("r", encoding="utf-8") as f:
         payload = yaml.safe_load(f)
     return payload.get("rules", [])
 
 
-def write_term_findings(path: Path, rows: List[Dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def main() -> int:
+    repo_root = Path(__file__).resolve().parents[2]
+    out_dir = repo_root / "outputs"
+    modules_dir = out_dir / "modules"
+    rules_path = Path(__file__).resolve().parent / "config" / "term_rules.yml"
 
-    fieldnames = [
-        "employee_id",
-        "termination_date",
-        "final_pay_date",
-        "rule_code",
-        "severity",
-        "message",
-        "days_gap",
-        "evidence",
-        "finding_id",
-        "next_action",
-    ]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    modules_dir.mkdir(parents=True, exist_ok=True)
 
-    with path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
+    terminations = pd.read_csv(
+        repo_root / "data" / "sample" / "terminations.csv",
+        dtype={"employee_id": "string"},
+    )
 
-        for row in rows:
-            out_row: Dict[str, Any] = {}
+    pay_events = pd.read_csv(
+        repo_root / "data" / "sample" / "pay_events.csv",
+        dtype={"employee_id": "string"},
+    )
 
-            for field in fieldnames:
-                value = row.get(field)
+    employees = pd.read_csv(
+        repo_root / "data" / "sample" / "employees.csv",
+        dtype={"employee_id": "string"},
+    )
 
-                if field == "evidence":
-                    # Serialise evidence dict to JSON for audit/debug use
-                    if isinstance(value, (dict, list)):
-                        out_row[field] = json.dumps(value, ensure_ascii=False)
-                    elif value is None:
-                        out_row[field] = ""
-                    else:
-                        out_row[field] = str(value)
-                else:
-                    out_row[field] = "" if value is None else value
+    for df in (terminations, pay_events, employees):
+        df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
-            writer.writerow(out_row)
+    _require_cols(terminations, REQUIRED_TERM, "terminations.csv")
+    _require_cols(pay_events, REQUIRED_PAY, "pay_events.csv")
+    _require_cols(employees, REQUIRED_EMP, "employees.csv")
 
+    terminations["termination_date"] = pd.to_datetime(terminations["termination_date"], errors="coerce")
+    pay_events["pay_date"] = pd.to_datetime(pay_events["pay_date"], errors="coerce")
 
-def build_summary_by_severity(findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Build simple HIGH / MEDIUM / LOW counts for TERM.
+    bad_term_dates = terminations["termination_date"].isna().sum()
+    bad_pay_dates = pay_events["pay_date"].isna().sum()
 
-    Shape:
-        [{"severity": "HIGH", "finding_count": 2}, ...]
-    """
-    counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    print(f"[input] Unparseable termination_date rows: {bad_term_dates}")
+    print(f"[input] Unparseable pay_date rows: {bad_pay_dates}")
 
-    for f in findings:
-        sev = str(f.get("severity", "")).strip().upper()
-        if sev in counts:
-            counts[sev] += 1
+    window_dates: list[date] = []
 
-    rows: List[Dict[str, Any]] = []
-    for sev in ["HIGH", "MEDIUM", "LOW"]:
-        rows.append(
-            {
-                "severity": sev,
-                "finding_count": counts[sev],
-            }
-        )
-    return rows
+    term_dates = terminations["termination_date"].dropna()
+    pay_dates = pay_events["pay_date"].dropna()
 
+    if not term_dates.empty:
+        window_dates.extend(term_dates.dt.date.tolist())
+    if not pay_dates.empty:
+        window_dates.extend(pay_dates.dt.date.tolist())
 
-def write_term_summary_by_severity(
-    path: Path, rows: List[Dict[str, Any]]
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    write_data_window(modules_dir / "term_data_window.csv", window_dates)
 
-    fieldnames = ["severity", "finding_count"]
+    state = prepare_term_state(
+        terminations=terminations,
+        pay_events=pay_events,
+        employees=employees,
+    )
 
-    with path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(
-                {
-                    "severity": row.get("severity", ""),
-                    "finding_count": row.get("finding_count", 0),
-                }
-            )
+    rules = _load_rules(rules_path)
 
-
-def build_term_rule_summary(
-    findings: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
-    """
-    Build rule-level summary for TERM, matching rkeg_summary.csv shape.
-
-    Shape:
-        rule_code,severity,finding_count
-    """
-    counts: Dict[tuple[str, str], int] = {}
-
-    for f in findings:
-        rule_code = str(f.get("rule_code", "")).strip()
-        severity = str(f.get("severity", "")).strip().upper()
-        if not rule_code or not severity:
-            continue
-        key = (rule_code, severity)
-        counts[key] = counts.get(key, 0) + 1
-
-    rows: List[Dict[str, Any]] = []
-    # Keep ordering deterministic: sort by rule_code then severity
-    for (rule_code, severity), n in sorted(counts.items()):
-        rows.append(
-            {
-                "rule_code": rule_code,
-                "severity": severity,
-                "finding_count": n,
-            }
-        )
-
-    return rows
-
-
-def write_term_rule_summary(path: Path, rows: List[Dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    fieldnames = ["rule_code", "severity", "finding_count"]
-
-    with path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(
-                {
-                    "rule_code": row.get("rule_code", ""),
-                    "severity": row.get("severity", ""),
-                    "finding_count": row.get("finding_count", 0),
-                }
-            )
-
-
-# ---------- Main orchestration ----------
-
-
-def run_termination_exposure_review() -> None:
-    """
-    Run all TERM v1 rules and write:
-      - outputs/modules/term_findings.csv
-      - outputs/modules/term_summary_by_severity.csv
-      - outputs/modules/term_summary.csv
-
-    This function does not handle reporting; it only produces CSV outputs
-    for downstream use by the reporting layer.
-    """
-    print(f"[TERM] Loading terminations from: {TERMINATIONS_CSV}")
-    print(f"[TERM] Loading pay events from:  {PAY_EVENTS_CSV}")
-    print(f"[TERM] Loading employees from:   {EMPLOYEES_CSV}")
-
-    terminations = load_csv(TERMINATIONS_CSV)
-    pay_events = load_csv(PAY_EVENTS_CSV)
-    employees = load_csv(EMPLOYEES_CSV)
-
-    print(f"[TERM] Loaded {len(terminations)} termination rows, "
-          f"{len(pay_events)} pay events, {len(employees)} employees")
-
-    # Derive TERM data window from client source data
-    term_dates = _extract_term_dates(terminations) + _extract_term_dates(pay_events)
-    if term_dates:
-        MODULES_DIR.mkdir(parents=True, exist_ok=True)
-        term_window_path = MODULES_DIR / "term_data_window.csv"
-        write_data_window(term_window_path, term_dates)
-        print(
-            f"[TERM] Wrote data window to {term_window_path} "
-            f"({min(term_dates)} → {max(term_dates)})"
-        )
-    else:
-        print("[TERM] No usable dates found for data window – term_data_window.csv not written")
-
-    rules = load_rules(TERM_RULES_YML)
-
+    findings: list[Finding] = []
     datasets = {
         "terminations": terminations,
         "pay_events": pay_events,
         "employee_master": employees,
     }
+    context = {"state": state}
 
-    findings = []
     for rule in rules:
-        findings.extend([f.__dict__ for f in run_rule(rule, datasets)])
+        findings.extend(run_rule(rule, datasets, context=context))
 
-    print(f"[TERM] Generated {len(findings)} findings")
+    if findings:
+        findings_df = pd.DataFrame([f.__dict__ for f in findings])
+    else:
+        findings_df = pd.DataFrame(
+            columns=[
+                "employee_id",
+                "leave_type",
+                "as_of_date",
+                "rule_code",
+                "severity",
+                "message",
+                "diff_units",
+                "evidence",
+                "finding_id",
+                "next_action",
+            ]
+        )
 
-    write_term_findings(TERM_FINDINGS_CSV, findings)
+    findings_path = modules_dir / "term_findings.csv"
+    findings_df.to_csv(findings_path, index=False)
 
-    summary_by_sev = build_summary_by_severity(findings)
-    write_term_summary_by_severity(TERM_SUMMARY_BY_SEVERITY_CSV, summary_by_sev)
+    if len(findings_df) == 0:
+        summary_df = pd.DataFrame(columns=["rule_code", "severity", "finding_count"])
+    else:
+        summary_df = (
+            findings_df.groupby(["rule_code", "severity"], as_index=False)
+            .size()
+            .rename(columns={"size": "finding_count"})
+            .sort_values(["severity", "finding_count"], ascending=[True, False])
+        )
 
-    rule_summary = build_term_rule_summary(findings)
-    write_term_rule_summary(TERM_SUMMARY_CSV, rule_summary)
+    summary_path = modules_dir / "term_summary.csv"
+    summary_df.to_csv(summary_path, index=False)
+
+    if len(findings_df) == 0:
+        severity_summary_df = pd.DataFrame(columns=["severity", "finding_count"])
+    else:
+        severity_summary_df = (
+            findings_df.groupby("severity", as_index=False)
+            .size()
+            .rename(columns={"size": "finding_count"})
+            .sort_values("finding_count", ascending=False)
+        )
+
+    severity_summary_path = modules_dir / "term_summary_by_severity.csv"
+    severity_summary_df.to_csv(severity_summary_path, index=False)
+
+    print(f"Wrote: {findings_path}")
+    print(f"Wrote: {summary_path}")
+    print(f"Wrote: {severity_summary_path}")
+
+    return 0
 
 
 if __name__ == "__main__":
-    run_termination_exposure_review()
+    raise SystemExit(main())

@@ -1,18 +1,19 @@
 import pandas as pd
 
-from lsl_exposure.rules import run_rule
+from lsl_exposure.detectors.registry import run_rule
 
 
-def test_lsl_003():
+def test_lsl_004():
     rule = {
-        "id": "LSL-003",
-        "severity": "HIGH",
+        "id": "LSL-004",
+        "severity": "MEDIUM",
         "config": {
-            "eligibility_years": 7.0,
+            "full_years": 10.0,
+            "low_floor_units": 20.0,
         },
         "text": {
-            "finding": "Employees meeting the configured LSL eligibility threshold were identified with an LSL balance of zero.",
-            "remediation": "Confirm whether LSL has been intentionally excluded or whether accruals have not been configured correctly for this employee.",
+            "finding": "Long-tenured employees were identified with LSL balances below the configured low-balance floor.",
+            "remediation": "Review LSL accrual rules and historical balances to confirm whether the low LSL balance is expected for this employee.",
         },
     }
 
@@ -20,23 +21,23 @@ def test_lsl_003():
         [
             {
                 "employee_id": "E001",
-                "service_years": 9.0,
-                "lsl_balance_units": 0.0,
+                "service_years": 12.0,
+                "lsl_balance_units": 5.0,
                 "lsl_as_of_date": pd.Timestamp("2024-03-31"),
                 "snapshot_date": pd.Timestamp("2024-03-31"),
             },
             {
                 "employee_id": "E002",
-                "service_years": 9.0,
-                "lsl_balance_units": 15.0,
+                "service_years": 12.0,
+                "lsl_balance_units": 50.0,
                 "lsl_as_of_date": pd.Timestamp("2024-03-31"),
                 "snapshot_date": pd.Timestamp("2024-03-31"),
             },
         ]
     )
 
-    findings = run_rule(rule, datasets={}, state=state)
+    findings = run_rule(rule, datasets={}, context={"state": state})
 
     assert len(findings) == 1
     assert findings[0].employee_id == "E001"
-    assert findings[0].rule_code == "LSL-003"
+    assert findings[0].rule_code == "LSL-004"

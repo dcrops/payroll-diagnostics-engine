@@ -298,3 +298,179 @@ rules:
     risk_dimension:
       - structural_completeness
       - evidence_traceability
+
+  - id: LSL-017
+    tier: 2
+    domain: LSL
+    severity: HIGH
+    title: LSL balance exists but service start date is missing
+    datasets:
+      primary: leave_snapshot
+      references:
+        - employee_master
+    config:
+      leave_type: LSL
+      min_balance_units: 0.01
+    text:
+      finding: Employee has an LSL balance recorded but no service start date is available.
+      why_it_matters: Service commencement is required to validate LSL eligibility and entitlement accumulation.
+      remediation: Validate employee master start date and confirm service history supporting the recorded LSL balance.
+    risk_dimension:
+      - structural_completeness
+      - evidence_traceability
+
+  - id: LSL-018
+    tier: 2
+    domain: LSL
+    severity: HIGH
+    title: LSL ledger history exists but no snapshot balance is recorded
+    datasets:
+      primary: leave_ledger
+      references:
+        - leave_snapshot
+    config:
+      leave_type: LSL
+      min_event_count: 1
+    text:
+      finding: LSL ledger activity exists for the employee but no corresponding LSL snapshot balance is available.
+      why_it_matters: A current balance is required to reconcile historical leave movements to the reported entitlement position.
+      remediation: Confirm balance snapshot extraction and ensure LSL balances are included for all employees with LSL history.
+    risk_dimension:
+      - evidence_traceability
+      - structural_completeness
+
+  - id: LSL-019
+    tier: 2
+    domain: LSL
+    severity: MEDIUM
+    title: LSL ledger activity occurs after snapshot date
+    datasets:
+      primary: leave_snapshot
+      references:
+        - leave_ledger
+    config:
+      leave_type: LSL
+    text:
+      finding: LSL ledger contains activity dated after the stated snapshot balance date.
+      why_it_matters: Ledger and snapshot should align to a common cut-off date to support reliable reconciliation.
+      remediation: Confirm extraction cut-off logic and ensure the ledger and snapshot were generated for the same reporting period.
+    risk_dimension:
+      - timing_integrity
+      - evidence_traceability
+
+  - id: LSL-020
+    tier: 2
+    domain: LSL
+    severity: HIGH
+    title: Employee exceeds LSL entitlement threshold but recorded balance is extremely low
+    datasets:
+      primary: leave_snapshot
+      references:
+        - employee_master
+    config:
+      leave_type: LSL
+      full_entitlement_years: 10
+      low_balance_threshold_units: 10
+    text:
+      finding: Employee appears to have lengthy service but holds an unusually low LSL balance.
+      why_it_matters: This can indicate under-accrual, missing service recognition, unit conversion issues, or incomplete balance migration.
+      remediation: Review service history, LSL accrual configuration, jurisdictional rules, and any legacy balance migration assumptions.
+    risk_dimension:
+      - calculation_integrity
+      - data_anomaly_sanity
+
+  - id: LSL-021
+    tier: 2
+    domain: LSL
+    severity: HIGH
+    title: LSL balance increased without supporting accrual ledger activity
+    datasets:
+      primary: leave_snapshot
+      references:
+        - leave_ledger
+    config:
+      leave_type: LSL
+      accrual_event_types:
+        - accrual
+        - adjustment
+        - opening_balance
+      min_increase_units: 0.01
+    text:
+      finding: LSL balance increased between snapshots without corresponding supporting ledger activity.
+      why_it_matters: Balance growth should be traceable to accruals or authorised adjustments.
+      remediation: Review accrual processing, manual balance adjustments, and ledger extraction completeness.
+    risk_dimension:
+      - evidence_traceability
+      - governance_monitoring_exposure
+
+  - id: LSL-022
+    tier: 2
+    domain: LSL
+    severity: HIGH
+    title: LSL accrual ledger activity exists but balance does not change
+    datasets:
+      primary: leave_snapshot
+      references:
+        - leave_ledger
+    config:
+      leave_type: LSL
+      accrual_event_types:
+        - accrual
+        - adjustment
+      balance_tolerance_units: 0.01
+    text:
+      finding: LSL accrual activity was recorded in the ledger but the snapshot balance did not materially change.
+      why_it_matters: Recorded accruals should flow through to the reported entitlement balance unless offset by other events.
+      remediation: Reconcile accrual posting logic, snapshot generation, and any offsetting leave or adjustment events.
+    risk_dimension:
+      - calculation_integrity
+      - evidence_traceability
+
+  - id: LSL-023
+    tier: 2
+    domain: LSL
+    severity: MEDIUM
+    title: Invalid or future-dated LSL ledger event
+    datasets:
+      primary: leave_ledger
+      references:
+        - leave_snapshot
+    config:
+      future_days_tolerance: 0
+    text:
+      finding: "LSL ledger events were identified with missing, invalid or future-dated event dates."
+      why_it_matters: "Invalid ledger dates weaken timing integrity and can prevent reliable reconstruction of leave activity."
+      remediation: "Review ledger extract quality, correct invalid event dates, and confirm that LSL transactions are posted within the reporting period."
+    risk_dimension:
+      - timing_integrity
+      - data_anomaly_sanity
+
+  - id: LSL-024
+    tier: 2
+    domain: LSL
+    severity: HIGH
+    title: Terminated employee retains material LSL balance at snapshot date
+    datasets:
+      primary: employee_master
+      references:
+        - leave_snapshot
+        - leave_ledger
+    config:
+      material_balance_units: 10
+      termination_grace_days: 14
+      closure_event_types:
+        - TAKEN
+        - ADJUSTMENT
+        - PAYOUT
+    text:
+      finding: "A terminated employee retains a material LSL balance in the snapshot extract."
+      why_it_matters: >
+      When an employee has a recorded termination date but retains a material LSL balance,
+      it may indicate that the leave payout has not yet been processed, that the snapshot
+      extract was taken before finalisation, or that balances were not closed correctly.
+      remediation: >
+      Confirm whether the employee's final pay included an LSL payout or whether the
+      balance is expected to remain open due to data timing or system configuration.
+    risk_dimension:
+      - cross_module_linkage_risk
+      - exception_handling

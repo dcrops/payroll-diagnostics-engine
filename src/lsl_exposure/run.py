@@ -111,6 +111,7 @@ def main() -> int:
     )
 
     rules = _load_rules(rules_path)
+    print([r["id"] for r in rules][-5:])
 
     findings: list[Finding] = []
     datasets = {

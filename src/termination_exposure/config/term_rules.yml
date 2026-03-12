@@ -14,7 +14,7 @@ rules:
         - pay_events
     text:
       finding: "Termination records were identified with no pay event on or after the recorded termination date."
-      why_it_matters: "A termination without any corresponding final pay event weakens evidence that final entitlements were processed and may indicate missed or delayed payroll action."
+      why_it_matters: "A termination without any corresponding pay event weakens evidence that final entitlements were processed and may indicate missed or delayed payroll action."
       remediation: "Review termination processing records and confirm whether final pay was processed. If it was, ensure the relevant pay event is clearly identifiable in payroll data."
     risk_dimension:
       - evidence_traceability

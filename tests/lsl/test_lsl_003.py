@@ -1,6 +1,6 @@
 import pandas as pd
 
-from lsl_exposure.rules import run_rule
+from lsl_exposure.detectors.registry import run_rule
 
 
 def test_lsl_003():
@@ -35,7 +35,7 @@ def test_lsl_003():
         ]
     )
 
-    findings = run_rule(rule, datasets={}, state=state)
+    findings = run_rule(rule, datasets={}, context={"state": state})
 
     assert len(findings) == 1
     assert findings[0].employee_id == "E001"

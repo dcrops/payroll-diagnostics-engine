@@ -637,3 +637,62 @@ def detect_lsl_ledger_balance_mismatch(
         )
 
     return findings
+
+def detect_low_lsl_balance_after_full_entitlement(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+    context: dict,
+) -> list[Finding]:
+    state = context.get("state")
+    if state is None or state.empty:
+        return []
+
+    findings: list[Finding] = []
+    full_entitlement_years = float(rule.get("config", {}).get("full_entitlement_years", 10.0))
+    low_balance_threshold_units = float(rule.get("config", {}).get("low_balance_threshold_units", 10.0))
+
+    bad = state[
+        state["service_years"].notna()
+        & (state["service_years"] >= full_entitlement_years)
+        & state["lsl_balance_units"].notna()
+        & (state["lsl_balance_units"] > 0)
+        & (state["lsl_balance_units"] < low_balance_threshold_units)
+    ].copy()
+
+    for _, row in bad.iterrows():
+        as_of = row["lsl_as_of_date"]
+        if pd.isna(as_of):
+            as_of = row["snapshot_date"]
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["employees.csv", "balances_snapshot.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "leave_type": "LSL",
+                    "as_of_date": str(as_of.date()) if pd.notna(as_of) else None,
+                },
+                "values": {
+                    "service_years": float(row["service_years"]) if pd.notna(row["service_years"]) else None,
+                    "lsl_balance_units": float(row["lsl_balance_units"]) if pd.notna(row["lsl_balance_units"]) else None,
+                },
+                "thresholds": {
+                    "full_entitlement_years": full_entitlement_years,
+                    "low_balance_threshold_units": low_balance_threshold_units,
+                },
+                "explanation": "Employee exceeds the configured full entitlement tenure threshold but has an unusually low LSL balance.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule=rule,
+                employee_id=str(row["employee_id"]),
+                leave_type="LSL",
+                as_of_date=str(as_of.date()) if pd.notna(as_of) else None,
+                evidence_str=evidence_str,
+            )
+        )
+
+    return findings
