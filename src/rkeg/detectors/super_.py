@@ -8,6 +8,7 @@ from uuid import uuid4
 import pandas as pd
 
 from rkeg.models import Finding
+from common.nulls import is_missing
 
 # You can tweak these if you like
 ABS_TOLERANCE = 5.00      # $ difference threshold for SUP-002
@@ -576,10 +577,7 @@ def _run_sup_004(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]
     )
 
     # Missing or blank fund
-    flagged = merged[
-        merged[fund_col].isna()
-        | (merged[fund_col].astype(str).str.strip() == "")
-    ].copy()
+    flagged = merged[merged[fund_col].map(is_missing)].copy()
 
     print(
         f"[SUP-004] candidate employees={len(merged)}, "
@@ -650,7 +648,7 @@ def _run_sup_005(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]
     raw_payment = df[payment_date_col]
     parsed_payment = pd.to_datetime(raw_payment, errors="coerce")
 
-    blank_mask = raw_payment.isna() | (raw_payment.astype(str).str.strip() == "")
+    blank_mask = raw_payment.map(is_missing)
     invalid_mask = (~blank_mask) & parsed_payment.isna()
 
     flagged = df[blank_mask | invalid_mask].copy()
@@ -788,7 +786,7 @@ def _run_sup_006(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]
                 {
                     str(v).strip()
                     for v in s
-                    if pd.notna(v) and str(v).strip() != ""
+                    if not is_missing(v)
                 }
             )
         )

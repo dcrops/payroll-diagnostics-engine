@@ -113,3 +113,201 @@ rules:
       - evidence_traceability
       - governance_exposure
       - exception_handling
+
+  - id: TERM-007
+    tier: 1
+    domain: TERM
+    severity: HIGH
+    title: Terminated employee retains material LSL balance at snapshot date
+    datasets:
+      primary: terminations
+      references:
+        - leave_snapshot
+    config:
+      material_balance_units: 10
+      snapshot_grace_days: 14
+    text:
+      finding: "A terminated employee retains a material LSL balance in the snapshot extract."
+      why_it_matters: "Outstanding LSL balances after termination may indicate incomplete finalisation, delayed payout processing or weak termination controls."
+      remediation: "Confirm whether the employee’s LSL was paid or intentionally remains open, and ensure the snapshot reflects the correct post-termination position."
+    risk_dimension:
+      - cross_module_linkage_risk
+      - exception_handling
+
+  - id: TERM-008
+    tier: 1
+    domain: TERM
+    severity: HIGH
+    title: Post-termination LSL movement recorded
+    datasets:
+      primary: terminations
+      references:
+        - leave_ledger
+    text:
+      finding: "LSL ledger movement was recorded after the employee termination date."
+      why_it_matters: "Post-termination LSL movement may indicate date errors, delayed processing or termination finalisation issues."
+      remediation: "Review termination timing and LSL processing history to confirm whether the movement is valid and properly evidenced."
+    risk_dimension:
+      - timing_integrity
+      - cross_module_linkage_risk
+      - governance_monitoring_exposure
+
+  - id: TERM-009
+    tier: 2
+    domain: TERM
+    severity: HIGH
+    title: Terminated employee has LSL balance with no apparent closure trail
+    datasets:
+      primary: terminations
+      references:
+        - leave_snapshot
+        - leave_ledger
+    config:
+      material_balance_units: 10
+      snapshot_grace_days: 14
+      closure_event_types:
+        - TAKEN
+        - ADJUSTMENT
+        - PAYOUT
+    text:
+      finding: "A terminated employee retains a material LSL balance without an apparent post-termination closure trail."
+      why_it_matters: "Where a terminated employee still holds LSL but no closure-style ledger activity is visible, it becomes harder to evidence whether termination entitlements were finalised correctly."
+      remediation: "Review final pay processing, LSL ledger activity and balance treatment to confirm whether the employee’s LSL position was properly closed."
+    risk_dimension:
+      - evidence_traceability
+      - cross_module_linkage_risk
+      - exception_handling
+
+  - id: TERM-010
+    tier: 2
+    domain: TERM
+    severity: HIGH
+    title: Payroll activity recorded after termination
+    datasets:
+      primary: terminations
+      references:
+        - pay_events
+    config:
+      allowed_days_after_term: 7
+    text:
+      finding: "Payroll activity was recorded after the employee termination date beyond the allowed tolerance window."
+      why_it_matters: "Payroll events after termination may indicate delayed off-boarding, system configuration issues, or incorrect termination timing."
+      remediation: "Review the termination date and subsequent payroll activity to confirm whether the employee was correctly finalised."
+    risk_dimension:
+      - timing_integrity
+      - governance_exposure
+
+  - id: TERM-011
+    tier: 2
+    domain: TERM
+    severity: HIGH
+    title: Multiple termination records for employee
+    datasets:
+      primary: terminations
+    text:
+      finding: "Multiple termination records were identified for the same employee."
+      why_it_matters: "Duplicate termination records can undermine payroll traceability and indicate data integrity issues."
+      remediation: "Review termination records and confirm the correct termination event."
+    risk_dimension:
+      - structural_completeness
+      - data_anomaly_sanity
+
+  - id: TERM-012
+    tier: 1
+    domain: TERM
+    severity: HIGH
+    title: Termination without employee master record
+    datasets:
+      primary: terminations
+      references:
+        - employee_master
+    text:
+      finding: "Termination records were identified without a corresponding employee master record."
+      why_it_matters: "Missing employee master records prevent reconstruction of employment history."
+      remediation: "Reconcile termination data with HR master records."
+    risk_dimension:
+      - structural_completeness
+      - cross_module_linkage_risk
+
+  - id: TERM-013
+    tier: 2
+    domain: TERM
+    severity: MEDIUM
+    title: Final pay missing super contribution
+    datasets:
+      primary: pay_events
+      references:
+        - terminations
+    text:
+      finding: "A final pay event was identified without a corresponding super contribution."
+      why_it_matters: "Final pay calculations often require super contributions depending on payment type."
+      remediation: "Review super treatment for the final pay event."
+    risk_dimension:
+      - calculation_integrity
+      - governance_exposure
+
+  - id: TERM-014
+    tier: 2
+    domain: TERM
+    severity: MEDIUM
+    title: Involuntary termination without reason
+    datasets:
+      primary: terminations
+    text:
+      finding: "An involuntary termination was identified without a recorded termination reason."
+      why_it_matters: "Termination reasons support governance, compliance, and dispute defence."
+      remediation: "Ensure termination reason fields are populated and documented."
+    risk_dimension:
+      - governance_monitoring
+      - evidence_traceability
+
+  - id: TERM-015
+    tier: 2
+    domain: TERM
+    severity: HIGH
+    title: Employee paid after termination across multiple payroll runs
+    datasets:
+      primary: pay_events
+      references:
+        - terminations
+    text:
+      finding: "Multiple payroll events were recorded after the termination date."
+      why_it_matters: "Repeated payroll events after termination may indicate an employee was not properly removed from payroll processing."
+      remediation: "Confirm whether the employee continued employment or whether payroll processing was incorrect."
+    risk_dimension:
+      - timing_integrity
+      - governance_exposure
+
+  - id: TERM-016
+    tier: 2
+    domain: TERM
+    severity: MEDIUM
+    title: Termination without any flagged final pay event
+    datasets:
+      primary: pay_events
+      references:
+        - terminations
+    text:
+      finding: "No payroll event was identified as a final pay for a terminated employee."
+      why_it_matters: "Clear identification of final pay events supports payroll auditability."
+      remediation: "Ensure final pay events are flagged consistently."
+    risk_dimension:
+      - exception_handling
+      - governance_monitoring
+
+  - id: TERM-017
+    tier: 2
+    domain: TERM
+    severity: MEDIUM
+    title: Termination date precedes last recorded payroll activity
+    datasets:
+      primary: terminations
+      references:
+        - pay_events
+    text:
+      finding: "Payroll activity indicates the employee may have worked after the recorded termination date."
+      why_it_matters: "Inconsistent payroll and termination timing may indicate incorrect termination processing."
+      remediation: "Review termination timing and payroll activity."
+    risk_dimension:
+      - timing_integrity
+      - data_anomaly_sanity

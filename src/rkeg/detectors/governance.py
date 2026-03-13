@@ -6,6 +6,7 @@ from uuid import uuid4
 import pandas as pd
 
 from rkeg.models import Finding
+from common.nulls import is_missing
 
 
 def _run_gov_001(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]:
@@ -81,7 +82,7 @@ def _run_gov_002(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]
     df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
     def _is_blank(series: pd.Series) -> pd.Series:
-        return series.isna() | (series.astype(str).str.strip() == "")
+        return series.map(is_missing)
 
     reason_missing = _is_blank(df[reason_col]) if reason_col is not None else pd.Series(False, index=df.index)
     approval_missing = _is_blank(df[approval_col]) if approval_col is not None else pd.Series(False, index=df.index)

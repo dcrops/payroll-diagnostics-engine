@@ -4,6 +4,7 @@ import json
 import pandas as pd
 
 from termination_exposure.models import Finding, _build_finding
+from common.nulls import is_missing
 
 
 def _truthy_flag(value) -> bool:
@@ -276,6 +277,293 @@ def detect_final_pay_not_clearly_identifiable(
                 employee_id=emp_id,
                 leave_type=None,
                 as_of_date=str(term_date.date()),
+                evidence_str=evidence_str,
+            )
+        )
+
+    return findings
+
+def detect_payroll_activity_recorded_after_termination(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+    context: dict,
+) -> list[Finding]:
+    terminations = datasets.get("terminations", pd.DataFrame())
+    pay_events = datasets.get("pay_events", pd.DataFrame())
+
+    if terminations.empty or pay_events.empty:
+        return []
+
+    findings: list[Finding] = []
+    allowed_days_after_term = int(rule.get("config", {}).get("allowed_days_after_term", 7))
+
+    term = terminations.copy()
+    term["employee_id"] = term["employee_id"].astype(str).str.strip()
+    term["termination_date"] = pd.to_datetime(term["termination_date"], errors="coerce")
+
+    pay = pay_events.copy()
+    pay["employee_id"] = pay["employee_id"].astype(str).str.strip()
+    pay["pay_date"] = pd.to_datetime(pay["pay_date"], errors="coerce")
+
+    merged = pay.merge(
+        term[["employee_id", "termination_date"]],
+        on="employee_id",
+        how="inner",
+    )
+
+    bad = merged[
+        merged["termination_date"].notna()
+        & merged["pay_date"].notna()
+        & ((merged["pay_date"] - merged["termination_date"]).dt.days > allowed_days_after_term)
+    ].copy()
+
+    for _, row in bad.iterrows():
+        days_after = int((row["pay_date"] - row["termination_date"]).days)
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["terminations.csv", "pay_events.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "termination_date": str(row["termination_date"].date()),
+                    "pay_date": str(row["pay_date"].date()),
+                },
+                "values": {
+                    "gross_amount": float(row["gross_amount"]) if "gross_amount" in row and pd.notna(row["gross_amount"]) else None,
+                    "is_final_pay": str(row["is_final_pay"]) if "is_final_pay" in row and pd.notna(row["is_final_pay"]) else None,
+                    "days_after_termination": days_after,
+                },
+                "thresholds": {
+                    "allowed_days_after_term": allowed_days_after_term,
+                },
+                "explanation": "Payroll activity was recorded after termination beyond the configured tolerance window.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule=rule,
+                employee_id=str(row["employee_id"]),
+                leave_type=None,
+                as_of_date=str(row["pay_date"].date()),
+                evidence_str=evidence_str,
+            )
+        )
+
+    return findings
+
+
+def detect_employee_paid_after_termination_across_multiple_runs(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+    context: dict,
+) -> list[Finding]:
+    terminations = datasets.get("terminations", pd.DataFrame())
+    pay_events = datasets.get("pay_events", pd.DataFrame())
+
+    if terminations.empty or pay_events.empty:
+        return []
+
+    findings: list[Finding] = []
+
+    term = terminations.copy()
+    term["employee_id"] = term["employee_id"].astype(str).str.strip()
+    term["termination_date"] = pd.to_datetime(term["termination_date"], errors="coerce")
+
+    pay = pay_events.copy()
+    pay["employee_id"] = pay["employee_id"].astype(str).str.strip()
+    pay["pay_date"] = pd.to_datetime(pay["pay_date"], errors="coerce")
+
+    merged = pay.merge(
+        term[["employee_id", "termination_date"]],
+        on="employee_id",
+        how="inner",
+    )
+
+    post_term = merged[
+        merged["termination_date"].notna()
+        & merged["pay_date"].notna()
+        & (merged["pay_date"] > merged["termination_date"])
+    ].copy()
+
+    if post_term.empty:
+        return []
+
+    grouped = (
+        post_term.groupby("employee_id", as_index=False)
+        .agg(
+            termination_date=("termination_date", "first"),
+            post_term_pay_count=("pay_date", "size"),
+            first_post_term_pay_date=("pay_date", "min"),
+            last_post_term_pay_date=("pay_date", "max"),
+        )
+    )
+
+    bad = grouped[grouped["post_term_pay_count"] >= 2].copy()
+
+    for _, row in bad.iterrows():
+        evidence_str = json.dumps(
+            {
+                "sources": ["terminations.csv", "pay_events.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "termination_date": str(row["termination_date"].date()) if pd.notna(row["termination_date"]) else None,
+                },
+                "values": {
+                    "post_term_pay_count": int(row["post_term_pay_count"]),
+                    "first_post_term_pay_date": str(row["first_post_term_pay_date"].date()) if pd.notna(row["first_post_term_pay_date"]) else None,
+                    "last_post_term_pay_date": str(row["last_post_term_pay_date"].date()) if pd.notna(row["last_post_term_pay_date"]) else None,
+                },
+                "explanation": "Multiple payroll events were recorded after the employee termination date.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule=rule,
+                employee_id=str(row["employee_id"]),
+                leave_type=None,
+                as_of_date=str(row["last_post_term_pay_date"].date()) if pd.notna(row["last_post_term_pay_date"]) else None,
+                evidence_str=evidence_str,
+            )
+        )
+
+    return findings
+
+
+def detect_termination_without_any_flagged_final_pay_event(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+    context: dict,
+) -> list[Finding]:
+    terminations = datasets.get("terminations", pd.DataFrame())
+    pay_events = datasets.get("pay_events", pd.DataFrame())
+
+    if terminations.empty:
+        return []
+
+    findings: list[Finding] = []
+
+    term = terminations.copy()
+    term["employee_id"] = term["employee_id"].astype(str).str.strip()
+    term["termination_date"] = pd.to_datetime(term["termination_date"], errors="coerce")
+
+    pay = pay_events.copy() if not pay_events.empty else pd.DataFrame(columns=["employee_id", "is_final_pay"])
+    if not pay.empty:
+        pay["employee_id"] = pay["employee_id"].astype(str).str.strip()
+        if "is_final_pay" not in pay.columns:
+            pay["is_final_pay"] = ""
+        pay["is_final_pay_norm"] = pay["is_final_pay"].apply(_truthy_flag)
+
+    for _, row in term.iterrows():
+        employee_id = str(row["employee_id"]).strip()
+        termination_date = row["termination_date"]
+
+        if not employee_id or pd.isna(termination_date):
+            continue
+
+        emp_pays = pay[pay["employee_id"] == employee_id] if not pay.empty else pd.DataFrame()
+        has_flagged_final = (
+            emp_pays["is_final_pay_norm"].any()
+            if not emp_pays.empty and "is_final_pay_norm" in emp_pays.columns
+            else False
+        )
+
+        if has_flagged_final:
+            continue
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["terminations.csv", "pay_events.csv"],
+                "primary_keys": {
+                    "employee_id": employee_id,
+                    "termination_date": str(termination_date.date()),
+                },
+                "values": {
+                    "has_flagged_final_pay": False,
+                },
+                "explanation": "No payroll event was identified as a final pay for the terminated employee.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule=rule,
+                employee_id=employee_id,
+                leave_type=None,
+                as_of_date=str(termination_date.date()),
+                evidence_str=evidence_str,
+            )
+        )
+
+    return findings
+
+
+def detect_termination_date_precedes_last_recorded_payroll_activity(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+    context: dict,
+) -> list[Finding]:
+    terminations = datasets.get("terminations", pd.DataFrame())
+    pay_events = datasets.get("pay_events", pd.DataFrame())
+
+    if terminations.empty or pay_events.empty:
+        return []
+
+    findings: list[Finding] = []
+
+    term = terminations.copy()
+    term["employee_id"] = term["employee_id"].astype(str).str.strip()
+    term["termination_date"] = pd.to_datetime(term["termination_date"], errors="coerce")
+
+    pay = pay_events.copy()
+    pay["employee_id"] = pay["employee_id"].astype(str).str.strip()
+    pay["pay_date"] = pd.to_datetime(pay["pay_date"], errors="coerce")
+
+    last_pay = (
+        pay[pay["pay_date"].notna()]
+        .sort_values(["employee_id", "pay_date"])
+        .groupby("employee_id", as_index=False)
+        .tail(1)[["employee_id", "pay_date"]]
+        .rename(columns={"pay_date": "last_payroll_activity_date"})
+    )
+
+    merged = term.merge(last_pay, on="employee_id", how="inner")
+
+    bad = merged[
+        merged["termination_date"].notna()
+        & merged["last_payroll_activity_date"].notna()
+        & (merged["termination_date"] < merged["last_payroll_activity_date"])
+    ].copy()
+
+    for _, row in bad.iterrows():
+        days_diff = int((row["last_payroll_activity_date"] - row["termination_date"]).days)
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["terminations.csv", "pay_events.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "termination_date": str(row["termination_date"].date()),
+                    "last_payroll_activity_date": str(row["last_payroll_activity_date"].date()),
+                },
+                "values": {
+                    "days_after_termination": days_diff,
+                },
+                "explanation": "Payroll activity indicates the employee may have remained in payroll after the recorded termination date.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule=rule,
+                employee_id=str(row["employee_id"]),
+                leave_type=None,
+                as_of_date=str(row["last_payroll_activity_date"].date()),
                 evidence_str=evidence_str,
             )
         )

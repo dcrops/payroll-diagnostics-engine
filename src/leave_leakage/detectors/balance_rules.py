@@ -4,6 +4,7 @@ import json
 import pandas as pd
 
 from leave_leakage.models import Finding, _build_finding
+from common.nulls import is_missing
 
 
 def _run_leave_001_negative_balance(rule: dict, snapshot: pd.DataFrame) -> list[Finding]:

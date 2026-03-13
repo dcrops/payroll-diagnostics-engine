@@ -6,10 +6,7 @@ import pandas as pd
 def prepare_term_state(
     terminations: pd.DataFrame,
     pay_events: pd.DataFrame,
-    employees: pd.DataFrame,
 ) -> pd.DataFrame:
-    emp = employees.copy()
-    emp["employee_id"] = emp["employee_id"].astype(str).str.strip()
     term = terminations.copy()
     term["employee_id"] = term["employee_id"].astype(str).str.strip()
     term["termination_date"] = pd.to_datetime(term["termination_date"], errors="coerce")
@@ -23,7 +20,11 @@ def prepare_term_state(
             pay["is_final_pay"] = ""
 
         pay["is_final_pay_norm"] = (
-            pay["is_final_pay"].astype(str).str.strip().str.lower().isin({"y", "yes", "true", "t", "1"})
+            pay["is_final_pay"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .isin({"y", "yes", "true", "t", "1"})
         )
 
         pay = pay.sort_values(["employee_id", "pay_date"])
@@ -47,9 +48,5 @@ def prepare_term_state(
 
     state = term.merge(last_pay, on="employee_id", how="left")
     state = state.merge(first_final_pay, on="employee_id", how="left")
-    state = state.merge(
-        emp[["employee_id", "employment_type"]],
-        on="employee_id",
-        how="left"
-)
+
     return state

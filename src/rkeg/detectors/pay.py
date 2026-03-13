@@ -6,6 +6,7 @@ from uuid import uuid4
 import pandas as pd
 
 from rkeg.models import Finding
+from common.nulls import is_missing
 
 
 def run_rule(rule: dict, datasets: dict[str, pd.DataFrame]) -> List[Finding]:
@@ -74,9 +75,7 @@ def _pick_first_existing_column(df: pd.DataFrame, candidates: list[str]) -> str 
 
 
 def _is_blank(value: object) -> bool:
-    if pd.isna(value):
-        return True
-    return str(value).strip() == ""
+    return is_missing(value)
 
 def _pay_001_missing_or_invalid_pay_date(
     rule: dict,
@@ -230,10 +229,7 @@ def _pay_003_missing_pay_run_reference(
 
     # Treat blank / whitespace as missing
     def _is_missing_run(val: object) -> bool:
-        if pd.isna(val):
-            return True
-        s = str(val).strip()
-        return s == ""
+        return is_missing(val)
 
     missing_mask = pay_events["run_id"].map(_is_missing_run)
 
@@ -481,7 +477,7 @@ def _pay_006_ordinary_earnings_without_base_rate(rule: dict, datasets: dict) -> 
     )
 
     # base_rate missing or blank
-    missing_mask = merged["base_rate"].isna() | (merged["base_rate"].str.strip() == "")
+    missing_mask = merged["base_rate"].map(is_missing)
     flagged = merged[missing_mask]
 
     if flagged.empty:

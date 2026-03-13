@@ -15,6 +15,8 @@ from common.data_window import write_data_window
 REQUIRED_TERM = {"employee_id", "termination_date"}
 REQUIRED_PAY = {"employee_id", "pay_date"}
 REQUIRED_EMP = {"employee_id"}
+REQUIRED_SNAPSHOT = {"employee_id", "leave_type", "as_of_date", "balance_units"}
+REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units", "event_type"}
 
 
 def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
@@ -53,38 +55,61 @@ def main() -> int:
         dtype={"employee_id": "string"},
     )
 
-    for df in (terminations, pay_events, employees):
+    leave_snapshot = pd.read_csv(
+        repo_root / "data" / "sample" / "balances_snapshot.csv",
+        dtype={"employee_id": "string", "leave_type": "string"},
+    )
+
+    leave_ledger = pd.read_csv(
+        repo_root / "data" / "sample" / "leave_ledger.csv",
+        dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
+    )
+
+    for df in (terminations, pay_events, employees, leave_snapshot, leave_ledger):
         df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
     _require_cols(terminations, REQUIRED_TERM, "terminations.csv")
     _require_cols(pay_events, REQUIRED_PAY, "pay_events.csv")
     _require_cols(employees, REQUIRED_EMP, "employees.csv")
+    _require_cols(leave_snapshot, REQUIRED_SNAPSHOT, "balances_snapshot.csv")
+    _require_cols(leave_ledger, REQUIRED_LEDGER, "leave_ledger.csv")
 
     terminations["termination_date"] = pd.to_datetime(terminations["termination_date"], errors="coerce")
     pay_events["pay_date"] = pd.to_datetime(pay_events["pay_date"], errors="coerce")
+    leave_snapshot["as_of_date"] = pd.to_datetime(leave_snapshot["as_of_date"], errors="coerce")
+    leave_ledger["event_date"] = pd.to_datetime(leave_ledger["event_date"], errors="coerce")
 
     bad_term_dates = terminations["termination_date"].isna().sum()
     bad_pay_dates = pay_events["pay_date"].isna().sum()
+    bad_snapshot_dates = leave_snapshot["as_of_date"].isna().sum()
+    bad_ledger_dates = leave_ledger["event_date"].isna().sum()
 
     print(f"[input] Unparseable termination_date rows: {bad_term_dates}")
     print(f"[input] Unparseable pay_date rows: {bad_pay_dates}")
+    print(f"[input] Unparseable snapshot as_of_date rows: {bad_snapshot_dates}")
+    print(f"[input] Unparseable ledger event_date rows: {bad_ledger_dates}")
 
     window_dates: list[date] = []
 
     term_dates = terminations["termination_date"].dropna()
     pay_dates = pay_events["pay_date"].dropna()
+    snapshot_dates = leave_snapshot["as_of_date"].dropna()
+    ledger_dates = leave_ledger["event_date"].dropna()
 
     if not term_dates.empty:
         window_dates.extend(term_dates.dt.date.tolist())
     if not pay_dates.empty:
         window_dates.extend(pay_dates.dt.date.tolist())
+    if not snapshot_dates.empty:
+        window_dates.extend(snapshot_dates.dt.date.tolist())
+    if not ledger_dates.empty:
+        window_dates.extend(ledger_dates.dt.date.tolist())
 
     write_data_window(modules_dir / "term_data_window.csv", window_dates)
 
     state = prepare_term_state(
         terminations=terminations,
         pay_events=pay_events,
-        employees=employees,
     )
 
     rules = _load_rules(rules_path)
@@ -94,6 +119,8 @@ def main() -> int:
         "terminations": terminations,
         "pay_events": pay_events,
         "employee_master": employees,
+        "leave_snapshot": leave_snapshot,
+        "leave_ledger": leave_ledger,
     }
     context = {"state": state}
 

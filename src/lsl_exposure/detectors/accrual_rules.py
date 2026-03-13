@@ -4,6 +4,7 @@ import json
 import pandas as pd
 
 from lsl_exposure.models import Finding, _build_finding
+from common.nulls import is_missing
 
 
 def detect_missing_lsl_balance_for_eligible(

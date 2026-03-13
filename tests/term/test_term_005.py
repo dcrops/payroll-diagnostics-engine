@@ -1,4 +1,6 @@
-from termination_exposure.rules import run_rule
+import pandas as pd
+
+from termination_exposure.detectors.registry import run_rule
 
 
 def test_term_005():
@@ -12,14 +14,22 @@ def test_term_005():
     }
 
     datasets = {
-        "terminations": [
-            {"employee_id": "E005", "termination_date": "2024-03-31", "evidence_ref": ""},
-        ],
-        "pay_events": [],
-        "employee_master": [],
+        "terminations": pd.DataFrame(
+            [
+                {
+                    "employee_id": "E005",
+                    "termination_date": "2024-03-20",
+                    "termination_type": "RESIGNATION",
+                    "termination_reason": "Personal",
+                    "evidence_ref": "",
+                }
+            ]
+        ),
+        "employee_master": pd.DataFrame(),
+        "pay_events": pd.DataFrame(),
     }
 
-    findings = run_rule(rule, datasets)
+    findings = run_rule(rule, datasets, context={})
 
     assert len(findings) == 1
     assert findings[0].employee_id == "E005"

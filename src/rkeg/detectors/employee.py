@@ -5,6 +5,7 @@ from typing import Dict, Iterable, List
 import pandas as pd
 
 from rkeg.models import Finding
+from common.nulls import is_missing
 
 
 def run_rule(rule: dict, datasets: dict[str, pd.DataFrame]) -> List[Finding]:

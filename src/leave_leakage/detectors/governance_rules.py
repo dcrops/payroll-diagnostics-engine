@@ -4,6 +4,7 @@ import json
 import pandas as pd
 
 from leave_leakage.models import Finding, _build_finding
+from common.nulls import is_missing
 
 
 def _run_leave_004_casual_accrual_present(rule: dict, employees: pd.DataFrame, ledger: pd.DataFrame) -> list[Finding]:

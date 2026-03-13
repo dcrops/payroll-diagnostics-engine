@@ -1,131 +1,159 @@
-# src/rkeg/detectors/termination.py
 from __future__ import annotations
 
-from typing import Iterable, Dict, Optional
-
-from datetime import datetime
+from typing import Dict, List
+from uuid import uuid4
+import json
 
 import pandas as pd
 
 from rkeg.models import Finding
 
 
-# You can tune this to whatever statutory / policy threshold you want
-DEFAULT_FINAL_PAY_DAYS_THRESHOLD = 7  # e.g. 7 calendar days after termination
+DEFAULT_FINAL_PAY_DAYS_THRESHOLD = 7
 
 
-def _parse_date(series: pd.Series) -> pd.Series:
-    """
-    Coerce a string-like series to datetime.date, ignoring unparseable values.
-    """
-    return pd.to_datetime(series, errors="coerce").dt.date
+def _pick_first_existing_column(df: pd.DataFrame, candidates: list[str]) -> str | None:
+    cols = {c.lower(): c for c in df.columns}
+    for candidate in candidates:
+        if candidate.lower() in cols:
+            return cols[candidate.lower()]
+    return None
 
 
 def _term_001_final_pay_outside_threshold(
     rule: dict,
     datasets: Dict[str, pd.DataFrame],
-) -> Iterable[RkegFinding]:
-    """
-    RKEG-TERM-001:
-    Final pay processed outside termination timing threshold.
+) -> List[Finding]:
+    terminations = datasets.get("terminations", pd.DataFrame())
+    pay_events = datasets.get("pay_events", pd.DataFrame())
 
-    Uses the 'terminations' dataset and looks for rows where the difference
-    between termination_date and final_pay_date exceeds the configured
-    threshold in days.
-    """
-    terminations = datasets.get("terminations")
-    if terminations is None or terminations.empty:
+    if terminations.empty or pay_events.empty:
         return []
 
-    # Make a copy so we don't mutate upstream data
-    df = terminations.copy()
-
-    # Try to locate date columns
-    term_date_col: Optional[str] = None
-    final_pay_date_col: Optional[str] = None
-
-    lower_cols = {c.lower(): c for c in df.columns}
-
-    for candidate in ["termination_date", "term_date", "end_date"]:
-        if candidate in lower_cols:
-            term_date_col = lower_cols[candidate]
-            break
-
-    for candidate in ["final_pay_date", "pay_date", "last_pay_date"]:
-        if candidate in lower_cols:
-            final_pay_date_col = lower_cols[candidate]
-            break
-
-    if term_date_col is None or final_pay_date_col is None:
-        # Not enough structure to perform this check; fail quietly.
+    if "employee_id" not in terminations.columns or "employee_id" not in pay_events.columns:
         return []
 
-    df["__term_date"] = _parse_date(df[term_date_col])
-    df["__final_pay_date"] = _parse_date(df[final_pay_date_col])
+    term_date_col = _pick_first_existing_column(
+        terminations,
+        ["termination_date", "term_date", "end_date", "termination_effective_date"],
+    )
+    pay_date_col = _pick_first_existing_column(
+        pay_events,
+        ["pay_date", "payment_date", "event_date"],
+    )
 
-    # Drop rows where either date is missing or invalid
-    df = df[df["__term_date"].notna() & df["__final_pay_date"].notna()]
-    if df.empty:
+    if term_date_col is None or pay_date_col is None:
         return []
 
-    # Compute difference in days: final_pay_date - term_date
-    df["__days_diff"] = (
-        pd.to_datetime(df["__final_pay_date"]) - pd.to_datetime(df["__term_date"])
-    ).dt.days
+    term = terminations.copy()
+    pay = pay_events.copy()
 
-    # Threshold – from rule config if present, otherwise default
-    cfg = rule.get("config", {})
+    term["employee_id"] = term["employee_id"].astype(str).str.strip()
+    pay["employee_id"] = pay["employee_id"].astype(str).str.strip()
+
+    term["_termination_date"] = pd.to_datetime(term[term_date_col], errors="coerce")
+    pay["_pay_date"] = pd.to_datetime(pay[pay_date_col], errors="coerce")
+
+    term = term[term["_termination_date"].notna()].copy()
+    pay = pay[pay["_pay_date"].notna()].copy()
+
+    if term.empty or pay.empty:
+        return []
+
+    merged = term.merge(
+        pay[["employee_id", "_pay_date"]],
+        on="employee_id",
+        how="left",
+    )
+
+    candidates = merged[merged["_pay_date"] >= merged["_termination_date"]].copy()
+
+    if candidates.empty:
+        return []
+
+    final_pay = (
+        candidates.groupby(["employee_id", "_termination_date"], as_index=False)["_pay_date"]
+        .max()
+        .rename(columns={"_pay_date": "_final_pay_date"})
+    )
+
+    review = term.merge(
+        final_pay,
+        on=["employee_id", "_termination_date"],
+        how="left",
+    )
+
+    review = review[review["_final_pay_date"].notna()].copy()
+    if review.empty:
+        return []
+
+    review["_days_diff"] = (review["_final_pay_date"] - review["_termination_date"]).dt.days
+
+    cfg = rule.get("config", {}) or {}
     threshold = int(cfg.get("max_days_after_termination", DEFAULT_FINAL_PAY_DAYS_THRESHOLD))
 
-    flagged = df[df["__days_diff"] > threshold]
+    flagged = review[review["_days_diff"] > threshold].copy()
     if flagged.empty:
         return []
 
-    rule_id = rule["id"]
+    text = rule.get("text", {})
+    base_msg = text.get(
+        "finding",
+        "One or more terminated employees appear to have received final pay outside the configured statutory timeframe.",
+    )
+    remediation = text.get(
+        "remediation",
+        "Review termination processing workflows and ensure final pay is calculated and processed within the required statutory timeframe.",
+    )
     severity = rule.get("severity", "HIGH")
 
-    text_block = rule.get("text", {})
-    base_finding_text = text_block.get(
-        "finding",
-        "Final pay appears to have been processed outside the configured timing threshold.",
-    )
-
-    findings: list[RkegFinding] = []
-
-    emp_col = "employee_id" if "employee_id" in flagged.columns else None
+    findings: List[Finding] = []
 
     for _, row in flagged.iterrows():
-        employee_id = str(row[emp_col]) if emp_col and pd.notna(row[emp_col]) else ""
-        term_date = row["__term_date"]
-        final_pay_date = row["__final_pay_date"]
-        days_diff = int(row["__days_diff"])
+        emp_id = str(row["employee_id"]).strip()
+        term_date = row["_termination_date"]
+        final_pay_date = row["_final_pay_date"]
+        days_diff = int(row["_days_diff"])
 
-        detail = (
-            f"{base_finding_text} Employee {employee_id or '[unknown]'}: "
-            f"termination date {term_date}, final pay date {final_pay_date}, "
-            f"gap {days_diff} days (threshold {threshold} days)."
-        )
+        evidence_obj = {
+            "sources": ["terminations.csv", "pay_events.csv"],
+            "primary_keys": {
+                "employee_id": emp_id,
+                "termination_date": str(term_date.date()) if pd.notna(term_date) else None,
+            },
+            "values": {
+                "termination_date": str(term_date.date()) if pd.notna(term_date) else None,
+                "derived_final_pay_date": str(final_pay_date.date()) if pd.notna(final_pay_date) else None,
+                "days_after_termination": days_diff,
+            },
+            "thresholds": {
+                "max_days_after_termination": threshold,
+            },
+            "explanation": "Latest pay event on or after termination date exceeds the configured final pay timing threshold.",
+        }
 
         findings.append(
-            RkegFinding(
-                rule_code=rule_id,
+            Finding(
+                employee_id=emp_id,
+                leave_type=None,
+                as_of_date=str(term_date.date()) if pd.notna(term_date) else None,
+                rule_code=rule["id"],
                 severity=severity,
-                employee_id=employee_id,
-                detail=detail,
+                message=base_msg,
+                diff_units=float(days_diff),
+                evidence=json.dumps(evidence_obj, ensure_ascii=False),
+                finding_id=uuid4().hex[:12],
+                next_action=remediation,
             )
         )
 
     return findings
 
 
-def run_rule(rule: dict, datasets: Dict[str, pd.DataFrame]) -> Iterable[RkegFinding]:
-    """
-    Entry point for TERM-domain RKEG rules.
-    """
-    rule_id = rule["id"]
+def run_rule(rule: dict, datasets: Dict[str, pd.DataFrame]) -> List[Finding]:
+    rule_id = rule.get("id")
 
     if rule_id == "RKEG-TERM-001":
         return _term_001_final_pay_outside_threshold(rule, datasets)
 
-    # Safety net: keep this so typos / future rules are caught quickly.
-    raise ValueError(f"Unknown TERM rule: {rule_id}")
+    return []
