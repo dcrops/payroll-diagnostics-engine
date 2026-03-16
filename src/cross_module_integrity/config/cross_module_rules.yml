@@ -1,0 +1,351 @@
+version: "1.0"
+module: CROSS_MODULE
+description: Cross-Module Integrity - lifecycle, evidence, and post-termination reconciliation across TERM, LEAVE, LSL and payroll data
+
+rules:
+  - id: CM-001
+    tier: 1
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Terminated employee retains material annual or LSL balance after grace period
+    datasets:
+      primary: terminations
+      references:
+        - leave_snapshot
+    config:
+      material_balance_units: 10
+      snapshot_grace_days: 14
+      leave_types:
+        - ANNUAL
+        - LSL
+    text:
+      finding: "A terminated employee retains a material annual leave or LSL balance after the configured grace period."
+      why_it_matters: "Outstanding leave balances after termination may indicate incomplete finalisation, delayed payout processing or weak off-boarding controls."
+      remediation: "Confirm whether the employee’s balances were paid or intentionally remain open, and ensure the snapshot reflects the correct post-termination position."
+    risk_dimension:
+      - cross_module_linkage_risk
+      - exception_handling
+
+  - id: CM-002
+    tier: 1
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Post-termination leave movement recorded
+    datasets:
+      primary: terminations
+      references:
+        - leave_ledger
+    config:
+      leave_types:
+        - ANNUAL
+        - PERSONAL
+        - LSL
+    text:
+      finding: "Leave ledger movement was recorded after the employee termination date."
+      why_it_matters: "Post-termination leave movement may indicate date errors, delayed processing or incomplete termination controls."
+      remediation: "Review termination timing and leave processing history to confirm whether the movement is valid and properly evidenced."
+    risk_dimension:
+      - timing_integrity
+      - cross_module_linkage_risk
+      - governance_monitoring_exposure
+
+  - id: CM-003
+    tier: 1
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Termination lacks evidence reference and payroll activity continues after termination
+    datasets:
+      primary: terminations
+      references:
+        - pay_events
+    config:
+      allowed_days_after_term: 7
+    text:
+      finding: "A termination record has no supporting evidence reference and payroll activity continues after the termination date."
+      why_it_matters: "Where termination evidence is missing and payroll continues after termination, confidence in off-boarding control integrity is weakened."
+      remediation: "Review termination evidence records and confirm whether payroll activity after termination was valid or requires correction."
+    risk_dimension:
+      - evidence_traceability
+      - timing_integrity
+      - cross_module_linkage_risk
+
+  - id: CM-004
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Employee retains material leave balance after termination with no final pay flagged
+    datasets:
+      primary: terminations
+      references:
+        - leave_snapshot
+        - pay_events
+    config:
+      material_balance_units: 10
+      snapshot_grace_days: 14
+      leave_types:
+        - ANNUAL
+        - LSL
+    text:
+      finding: "A terminated employee retains a material leave balance after the configured grace period and no final pay event is flagged."
+      why_it_matters: "Where open balances remain after termination and no final pay is clearly identified, payroll finalisation is harder to evidence and reconcile."
+      remediation: "Review final pay processing, open leave balances and payroll finalisation records to confirm whether the employee’s balances were correctly handled."
+    risk_dimension:
+      - cross_module_linkage_risk
+      - evidence_traceability
+      - exception_handling
+
+  - id: CM-005
+    tier: 1
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Termination lacks evidence reference and open leave balance remains
+    datasets:
+      primary: terminations
+      references:
+        - leave_snapshot
+    config:
+      material_balance_units: 10
+      snapshot_grace_days: 14
+      leave_types:
+        - ANNUAL
+        - LSL
+    text:
+      finding: "A termination record has no supporting evidence reference and a material leave balance remains after the configured grace period."
+      why_it_matters: "Where termination evidence is missing and leave balances remain open after termination, confidence in payroll finalisation and off-boarding controls is weakened."
+      remediation: "Review termination evidence records and confirm whether outstanding leave balances were correctly paid, closed, or intentionally remain open."
+    risk_dimension:
+      - evidence_traceability
+      - cross_module_linkage_risk
+      - exception_handling
+
+  - id: CM-006
+    tier: 1
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Employee has both post-termination payroll activity and post-termination leave movement
+    datasets:
+      primary: terminations
+      references:
+        - pay_events
+        - leave_ledger
+    config:
+      leave_types:
+        - ANNUAL
+        - PERSONAL
+        - LSL
+      allowed_days_after_term: 7
+    text:
+      finding: "Payroll activity and leave ledger movement both continue after the employee termination date."
+      why_it_matters: "Where payroll and leave activity both continue after termination, off-boarding control integrity is significantly weakened."
+      remediation: "Review the employee termination timeline, payroll activity, and leave transactions to confirm whether the employee was correctly finalised."
+    risk_dimension:
+      - timing_integrity
+      - cross_module_linkage_risk
+      - governance_monitoring_exposure
+
+  - id: CM-007
+    tier: 2
+    domain: CROSS_MODULE
+    severity: MEDIUM
+    title: Terminated employee remains active in employee master with open leave balance
+    datasets:
+      primary: terminations
+      references:
+        - employee_master
+        - leave_snapshot
+    config:
+      material_balance_units: 10
+      snapshot_grace_days: 14
+      leave_types:
+        - ANNUAL
+        - LSL
+    text:
+      finding: "A terminated employee appears to remain active in employee master while also retaining a material leave balance."
+      why_it_matters: "Inconsistent employee lifecycle status across master data and leave balances may indicate weak synchronisation between HR and payroll records."
+      remediation: "Review employee status fields, termination timing, and leave balances to confirm whether the employee was fully finalised across systems."
+    risk_dimension:
+      - structural_completeness
+      - cross_module_linkage_risk
+      - data_anomaly_sanity
+
+  - id: CM-008
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Terminated employee retains material balance with no final pay flag and no closure ledger event
+    datasets:
+      primary: terminations
+      references:
+        - leave_snapshot
+        - pay_events
+        - leave_ledger
+    config:
+      material_balance_units: 10
+      snapshot_grace_days: 14
+      leave_types:
+        - ANNUAL
+        - LSL
+      closure_event_types:
+        - TAKEN
+        - ADJUSTMENT
+        - PAYOUT
+    text:
+      finding: "A terminated employee retains a material leave balance after the configured grace period, with no final pay flagged and no closure-style ledger activity."
+      why_it_matters: "Where open leave balances remain after termination and neither final pay nor closure ledger events are evident, payroll finalisation is difficult to defend."
+      remediation: "Review leave balances, final pay processing, and leave ledger activity to confirm whether termination entitlements were correctly finalised."
+    risk_dimension:
+      - evidence_traceability
+      - cross_module_linkage_risk
+      - exception_handling
+
+  - id: CM-009
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Leave payout recorded but no termination record exists
+    datasets:
+      primary: leave_ledger
+      references:
+        - terminations
+    config:
+      payout_event_types:
+        - PAYOUT
+    text:
+      finding: A leave payout ledger event was recorded but no termination record exists for the employee.
+      why_it_matters: Leave payouts normally occur when employment ends. Missing termination records weaken lifecycle integrity.
+      remediation: Review whether the employee termination was recorded correctly or whether the payout event was misclassified.
+    risk_dimension:
+      - lifecycle_integrity
+      - governance_exposure
+
+  - id: CM-010
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Termination exists but no leave payout recorded
+    datasets:
+      primary: terminations
+      references:
+        - leave_ledger
+        - leave_snapshot
+    config:
+      payout_event_types:
+        - PAYOUT
+      material_balance_units: 10
+    text:
+      finding: A termination was recorded but no leave payout event was identified for the employee.
+      why_it_matters: Employees with accrued leave are normally paid out upon termination.
+      remediation: Confirm whether leave balances were paid out and ensure payout events are recorded correctly.
+    risk_dimension:
+      - lifecycle_integrity
+      - calculation_integrity
+
+  - id: CM-011
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Multiple termination records identified for the same employee
+    datasets:
+      primary: terminations
+    text:
+      finding: Multiple termination records were identified for the same employee.
+      why_it_matters: Duplicate termination records may indicate HRIS sync issues or incorrect termination processing.
+      remediation: Review employee lifecycle history and confirm the correct termination record.
+    risk_dimension:
+      - data_anomaly_sanity
+      - governance_exposure
+
+  - id: CM-012
+    tier: 2
+    domain: CROSS_MODULE
+    severity: MEDIUM
+    title: Leave ledger activity recorded after termination
+    datasets:
+      primary: leave_ledger
+      references:
+        - terminations
+    config:
+      allowed_event_types:
+        - PAYOUT
+        - ADJUSTMENT
+    text:
+      finding: Leave ledger activity was recorded after the employee termination date.
+      why_it_matters: Leave transactions after termination may indicate incorrect payroll posting or lifecycle inconsistencies.
+      remediation: Confirm whether the employee was reinstated or whether the ledger events were posted incorrectly.
+    risk_dimension:
+      - lifecycle_integrity
+      - timing_integrity
+
+  - id: CM-013
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Final pay flagged but material leave balance remains after termination
+    datasets:
+      primary: terminations
+      references:
+        - pay_events
+        - leave_snapshot
+    config:
+      material_balance_units: 10
+      snapshot_grace_days: 14
+      leave_types:
+        - ANNUAL
+        - LSL
+    text:
+      finding: "A final pay event was flagged, but a material leave balance remains after termination."
+      why_it_matters: "Where final pay is marked as processed but material leave balances remain open, payroll finalisation may be incomplete or poorly reconciled."
+      remediation: "Review the employee’s final pay, leave payout treatment and post-termination balances to confirm whether the leave position was fully closed."
+    risk_dimension:
+      - calculation_integrity
+      - cross_module_linkage_risk
+      - exception_handling
+
+  - id: CM-014
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Leave payout recorded but balance does not materially reduce
+    datasets:
+      primary: leave_ledger
+      references:
+        - leave_snapshot
+        - terminations
+    config:
+      payout_event_types:
+        - PAYOUT
+      material_balance_units: 10
+    text:
+      finding: "A leave payout event was recorded, but the employee still retains a material leave balance."
+      why_it_matters: "Where a leave payout is recorded but balances remain materially open, the payroll record may be inconsistent or incompletely reconciled."
+      remediation: "Review leave payout transactions, balance snapshots and cutoff timing to confirm whether the balance should have reduced."
+    risk_dimension:
+      - calculation_integrity
+      - evidence_traceability
+      - cross_module_linkage_risk
+
+  - id: CM-015
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Terminated employee continues receiving non-final payroll with open leave balance
+    datasets:
+      primary: terminations
+      references:
+        - pay_events
+        - leave_snapshot
+    config:
+      material_balance_units: 10
+      snapshot_grace_days: 14
+      leave_types:
+        - ANNUAL
+        - LSL
+      allowed_days_after_term: 7
+    text:
+      finding: "A terminated employee continues to receive non-final payroll while retaining a material leave balance."
+      why_it_matters: "Where payroll continues after termination without clear finalisation and balances remain open, lifecycle and payroll control integrity are weakened."
+      remediation: "Review termination timing, payroll continuation and open leave balances to confirm whether the employee was correctly finalised."
+    risk_dimension:
+      - timing_integrity
+      - governance_monitoring_exposure
+      - cross_module_linkage_risk
