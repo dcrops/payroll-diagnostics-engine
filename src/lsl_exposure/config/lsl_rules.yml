@@ -463,8 +463,8 @@ rules:
         - ADJUSTMENT
         - PAYOUT
     text:
-      finding: "A terminated employee retains a material LSL balance in the snapshot extract."
-      why_it_matters: >
+      finding: "finding: A terminated employee retains a material LSL balance in the 
+      snapshot extract beyond the configured grace period: >
       When an employee has a recorded termination date but retains a material LSL balance,
       it may indicate that the leave payout has not yet been processed, that the snapshot
       extract was taken before finalisation, or that balances were not closed correctly.
