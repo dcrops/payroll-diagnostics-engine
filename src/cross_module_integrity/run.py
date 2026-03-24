@@ -103,7 +103,6 @@ def main() -> int:
 
     rules = _load_rules(rules_path)
 
-    findings: list[Finding] = []
     datasets = {
         "terminations": terminations,
         "pay_events": pay_events,
@@ -112,9 +111,42 @@ def main() -> int:
         "leave_ledger": leave_ledger,
     }
 
+    findings: list[Finding] = []
+
+    # Pass 1: run all rules except CM-020
     for rule in rules:
+        if rule["id"] == "CM-020":
+            continue
         findings.extend(run_rule(rule, datasets, context={}))
 
+    if findings:
+        findings_df = pd.DataFrame([f.__dict__ for f in findings])
+    else:
+        findings_df = pd.DataFrame(
+            columns=[
+                "employee_id",
+                "leave_type",
+                "as_of_date",
+                "rule_code",
+                "severity",
+                "message",
+                "diff_units",
+                "evidence",
+                "finding_id",
+                "next_action",
+            ]
+        )
+
+    # Make first-pass findings available to CM-020
+    datasets["cross_module_findings"] = findings_df
+
+    # Pass 2: run CM-020 only
+    for rule in rules:
+        if rule["id"] != "CM-020":
+            continue
+        findings.extend(run_rule(rule, datasets, context={}))
+
+    # Rebuild final findings_df including CM-020 output
     if findings:
         findings_df = pd.DataFrame([f.__dict__ for f in findings])
     else:

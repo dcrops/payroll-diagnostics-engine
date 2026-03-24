@@ -26,6 +26,11 @@ RULE_REGISTRY: dict[str, Detector] = {
     "CM-013": lifecycle_rules.detect_final_pay_flagged_but_balance_remains,
     "CM-014": lifecycle_rules.detect_leave_payout_recorded_but_balance_does_not_reduce,
     "CM-015": lifecycle_rules.detect_terminated_employee_continues_receiving_non_final_pay_with_open_balance,
+    "CM-016": lifecycle_rules.detect_termination_without_supporting_leave_snapshot,
+    "CM-017": lifecycle_rules.detect_final_pay_without_termination_evidence,
+    "CM-018": lifecycle_rules.detect_terminated_employee_retains_both_annual_and_lsl_balances,
+    "CM-019": lifecycle_rules.detect_silent_termination,
+    "CM-020": lifecycle_rules.detect_multi_failure_cluster,
 }
 
 

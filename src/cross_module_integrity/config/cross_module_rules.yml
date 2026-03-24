@@ -349,3 +349,113 @@ rules:
       - timing_integrity
       - governance_monitoring_exposure
       - cross_module_linkage_risk
+
+  - id: CM-016
+    tier: 2
+    domain: CROSS_MODULE
+    severity: MEDIUM
+    title: Termination exists but no supporting leave snapshot record exists
+    datasets:
+      primary: terminations
+      references:
+        - leave_snapshot
+    config:
+      leave_types:
+        - ANNUAL
+        - LSL
+    text:
+      finding: "A termination record exists but no supporting leave snapshot record was identified for the employee."
+      why_it_matters: "Where terminated employees have no leave snapshot record, it becomes harder to confirm whether their leave balances were correctly assessed and finalised."
+      remediation: "Review snapshot extract completeness and confirm whether terminated employees were intentionally excluded or whether leave balances were missing from the extract."
+    risk_dimension:
+      - structural_completeness
+      - cross_module_linkage_risk
+
+  - id: CM-017
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Final pay flagged but no termination evidence reference exists
+    datasets:
+      primary: pay_events
+      references:
+        - terminations
+    text:
+      finding: "A final pay event was flagged but no termination evidence reference exists."
+      why_it_matters: "Where final pay is processed without supporting termination evidence, defensibility of the termination process is weakened."
+      remediation: "Ensure termination evidence such as resignation or termination documentation is recorded and linked to payroll records."
+    risk_dimension:
+      - evidence_traceability
+      - cross_module_linkage_risk
+
+  - id: CM-018
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Terminated employee retains both material annual leave and LSL balances
+    datasets:
+      primary: terminations
+      references:
+        - leave_snapshot
+    config:
+      material_balance_units: 10
+      snapshot_grace_days: 14
+      required_leave_types:
+        - ANNUAL
+        - LSL
+    text:
+      finding: "A terminated employee retains both material annual leave and LSL balances after the configured grace period."
+      why_it_matters: "Where multiple entitlement balances remain open after termination, payroll finalisation and leave closure controls may be significantly weakened."
+      remediation: "Review final pay processing, leave balances and closure treatment to confirm whether termination entitlements were correctly finalised."
+    risk_dimension:
+      - cross_module_linkage_risk
+      - exception_handling
+      - governance_monitoring_exposure
+
+  - id: CM-019
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Termination exists but no payroll, payout, or closure activity identified
+    datasets:
+      primary: terminations
+      references:
+        - pay_events
+        - leave_ledger
+        - leave_snapshot
+    config:
+      leave_types:
+        - ANNUAL
+        - LSL
+      closure_event_types:
+        - PAYOUT
+        - ADJUSTMENT
+        - TAKEN
+    text:
+      finding: "A termination was recorded but no payroll activity, leave payout, or closure ledger activity was identified."
+      why_it_matters: "Where no finalisation activity exists following termination, payroll records may be incomplete or missing key lifecycle steps."
+      remediation: "Review termination processing, payroll records and leave ledger activity to confirm whether the employee was correctly finalised."
+    risk_dimension:
+      - evidence_traceability
+      - exception_handling
+      - cross_module_linkage_risk
+
+  - id: CM-020
+    tier: 2
+    domain: CROSS_MODULE
+    severity: HIGH
+    title: Employee triggers multiple cross-module integrity failures
+    datasets:
+      primary: derived
+      references:
+        - cross_module_findings
+    config:
+      min_findings: 3
+      min_high_severity: 2
+    text:
+      finding: "An employee triggered multiple cross-module integrity failures."
+      why_it_matters: "Multiple concurrent failures indicate systemic payroll lifecycle breakdown rather than isolated issues."
+      remediation: "Review the full lifecycle of the employee including payroll, leave, termination and evidence records."
+    risk_dimension:
+      - governance_monitoring_exposure
+      - cross_module_linkage_risk

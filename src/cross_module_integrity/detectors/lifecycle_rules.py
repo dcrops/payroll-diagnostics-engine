@@ -4,6 +4,7 @@ import json
 import pandas as pd
 
 from cross_module_integrity.models import Finding, _build_finding
+from common.nulls import is_missing
 
 
 def detect_terminated_employee_retains_material_leave_balance(
@@ -1306,6 +1307,328 @@ def detect_terminated_employee_continues_receiving_non_final_pay_with_open_balan
                 leave_type=str(row["leave_type"]),
                 as_of_date=str(row["as_of_date"].date()),
                 evidence_str=evidence_str,
+            )
+        )
+
+    return findings
+
+def detect_termination_without_supporting_leave_snapshot(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+    context: dict,
+) -> list[Finding]:
+    terminations = datasets.get("terminations", pd.DataFrame())
+    leave_snapshot = datasets.get("leave_snapshot", pd.DataFrame())
+
+    if terminations.empty:
+        return []
+
+    findings: list[Finding] = []
+    leave_types = {
+        str(x).strip().upper()
+        for x in rule.get("config", {}).get("leave_types", ["ANNUAL", "LSL"])
+    }
+
+    term = terminations.copy()
+    term["employee_id"] = term["employee_id"].astype(str).str.strip()
+    term["termination_date"] = pd.to_datetime(term["termination_date"], errors="coerce")
+
+    if leave_snapshot.empty:
+        snapshot_keys = set()
+    else:
+        snap = leave_snapshot.copy()
+        snap["employee_id"] = snap["employee_id"].astype(str).str.strip()
+        snap["leave_type"] = snap["leave_type"].astype(str).str.strip().str.upper()
+
+        snap = snap[snap["leave_type"].isin(leave_types)].copy()
+        snapshot_keys = set(snap["employee_id"].dropna().astype(str).str.strip())
+
+    bad = term[~term["employee_id"].isin(snapshot_keys)].copy()
+
+    for _, row in bad.iterrows():
+        evidence_str = json.dumps(
+            {
+                "sources": ["terminations.csv", "balances_snapshot.csv"],
+                "primary_keys": {
+                    "employee_id": str(row["employee_id"]),
+                    "termination_date": str(row["termination_date"].date()) if pd.notna(row["termination_date"]) else None,
+                },
+                "values": {
+                    "leave_snapshot_record_found": False,
+                },
+                "thresholds": {
+                    "leave_types_checked": sorted(leave_types),
+                },
+                "explanation": "A termination record exists but no supporting leave snapshot record was identified for the employee.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule=rule,
+                employee_id=str(row["employee_id"]),
+                leave_type=None,
+                as_of_date=str(row["termination_date"].date()) if pd.notna(row["termination_date"]) else None,
+                evidence_str=evidence_str,
+            )
+        )
+
+    return findings
+
+def detect_final_pay_without_termination_evidence(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+    context: dict,
+) -> list[Finding]:
+    pay_events = datasets.get("pay_events", pd.DataFrame())
+    terminations = datasets.get("terminations", pd.DataFrame())
+
+    if pay_events.empty or terminations.empty:
+        return []
+
+    findings: list[Finding] = []
+
+    pay = pay_events.copy()
+    pay["employee_id"] = pay["employee_id"].astype(str).str.strip()
+    pay["pay_date"] = pd.to_datetime(pay["pay_date"], errors="coerce")
+
+    if "is_final_pay" not in pay.columns:
+        pay["is_final_pay"] = ""
+
+    pay["is_final_pay_norm"] = (
+        pay["is_final_pay"].astype(str).str.strip().str.lower().isin({"y","yes","true","1"})
+    )
+
+    final_pays = pay[pay["is_final_pay_norm"]].copy()
+    if final_pays.empty:
+        return []
+
+    term = terminations.copy()
+    term["employee_id"] = term["employee_id"].astype(str).str.strip()
+
+    if "evidence_ref" not in term.columns:
+        term["evidence_ref"] = ""
+
+    term["evidence_ref_norm"] = term["evidence_ref"].astype(str).str.strip()
+
+    merged = final_pays.merge(
+        term[["employee_id", "evidence_ref"]],
+        on="employee_id",
+        how="left"
+    )
+
+    bad = merged[merged["evidence_ref"].apply(is_missing)]
+
+    for _, row in bad.iterrows():
+        findings.append(
+            _build_finding(
+                rule=rule,
+                employee_id=str(row["employee_id"]),
+                leave_type=None,
+                as_of_date=str(row["pay_date"].date()) if pd.notna(row["pay_date"]) else None,
+                evidence_str=json.dumps({"issue": "final pay without evidence"}, ensure_ascii=False)
+            )
+        )
+
+    return findings
+
+def detect_terminated_employee_retains_both_annual_and_lsl_balances(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+    context: dict,
+) -> list[Finding]:
+    terminations = datasets.get("terminations", pd.DataFrame())
+    leave_snapshot = datasets.get("leave_snapshot", pd.DataFrame())
+
+    if terminations.empty or leave_snapshot.empty:
+        return []
+
+    findings: list[Finding] = []
+    material_balance_units = float(rule.get("config", {}).get("material_balance_units", 10))
+    snapshot_grace_days = int(rule.get("config", {}).get("snapshot_grace_days", 14))
+    required_leave_types = [
+        str(x).strip().upper()
+        for x in rule.get("config", {}).get("required_leave_types", ["ANNUAL", "LSL"])
+    ]
+
+    term = terminations.copy()
+    term["employee_id"] = term["employee_id"].astype(str).str.strip()
+    term["termination_date"] = pd.to_datetime(term["termination_date"], errors="coerce")
+
+    snap = leave_snapshot.copy()
+    snap["employee_id"] = snap["employee_id"].astype(str).str.strip()
+    snap["leave_type"] = snap["leave_type"].astype(str).str.strip().str.upper()
+    snap["as_of_date"] = pd.to_datetime(snap["as_of_date"], errors="coerce")
+    snap["balance_units"] = pd.to_numeric(snap["balance_units"], errors="coerce")
+
+    snap = snap[
+        snap["leave_type"].isin(required_leave_types)
+        & snap["balance_units"].notna()
+        & (snap["balance_units"] >= material_balance_units)
+    ].copy()
+
+    if snap.empty:
+        return []
+
+    latest_snap = (
+        snap.sort_values(["employee_id", "leave_type", "as_of_date"])
+        .groupby(["employee_id", "leave_type"], as_index=False)
+        .tail(1)
+    )
+
+    merged = latest_snap.merge(
+        term[["employee_id", "termination_date"]],
+        on="employee_id",
+        how="inner",
+    )
+
+    merged = merged[
+        merged["termination_date"].notna()
+        & merged["as_of_date"].notna()
+        & (merged["as_of_date"] > merged["termination_date"])
+        & ((merged["as_of_date"] - merged["termination_date"]).dt.days >= snapshot_grace_days)
+    ].copy()
+
+    if merged.empty:
+        return []
+
+    grouped = (
+        merged.groupby("employee_id")
+        .agg(
+            leave_types_found=("leave_type", lambda x: sorted(set(x))),
+            latest_snapshot_date=("as_of_date", "max"),
+        )
+        .reset_index()
+    )
+
+    bad = grouped[
+        grouped["leave_types_found"].apply(lambda x: all(t in x for t in required_leave_types))
+    ].copy()
+
+    for _, row in bad.iterrows():
+        employee_id = str(row["employee_id"])
+        employee_rows = merged[merged["employee_id"] == employee_id].copy()
+
+        balance_map = {
+            str(r["leave_type"]): float(r["balance_units"])
+            for _, r in employee_rows.iterrows()
+            if pd.notna(r["balance_units"])
+        }
+
+        termination_date = employee_rows["termination_date"].dropna().iloc[0] if not employee_rows["termination_date"].dropna().empty else pd.NaT
+        latest_snapshot_date = row["latest_snapshot_date"]
+
+        evidence_str = json.dumps(
+            {
+                "sources": ["terminations.csv", "balances_snapshot.csv"],
+                "primary_keys": {
+                    "employee_id": employee_id,
+                    "termination_date": str(termination_date.date()) if pd.notna(termination_date) else None,
+                    "snapshot_date": str(latest_snapshot_date.date()) if pd.notna(latest_snapshot_date) else None,
+                },
+                "values": {
+                    "leave_types_found": row["leave_types_found"],
+                    "balance_units_by_leave_type": balance_map,
+                },
+                "thresholds": {
+                    "required_leave_types": required_leave_types,
+                    "material_balance_units": material_balance_units,
+                    "snapshot_grace_days": snapshot_grace_days,
+                },
+                "explanation": "A terminated employee retains both material annual leave and LSL balances after the configured grace period.",
+            },
+            ensure_ascii=False,
+        )
+
+        findings.append(
+            _build_finding(
+                rule=rule,
+                employee_id=employee_id,
+                leave_type="MULTI_LEAVE",
+                as_of_date=str(latest_snapshot_date.date()) if pd.notna(latest_snapshot_date) else None,
+                evidence_str=evidence_str,
+            )
+        )
+
+    return findings
+
+def detect_silent_termination(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+    context: dict,
+) -> list[Finding]:
+    terminations = datasets.get("terminations", pd.DataFrame())
+    pay_events = datasets.get("pay_events", pd.DataFrame())
+    leave_ledger = datasets.get("leave_ledger", pd.DataFrame())
+
+    if terminations.empty:
+        return []
+
+    findings: list[Finding] = []
+
+    term = terminations.copy()
+    term["employee_id"] = term["employee_id"].astype(str).str.strip()
+    term["termination_date"] = pd.to_datetime(term["termination_date"], errors="coerce")
+
+    pay_ids = set(pay_events["employee_id"].astype(str).str.strip()) if not pay_events.empty else set()
+    ledger_ids = set(leave_ledger["employee_id"].astype(str).str.strip()) if not leave_ledger.empty else set()
+
+    for _, row in term.iterrows():
+        emp = str(row["employee_id"])
+
+        if emp in pay_ids or emp in ledger_ids:
+            continue
+
+        findings.append(
+            _build_finding(
+                rule=rule,
+                employee_id=emp,
+                leave_type=None,
+                as_of_date=str(row["termination_date"].date()) if pd.notna(row["termination_date"]) else None,
+                evidence_str=json.dumps({"issue": "no lifecycle activity"}, ensure_ascii=False)
+            )
+        )
+
+    return findings
+
+def detect_multi_failure_cluster(
+    rule: dict,
+    datasets: dict[str, pd.DataFrame],
+    context: dict,
+) -> list[Finding]:
+
+    findings_df = datasets.get("cross_module_findings", pd.DataFrame())
+
+    if findings_df.empty:
+        return []
+
+    findings: list[Finding] = []
+
+    min_findings = int(rule.get("config", {}).get("min_findings", 3))
+    min_high = int(rule.get("config", {}).get("min_high_severity", 2))
+
+    grouped = findings_df.groupby("employee_id").agg(
+        total=("rule_code","count"),
+        high=("severity", lambda x: (x=="HIGH").sum())
+    ).reset_index()
+
+    bad = grouped[
+        (grouped["total"] >= min_findings) |
+        (grouped["high"] >= min_high)
+    ]
+
+    for _, row in bad.iterrows():
+        findings.append(
+            _build_finding(
+                rule=rule,
+                employee_id=row["employee_id"],
+                leave_type=None,
+                as_of_date=None,
+                evidence_str=json.dumps({
+                    "total_findings": int(row["total"]),
+                    "high_findings": int(row["high"])
+                }, ensure_ascii=False)
             )
         )
 
