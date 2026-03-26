@@ -12,10 +12,27 @@ Thumbs.db
 outputs/*
 !outputs/.gitkeep
 
-# Data (sample data only)
+# Ignore all data by default
 data/*
+
+# Allow sample data (safe demo)
 !data/sample/
-!data/sample/*.csv
+!data/sample/**
+
+# Allow demo client (portfolio example)
+!data/clients/
+!data/clients/kaggle_demo/
+!data/clients/kaggle_demo/**
+
+# Ignore raw files (can be large / sensitive)
+data/clients/*/*/raw/*
+!data/clients/kaggle_demo/*/raw/*.csv
+
+# Ignore processed outputs (can regenerate)
+data/clients/*/*/processed/*
+
+# BUT allow small demo processed files if you want
+!data/clients/kaggle_demo/*/processed/*.csv
 
 # IDE
 .vscode/

@@ -1,0 +1,24 @@
+employees:
+  source_file: ibm_hr.csv
+  rename:
+    EmployeeNumber: employee_id
+    Department: department
+    JobRole: job_title
+    MonthlyIncome: monthly_income
+    OverTime: overtime_flag
+    Attrition: attrition_flag
+    Age: age
+    Gender: gender
+    MaritalStatus: marital_status
+    TotalWorkingYears: total_working_years
+    YearsAtCompany: years_at_company
+
+leave_balances:
+  source_file: employee leave tracking data.csv
+  rename:
+    Employee Name: employee_name
+    Leave Type: leave_type
+    Start Date: start_date
+    End Date: end_date
+    Days Taken: days_taken
+    Remaining Leaves: balance_units
