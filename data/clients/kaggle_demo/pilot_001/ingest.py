@@ -170,7 +170,7 @@ def create_leave_ledger(employees_df, raw_dir, leave_cfg):
 
 def create_terminations(employees_df):
     terminated = employees_df.loc[
-        employees_df["employment_status"] == "Terminated",
+        employees_df["employment_status"].astype(str).str.strip().str.upper() == "TERMINATED",
         ["employee_id"]
     ].copy()
 
