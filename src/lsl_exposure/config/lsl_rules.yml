@@ -110,6 +110,8 @@ rules:
       primary: employee_master
       references:
         - leave_snapshot
+    config:
+      eligibility_years: 7.0
     text:
       finding: "Employees were identified without any corresponding LSL balance record."
       why_it_matters: "Missing LSL records may indicate that LSL is not being tracked or was not migrated correctly."
@@ -463,14 +465,16 @@ rules:
         - ADJUSTMENT
         - PAYOUT
     text:
-      finding: "finding: A terminated employee retains a material LSL balance in the 
-      snapshot extract beyond the configured grace period: >
-      When an employee has a recorded termination date but retains a material LSL balance,
-      it may indicate that the leave payout has not yet been processed, that the snapshot
-      extract was taken before finalisation, or that balances were not closed correctly.
-      remediation: >
-      Confirm whether the employee's final pay included an LSL payout or whether the
-      balance is expected to remain open due to data timing or system configuration.
+      finding: |
+        A terminated employee retains a material LSL balance in the snapshot extract
+        beyond the configured grace period.
+      why_it_matters: |
+        When an employee has a recorded termination date but retains a material LSL balance,
+        it may indicate that the leave payout has not yet been processed, that the snapshot
+        extract was taken before finalisation, or that balances were not closed correctly.
+      remediation: |
+        Confirm whether the employee's final pay included an LSL payout or whether the
+        balance is expected to remain open due to data timing or system configuration.
     risk_dimension:
       - cross_module_linkage_risk
       - exception_handling

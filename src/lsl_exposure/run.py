@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from datetime import date
 import pandas as pd
@@ -30,30 +31,45 @@ def _load_rules(rules_path: Path) -> list[dict]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Run LSL exposure module")
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default=None,
+        help="Path to input data directory. Defaults to repo_root/data/sample",
+    )
+    args = parser.parse_args()
+
     repo_root = Path(__file__).resolve().parents[2]
     out_dir = repo_root / "outputs"
     modules_dir = out_dir / "modules"
     rules_path = Path(__file__).resolve().parent / "config" / "lsl_rules.yml"
 
+    data_dir = (
+        Path(args.data_dir).resolve()
+        if args.data_dir
+        else repo_root / "data" / "sample"
+    )
+
     out_dir.mkdir(parents=True, exist_ok=True)
     modules_dir.mkdir(parents=True, exist_ok=True)
 
     employees = pd.read_csv(
-        repo_root / "data" / "sample" / "employees.csv",
+        data_dir / "employees.csv",
         dtype={"employee_id": "string"},
     )
 
     snapshot = pd.read_csv(
-        repo_root / "data" / "sample" / "balances_snapshot.csv",
+        data_dir / "balances_snapshot.csv",
         dtype={"employee_id": "string", "leave_type": "string"},
     )
 
     ledger = pd.read_csv(
-        repo_root / "data" / "sample" / "leave_ledger.csv",
+        data_dir / "leave_ledger.csv",
         dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
     )
 
-    pay_rates_path = repo_root / "data" / "sample" / "pay_rates.csv"
+    pay_rates_path = data_dir / "pay_rates.csv"
     pay_rates = None
     if pay_rates_path.exists():
         pay_rates = pd.read_csv(
@@ -82,6 +98,7 @@ def main() -> int:
     bad_snapshot_dates = snapshot["as_of_date"].isna().sum()
     bad_ledger_dates = ledger["event_date"].isna().sum()
 
+    print(f"[input] Using data directory: {data_dir}")
     print(f"[input] Unparseable employee start_date rows: {bad_emp_dates}")
     print(f"[input] Unparseable snapshot as_of_date rows: {bad_snapshot_dates}")
     print(f"[input] Unparseable ledger event_date rows: {bad_ledger_dates}")

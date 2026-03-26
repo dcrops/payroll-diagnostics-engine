@@ -180,10 +180,10 @@ def _emp_003_missing_or_invalid_status(
 ) -> list[Finding]:
     """
     RKEG-EMP-003:
-    Employment status/type missing or invalid.
+    Employment status missing or invalid.
 
-    In this implementation we use the `employment_type` field from employees.csv
-    as a proxy for status (e.g. FULL_TIME, PART_TIME, CASUAL, FIXED_TERM, etc.).
+    Prefer `employment_status` if present.
+    If not present, fall back to `employment_type` as a weaker proxy.
     """
 
     employees = datasets.get("employee_master", pd.DataFrame())
@@ -195,43 +195,46 @@ def _emp_003_missing_or_invalid_status(
     if "employee_id" not in employees.columns:
         return findings
 
-    # Prefer an explicit status column if present, otherwise fall back to employment_type
     status_col = None
+    valid_values: set[str] = set()
+
     if "employment_status" in employees.columns:
         status_col = "employment_status"
+        valid_values = {
+            "ACTIVE",
+            "TERMINATED",
+            "INACTIVE",
+            "CEASED",
+            "ON_LEAVE",
+        }
     elif "employment_type" in employees.columns:
         status_col = "employment_type"
+        valid_values = {
+            "FULL_TIME",
+            "PART_TIME",
+            "CASUAL",
+            "FIXED_TERM",
+            "CONTRACTOR",
+            "TEMPORARY",
+        }
     else:
-        # No usable column for this rule
         return findings
-
-    # Define what we consider "valid" values – adjust over time if needed
-    valid_statuses = {
-        "FULL_TIME",
-        "PART_TIME",
-        "CASUAL",
-        "FIXED_TERM",
-        "CONTRACTOR",
-        "TEMPORARY",
-    }
 
     for _, row in employees.iterrows():
         emp_id = str(row["employee_id"]).strip()
         raw_status = row.get(status_col)
 
-        # Normalise
         if pd.isna(raw_status):
             status = ""
         else:
             status = str(raw_status).strip().upper()
 
-        # Missing or not in our controlled list → finding
-        if status == "" or status not in valid_statuses:
+        if status == "" or status not in valid_values:
             evidence_obj = {
                 "sources": ["employees.csv"],
                 "primary_keys": {"employee_id": emp_id},
                 "values": {status_col: status},
-                "explanation": "Employee record has a missing or non-standard employment status/type value.",
+                "explanation": f"Employee record has a missing or non-standard {status_col} value.",
             }
             evidence_str = str(evidence_obj).replace("'", '"')
 

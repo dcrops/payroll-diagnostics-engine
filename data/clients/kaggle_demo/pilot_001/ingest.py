@@ -281,6 +281,120 @@ def create_pay_events_for_term(employees_df, terminations_df):
 
     return pd.DataFrame(records)
 
+
+def append_lsl_ledger_rows(leave_ledger_df, employees_df):
+    eligible = employees_df.copy()
+
+    eligible["years_at_company"] = pd.to_numeric(
+        eligible["years_at_company"], errors="coerce"
+    ).fillna(0)
+
+    eligible = eligible[eligible["years_at_company"] >= 7].copy()
+
+    if eligible.empty:
+        return leave_ledger_df
+
+    records = []
+
+    for i, row in eligible.iterrows():
+        emp_id = str(row["employee_id"]).strip()
+        years = float(row["years_at_company"])
+        start_date = pd.to_datetime(row["start_date"], errors="coerce")
+        termination_date = pd.to_datetime(row["termination_date"], errors="coerce")
+
+        if pd.isna(start_date):
+            continue
+
+        # Simple synthetic LSL accrual history:
+        # one opening-style accrual after eligibility, then one later adjustment/accrual
+        first_lsl_date = start_date + pd.Timedelta(days=int(7 * 365))
+        second_lsl_date = first_lsl_date + pd.Timedelta(days=365)
+
+        opening_units = round(max(10.0, (years - 7) * 4 + 10), 2)
+        later_units = round(max(2.0, (years - 7) * 2), 2)
+
+        records.append({
+            "employee_id": emp_id,
+            "leave_type": "LSL",
+            "event_date": first_lsl_date.strftime("%Y-%m-%d"),
+            "units": opening_units,
+            "event_type": "ACCRUAL",
+        })
+
+        records.append({
+            "employee_id": emp_id,
+            "leave_type": "LSL",
+            "event_date": second_lsl_date.strftime("%Y-%m-%d"),
+            "units": later_units,
+            "event_type": "ADJUSTMENT",
+        })
+
+        # If terminated, add a payout event for some employees so not all terminated staff retain LSL
+        if not pd.isna(termination_date):
+            if i % 2 == 0:
+                payout_date = termination_date + pd.Timedelta(days=7)
+                payout_units = round(opening_units + later_units, 2)
+
+                records.append({
+                    "employee_id": emp_id,
+                    "leave_type": "LSL",
+                    "event_date": payout_date.strftime("%Y-%m-%d"),
+                    "units": -payout_units,
+                    "event_type": "PAYOUT",
+                })
+
+    lsl_rows = pd.DataFrame(records)
+
+    combined = pd.concat([leave_ledger_df, lsl_rows], ignore_index=True)
+    return combined
+
+def append_lsl_snapshot_from_ledger(leave_balances_df, leave_ledger_df):
+    lsl_ledger = leave_ledger_df[
+        leave_ledger_df["leave_type"].astype(str).str.upper() == "LSL"
+    ].copy()
+
+    if lsl_ledger.empty:
+        return leave_balances_df
+
+    lsl_ledger["units"] = pd.to_numeric(lsl_ledger["units"], errors="coerce").fillna(0)
+
+    lsl_snapshot = (
+        lsl_ledger.groupby("employee_id", as_index=False)["units"]
+        .sum()
+        .rename(columns={"units": "balance_units"})
+    )
+
+    lsl_snapshot["leave_type"] = "LSL"
+    lsl_snapshot["as_of_date"] = "2024-12-31"
+    lsl_snapshot["balance_units"] = lsl_snapshot["balance_units"].round(2)
+
+    base_snapshot = leave_balances_df[
+        leave_balances_df["leave_type"].astype(str).str.upper() != "LSL"
+    ].copy()
+
+    combined = pd.concat(
+        [
+            base_snapshot,
+            lsl_snapshot[["employee_id", "leave_type", "as_of_date", "balance_units"]],
+        ],
+        ignore_index=True,
+    )
+
+    return combined
+
+def add_employment_status(employees_df):
+    df = employees_df.copy()
+
+    df["termination_date"] = pd.to_datetime(
+        df["termination_date"], errors="coerce"
+    )
+
+    df["employment_status"] = df["termination_date"].apply(
+        lambda x: "TERMINATED" if pd.notna(x) else "ACTIVE"
+    )
+
+    return df
+
 def main():
     mapping = load_mapping()
     emp_cfg = mapping["employees"]
@@ -291,12 +405,13 @@ def main():
     # --- Derived fields ---
     df["annual_salary"] = (df["monthly_income"] * 12).round(2)
 
-    df["employment_status"] = df["attrition_flag"].map(
+    # Temporary source-driven status used only to derive termination_date
+    df["attrition_status"] = df["attrition_flag"].map(
         {
-            "Yes": "Terminated",
-            "No": "Active",
+            "Yes": "TERMINATED",
+            "No": "ACTIVE",
         }
-    ).fillna("Active")
+    ).fillna("ACTIVE")
 
     # More realistic start dates for 2024 leave data
     reference_date = pd.Timestamp("2024-01-01")
@@ -307,11 +422,16 @@ def main():
     df["start_date"] = df["start_date"].dt.strftime("%Y-%m-%d")
 
     df["termination_date"] = ""
-    df.loc[df["employment_status"] == "Terminated", "termination_date"] = "2025-12-31"
+    df.loc[df["attrition_status"] == "TERMINATED", "termination_date"] = "2025-12-31"
 
     df["employment_type"] = "FULL_TIME"
     df["fte"] = 1.0
     df["base_rate"] = ((df["monthly_income"] * 12) / 52 / 38).round(2)
+
+    # Final employment status derived from termination_date
+    df["employment_status"] = pd.to_datetime(
+        df["termination_date"], errors="coerce"
+    ).apply(lambda x: "TERMINATED" if pd.notna(x) else "ACTIVE")
 
     # --- Final schema ---
     employees = df[
@@ -361,8 +481,6 @@ def main():
     leave_cfg = mapping["leave_balances"]
 
     leave_balances = create_leave_balances(employees, RAW, leave_cfg)
-    leave_balances.to_csv(PROCESSED / "leave_balances.csv", index=False)
-    leave_balances.to_csv(PROCESSED / "balances_snapshot.csv", index=False)
 
     leave_requests = create_leave_requests(employees, RAW, leave_cfg)
     leave_requests.to_csv(PROCESSED / "leave_requests.csv", index=False)
@@ -371,7 +489,12 @@ def main():
     timesheets.to_csv(PROCESSED / "timesheets.csv", index=False)
 
     leave_ledger = create_leave_ledger(employees, RAW, leave_cfg)
+    leave_ledger = append_lsl_ledger_rows(leave_ledger, employees)
     leave_ledger.to_csv(PROCESSED / "leave_ledger.csv", index=False)
+
+    leave_balances = append_lsl_snapshot_from_ledger(leave_balances, leave_ledger)
+    leave_balances.to_csv(PROCESSED / "leave_balances.csv", index=False)
+    leave_balances.to_csv(PROCESSED / "balances_snapshot.csv", index=False)
 
     print("✅ leave_requests.csv created")
     print("✅ timesheets.csv created")

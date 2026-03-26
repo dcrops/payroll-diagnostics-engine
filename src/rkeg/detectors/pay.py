@@ -104,12 +104,15 @@ def _pay_001_missing_or_invalid_pay_date(
 
     # Parse pay_date; invalid/unparseable -> NaT
     parsed_dates = pd.to_datetime(
-        pay_events["pay_date"],
+        pay_events["pay_date"].astype(str).str.strip(),
+        format="%Y-%m-%d",
         errors="coerce",
-        dayfirst=True,  # align with how you've done other dates
     )
 
     invalid_mask = parsed_dates.isna()
+    print("[PAY-001] total rows:", len(pay_events))
+    print("[PAY-001] sample pay_date values:", pay_events["pay_date"].head().tolist())
+    print("[PAY-001] invalid pay_date count:", int(invalid_mask.sum()))
 
     if not invalid_mask.any():
         return findings
@@ -973,32 +976,6 @@ def _pay_010_pay_events_outside_employment_period(
 
     flagged = merged[findings_mask].copy()
 
-    print("[PAY-010] dataset keys:", list(datasets.keys()))
-    print("[PAY-010] pay_events shape:", pe.shape)
-    print("[PAY-010] employee_master shape:", emps.shape)
-    print("[PAY-010] terminations shape:", terminations.shape if terminations is not None else None)
-
-    debug_cols = ["employee_id", "_pay_date", "_start_date", "_termination_date"]
-    print("[PAY-010] merged rows:")
-    print(merged[debug_cols].to_string(index=False))
-
-    print("[PAY-010] before-start matches:")
-    print(
-        merged[
-            merged["_pay_date"].notna()
-            & merged["_start_date"].notna()
-            & (merged["_pay_date"] < merged["_start_date"])
-        ][debug_cols].to_string(index=False)
-    )
-
-    print("[PAY-010] after-termination matches:")
-    print(
-        merged[
-            merged["_pay_date"].notna()
-            & merged["_termination_date"].notna()
-            & (merged["_pay_date"] > merged["_termination_date"])
-        ][debug_cols].to_string(index=False)
-    )
 
     if flagged.empty:
         return findings
@@ -1044,9 +1021,6 @@ def _pay_010_pay_events_outside_employment_period(
                 next_action=remediation,
             )
         )
-    print("[PAY-010] findings returned:", len(findings))
-    for f in findings:
-        print("[PAY-010] finding:", f.rule_code, f.employee_id, f.as_of_date)
 
     return findings
 

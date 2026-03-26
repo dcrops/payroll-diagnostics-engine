@@ -6,6 +6,8 @@ from typing import Iterable
 
 import pandas as pd
 import yaml
+import argparse
+
 
 from rkeg.models import Finding, write_findings_csv
 from rkeg.detectors.registry import run_rule
@@ -122,7 +124,21 @@ def _risk_score_and_rating(findings_df: pd.DataFrame) -> tuple[int, str]:
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
-    data_dir = repo_root / "data" / "sample"
+
+    parser = argparse.ArgumentParser(description="Run RKEG module")
+    parser.add_argument(
+        "--data-dir",
+        default=None,
+        help="Path to input data directory",
+    )
+
+    args = parser.parse_args()
+
+    data_dir = (
+        Path(args.data_dir).resolve()
+        if args.data_dir
+        else repo_root / "data" / "sample"
+    )
     out_dir = repo_root / "outputs"
     modules_dir = out_dir / "modules"
     rules_yaml_path = repo_root / "src" / "rkeg" / "config" / "rkeg_rules.yml"
@@ -148,6 +164,7 @@ def main() -> int:
     # ----------------------------
     datasets = load_all_datasets(data_dir)
 
+    print("[RKEG] Using data directory:", data_dir)
     print("[RKEG] Loaded dataset keys:", list(datasets.keys()))
     for name, df in datasets.items():
         print(f"[RKEG] {name}: shape={df.shape}")

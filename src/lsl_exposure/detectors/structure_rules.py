@@ -35,9 +35,13 @@ def detect_missing_lsl_balance_record(
     if "employment_type" in emp.columns:
         emp = emp[emp["employment_type"].astype(str).str.upper() != "CASUAL"]
 
+    eligibility_years = float((rule.get("config", {}) or {}).get("eligibility_years", 7.0))
+
     if state is not None and not state.empty:
         eligible_ids = set(
-            state[state["service_years"] >= 1]["employee_id"].astype(str).str.strip()
+            state[state["service_years"] >= eligibility_years]["employee_id"]
+            .astype(str)
+            .str.strip()
         )
         bad = emp[
             (~emp["employee_id"].isin(lsl_ids))
