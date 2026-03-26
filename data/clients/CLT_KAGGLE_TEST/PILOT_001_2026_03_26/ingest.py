@@ -2,7 +2,9 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-BASE = Path("data/clients/kaggle_demo/pilot_001")
+# Base directory = where THIS ingest.py lives
+BASE = Path(__file__).resolve().parent
+
 RAW = BASE / "raw"
 CONFIG = BASE / "config"
 PROCESSED = BASE / "processed"
