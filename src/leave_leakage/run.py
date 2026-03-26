@@ -4,6 +4,7 @@ from datetime import datetime, date
 from pathlib import Path
 import pandas as pd
 import yaml
+import argparse
 
 from common.data_window import write_data_window
 
@@ -91,8 +92,23 @@ def _load_rules(rules_path: Path) -> list[dict]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Run leave leakage module")
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default=None,
+        help="Path to input data directory. Defaults to repo_root/data/sample",
+    )
+    args = parser.parse_args()
+
     repo_root = Path(__file__).resolve().parents[2]
-    data_dir = repo_root / "data" / "sample"
+
+    data_dir = (
+        Path(args.data_dir).resolve()
+        if args.data_dir
+        else repo_root / "data" / "sample"
+    )
+
     out_dir = repo_root / "outputs"
     modules_dir = out_dir / "modules"
     rules_path = Path(__file__).resolve().parent / "config" / "leave_rules.yml"
@@ -127,6 +143,11 @@ def main() -> int:
             "employee_id": "string",
             "timesheet_status": "string",
         },
+    )
+
+    snapshot = pd.read_csv(
+        data_dir / "leave_balances.csv",
+        dtype={"employee_id": "string", "leave_type": "string"},
     )
 
     # Derive LEAVE data window from client ledger

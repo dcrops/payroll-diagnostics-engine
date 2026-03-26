@@ -75,6 +75,10 @@ def main():
     df["termination_date"] = ""
     df.loc[df["employment_status"] == "Terminated", "termination_date"] = "2025-12-31"
 
+    df["employment_type"] = "FULL_TIME"
+    df["fte"] = 1.0
+    df["base_rate"] = (df["monthly_income"] * 12) / 52 / 38
+
     # --- Final schema ---
     employees = df[
         [
@@ -84,8 +88,11 @@ def main():
             "annual_salary",
             "overtime_flag",
             "employment_status",
+            "employment_type",
+            "fte",
             "start_date",
             "termination_date",
+            "base_rate",
             "age",
             "gender",
             "marital_status",
@@ -110,9 +117,22 @@ def main():
 
     leave_balances = create_leave_balances(employees, RAW, leave_cfg)
     leave_balances.to_csv(PROCESSED / "leave_balances.csv", index=False)
+    leave_balances.to_csv(PROCESSED / "balances_snapshot.csv", index=False)
 
-    print("✅ leave_balances.csv created")
-    print(leave_balances.head())
+    leave_requests = create_leave_requests(employees, RAW, leave_cfg)
+    leave_requests.to_csv(PROCESSED / "leave_requests.csv", index=False)
+
+    timesheets = create_timesheets(employees)
+    timesheets.to_csv(PROCESSED / "timesheets.csv", index=False)
+
+    leave_ledger = create_leave_ledger(employees, RAW, leave_cfg)
+    leave_ledger.to_csv(PROCESSED / "leave_ledger.csv", index=False)
+
+
+    print("✅ leave_requests.csv created")
+    print("✅ timesheets.csv created")
+    print("✅ leave_ledger.csv created")
+    print("✅ balances_snapshot.csv created")
 
 def create_payroll(employees_df):
     payroll = employees_df.copy()
@@ -142,6 +162,95 @@ def create_payroll(employees_df):
             "rate",
             "amount",
             "gross_earnings",
+        ]
+    ]
+
+def create_leave_requests(employees_df, raw_dir, leave_cfg):
+    df = pd.read_csv(raw_dir / leave_cfg["source_file"])
+    df = df.rename(columns=leave_cfg["rename"])
+
+    master_ids = employees_df["employee_id"].tolist()
+
+    df = df.copy()
+    df["employee_id"] = [
+        master_ids[i % len(master_ids)]
+        for i in range(len(df))
+    ]
+
+    df["leave_type"] = (
+        df["leave_type"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .str.replace(" ", "_")
+    )
+
+    df["request_start_date"] = pd.to_datetime(
+        df["start_date"], errors="coerce"
+    ).dt.strftime("%Y-%m-%d")
+
+    df["request_end_date"] = pd.to_datetime(
+        df["end_date"], errors="coerce"
+    ).dt.strftime("%Y-%m-%d")
+
+    df["units_requested"] = pd.to_numeric(df["days_taken"], errors="coerce")
+    df["request_id"] = [f"R{str(i+1).zfill(3)}" for i in range(len(df))]
+    df["approval_status"] = "APPROVED"
+    df["approval_date"] = df["request_start_date"]
+    df["approved_by"] = "MGR01"
+
+    return df[
+        [
+            "request_id",
+            "employee_id",
+            "leave_type",
+            "request_start_date",
+            "request_end_date",
+            "units_requested",
+            "approval_status",
+            "approval_date",
+            "approved_by",
+        ]
+    ]
+
+def create_timesheets(employees_df):
+    records = []
+
+    for emp_id in employees_df["employee_id"]:
+        for day in pd.date_range("2024-03-01", "2024-03-10"):
+            records.append({
+                "employee_id": emp_id,
+                "work_date": day.strftime("%Y-%m-%d"),
+                "hours_worked": 7.6,
+                "timesheet_status": "submitted",
+            })
+
+    return pd.DataFrame(records)
+
+def create_leave_ledger(employees_df, raw_dir, leave_cfg):
+    df = pd.read_csv(raw_dir / leave_cfg["source_file"])
+    df = df.rename(columns=leave_cfg["rename"])
+
+    master_ids = employees_df["employee_id"].tolist()
+
+    df = df.copy()
+    df["employee_id"] = [
+        master_ids[i % len(master_ids)]
+        for i in range(len(df))
+    ]
+
+    df["leave_type"] = df["leave_type"].str.lower().str.replace(" ", "_")
+    df["event_date"] = pd.to_datetime(df["end_date"]).dt.strftime("%Y-%m-%d")
+    df["units"] = df["days_taken"]
+    df["event_type"] = "taken"
+
+    return df[
+        [
+            "employee_id",
+            "leave_type",
+            "event_date",
+            "units",
+            "event_type",
         ]
     ]
 
