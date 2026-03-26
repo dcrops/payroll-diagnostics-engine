@@ -2,16 +2,23 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-# Base directory = where THIS ingest.py lives
-BASE = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_ROOT = PROJECT_ROOT / "data" / "clients"
 
-RAW = BASE / "raw"
-CONFIG = BASE / "config"
-PROCESSED = BASE / "processed"
+CLIENT = "CLT_KAGGLE_TEST"
+PILOT = "PILOT_001_2026_03_26"
+
+PILOT_ROOT = DATA_ROOT / CLIENT / PILOT
+
+RAW = PILOT_ROOT / "raw"
+CONFIG = PILOT_ROOT / "config"
+PROCESSED = PILOT_ROOT / "processed"
+LOGS = PILOT_ROOT / "logs"
+OUTPUTS = PILOT_ROOT / "outputs"
 
 
-def load_mapping():
-    with open(CONFIG / "column_mapping.yaml", "r", encoding="utf-8") as f:
+def load_mapping(config_path):
+    with open(config_path / "column_mapping.yaml", "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -397,8 +404,25 @@ def add_employment_status(employees_df):
 
     return df
 
-def main():
-    mapping = load_mapping()
+def main(client: str, pilot: str):
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    DATA_ROOT = PROJECT_ROOT / "data" / "clients"
+
+    PILOT_ROOT = DATA_ROOT / client / pilot
+
+    RAW = PILOT_ROOT / "raw"
+    CONFIG = PILOT_ROOT / "config"
+    PROCESSED = PILOT_ROOT / "processed"
+    LOGS = PILOT_ROOT / "logs"
+    OUTPUTS = PILOT_ROOT / "outputs"
+
+    # make sure folders exist
+    PROCESSED.mkdir(parents=True, exist_ok=True)
+    LOGS.mkdir(parents=True, exist_ok=True)
+    OUTPUTS.mkdir(parents=True, exist_ok=True)
+
+    mapping = load_mapping(CONFIG)
+   # mapping = load_mapping()
     emp_cfg = mapping["employees"]
 
     df = pd.read_csv(RAW / emp_cfg["source_file"])
