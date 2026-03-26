@@ -1,0 +1,4 @@
+rule_code,severity,finding_count
+CM-010,HIGH,60
+CM-020,HIGH,3
+CM-016,MEDIUM,171
