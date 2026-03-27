@@ -33,7 +33,6 @@ The dominant exposure is **evidence_traceability**, indicating gaps in the organ
 - `RKEG-PAY-010`: Reconcile pay events against employment start and termination dates and investigate any payments recorded outside valid employment periods.
 - `RKEG-GOV-001`: Introduce a basic override register or system-based workflow to record all manual payroll changes, including who made the change, when, and for what reason.
 
-
 ## Notes
 - Linked findings counts may exceed total findings because a single finding can map to multiple risk dimensions.
 - This output is diagnostics-focused and does not constitute legal advice.

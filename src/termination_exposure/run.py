@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 from datetime import date
 import pandas as pd
 import yaml
 
-from termination_exposure.models import Finding
-from termination_exposure.detectors.registry import run_rule
-from termination_exposure.rules import prepare_term_state
+from src.common.paths import get_processed_dir, get_outputs_dir
+from src.common.data_window import write_data_window
 
-from common.data_window import write_data_window
+from src.termination_exposure.models import Finding
+from src.termination_exposure.detectors.registry import run_rule
+from src.termination_exposure.rules import prepare_term_state
 
 
 REQUIRED_TERM = {"employee_id", "termination_date"}
@@ -32,55 +32,43 @@ def _load_rules(rules_path: Path) -> list[dict]:
     return payload.get("rules", [])
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Run termination exposure module")
-    parser.add_argument(
-        "--data-dir",
-        type=str,
-        default=None,
-        help="Path to input data directory. Defaults to repo_root/data/sample",
-    )
-    args = parser.parse_args()
+def main(client: str, pilot: str) -> int:
+    processed_dir = get_processed_dir(client, pilot)
+    output_dir = get_outputs_dir(client, pilot)
 
-    repo_root = Path(__file__).resolve().parents[2]
-    out_dir = repo_root / "outputs"
-    modules_dir = out_dir / "modules"
     rules_path = Path(__file__).resolve().parent / "config" / "term_rules.yml"
 
-    data_dir = (
-        Path(args.data_dir).resolve()
-        if args.data_dir
-        else repo_root / "data" / "sample"
-    )
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-    modules_dir.mkdir(parents=True, exist_ok=True)
-
+    # ----------------------------
+    # Load datasets
+    # ----------------------------
     terminations = pd.read_csv(
-        data_dir / "terminations.csv",
+        processed_dir / "terminations.csv",
         dtype={"employee_id": "string"},
     )
 
     pay_events = pd.read_csv(
-        data_dir / "pay_events.csv",
+        processed_dir / "pay_events.csv",
         dtype={"employee_id": "string"},
     )
 
     employees = pd.read_csv(
-        data_dir / "employees.csv",
+        processed_dir / "employees.csv",
         dtype={"employee_id": "string"},
     )
 
     leave_snapshot = pd.read_csv(
-        data_dir / "balances_snapshot.csv",
+        processed_dir / "balances_snapshot.csv",
         dtype={"employee_id": "string", "leave_type": "string"},
     )
 
     leave_ledger = pd.read_csv(
-        data_dir / "leave_ledger.csv",
+        processed_dir / "leave_ledger.csv",
         dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
     )
 
+    # ----------------------------
+    # Clean + validate
+    # ----------------------------
     for df in (terminations, pay_events, employees, leave_snapshot, leave_ledger):
         df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
@@ -95,34 +83,26 @@ def main() -> int:
     leave_snapshot["as_of_date"] = pd.to_datetime(leave_snapshot["as_of_date"], errors="coerce")
     leave_ledger["event_date"] = pd.to_datetime(leave_ledger["event_date"], errors="coerce")
 
-    bad_term_dates = terminations["termination_date"].isna().sum()
-    bad_pay_dates = pay_events["pay_date"].isna().sum()
-    bad_snapshot_dates = leave_snapshot["as_of_date"].isna().sum()
-    bad_ledger_dates = leave_ledger["event_date"].isna().sum()
-
-    print(f"[input] Unparseable termination_date rows: {bad_term_dates}")
-    print(f"[input] Unparseable pay_date rows: {bad_pay_dates}")
-    print(f"[input] Unparseable snapshot as_of_date rows: {bad_snapshot_dates}")
-    print(f"[input] Unparseable ledger event_date rows: {bad_ledger_dates}")
-
+    # ----------------------------
+    # Data window
+    # ----------------------------
     window_dates: list[date] = []
 
-    term_dates = terminations["termination_date"].dropna()
-    pay_dates = pay_events["pay_date"].dropna()
-    snapshot_dates = leave_snapshot["as_of_date"].dropna()
-    ledger_dates = leave_ledger["event_date"].dropna()
+    for series in [
+        terminations["termination_date"],
+        pay_events["pay_date"],
+        leave_snapshot["as_of_date"],
+        leave_ledger["event_date"],
+    ]:
+        valid = series.dropna()
+        if not valid.empty:
+            window_dates.extend(valid.dt.date.tolist())
 
-    if not term_dates.empty:
-        window_dates.extend(term_dates.dt.date.tolist())
-    if not pay_dates.empty:
-        window_dates.extend(pay_dates.dt.date.tolist())
-    if not snapshot_dates.empty:
-        window_dates.extend(snapshot_dates.dt.date.tolist())
-    if not ledger_dates.empty:
-        window_dates.extend(ledger_dates.dt.date.tolist())
+    write_data_window(output_dir / "term_data_window.csv", window_dates)
 
-    write_data_window(modules_dir / "term_data_window.csv", window_dates)
-
+    # ----------------------------
+    # Prepare state + rules
+    # ----------------------------
     state = prepare_term_state(
         terminations=terminations,
         pay_events=pay_events,
@@ -131,6 +111,7 @@ def main() -> int:
     rules = _load_rules(rules_path)
 
     findings: list[Finding] = []
+
     datasets = {
         "terminations": terminations,
         "pay_events": pay_events,
@@ -138,11 +119,15 @@ def main() -> int:
         "leave_snapshot": leave_snapshot,
         "leave_ledger": leave_ledger,
     }
+
     context = {"state": state}
 
     for rule in rules:
         findings.extend(run_rule(rule, datasets, context=context))
 
+    # ----------------------------
+    # Findings
+    # ----------------------------
     if findings:
         findings_df = pd.DataFrame([f.__dict__ for f in findings])
     else:
@@ -161,9 +146,12 @@ def main() -> int:
             ]
         )
 
-    findings_path = modules_dir / "term_findings.csv"
+    findings_path = output_dir / "term_findings.csv"
     findings_df.to_csv(findings_path, index=False)
 
+    # ----------------------------
+    # Summary
+    # ----------------------------
     if len(findings_df) == 0:
         summary_df = pd.DataFrame(columns=["rule_code", "severity", "finding_count"])
     else:
@@ -174,9 +162,12 @@ def main() -> int:
             .sort_values(["severity", "finding_count"], ascending=[True, False])
         )
 
-    summary_path = modules_dir / "term_summary.csv"
+    summary_path = output_dir / "term_summary.csv"
     summary_df.to_csv(summary_path, index=False)
 
+    # ----------------------------
+    # Severity summary
+    # ----------------------------
     if len(findings_df) == 0:
         severity_summary_df = pd.DataFrame(columns=["severity", "finding_count"])
     else:
@@ -187,7 +178,7 @@ def main() -> int:
             .sort_values("finding_count", ascending=False)
         )
 
-    severity_summary_path = modules_dir / "term_summary_by_severity.csv"
+    severity_summary_path = output_dir / "term_summary_by_severity.csv"
     severity_summary_df.to_csv(severity_summary_path, index=False)
 
     print(f"Wrote: {findings_path}")
@@ -195,7 +186,3 @@ def main() -> int:
     print(f"Wrote: {severity_summary_path}")
 
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

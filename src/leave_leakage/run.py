@@ -4,12 +4,12 @@ from datetime import datetime, date
 from pathlib import Path
 import pandas as pd
 import yaml
-import argparse
 
-from common.data_window import write_data_window
+from src.common.data_window import write_data_window
+from src.common.paths import get_processed_dir, get_outputs_dir
 
-from leave_leakage.models import Finding
-from leave_leakage.detectors.registry import run_rule
+from src.leave_leakage.models import Finding
+from src.leave_leakage.detectors.registry import run_rule
 
 
 REQUIRED_EMP = {"employee_id", "employment_type", "fte", "start_date", "termination_date"}
@@ -34,7 +34,7 @@ REQUIRED_TIMESHEETS = {
 }
 
 
-def _extract_dates_from_leave_ledger_df(df) -> list[date]:
+def _extract_dates_from_leave_ledger_df(df: pd.DataFrame) -> list[date]:
     """
     Collect valid dates from the client leave ledger DataFrame.
 
@@ -91,43 +91,24 @@ def _load_rules(rules_path: Path) -> list[dict]:
     return payload.get("rules", [])
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Run leave leakage module")
-    parser.add_argument(
-        "--data-dir",
-        type=str,
-        default=None,
-        help="Path to input data directory. Defaults to repo_root/data/sample",
-    )
-    args = parser.parse_args()
+def main(client: str, pilot: str) -> int:
+    processed_dir = get_processed_dir(client, pilot)
+    output_dir = get_outputs_dir(client, pilot)
 
-    repo_root = Path(__file__).resolve().parents[2]
-
-    data_dir = (
-        Path(args.data_dir).resolve()
-        if args.data_dir
-        else repo_root / "data" / "sample"
-    )
-
-    out_dir = repo_root / "outputs"
-    modules_dir = out_dir / "modules"
     rules_path = Path(__file__).resolve().parent / "config" / "leave_rules.yml"
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    modules_dir.mkdir(parents=True, exist_ok=True)
-
     employees = pd.read_csv(
-        data_dir / "employees.csv",
+        processed_dir / "employees.csv",
         dtype={"employee_id": "string"},
     )
 
     ledger = pd.read_csv(
-        data_dir / "leave_ledger.csv",
+        processed_dir / "leave_ledger.csv",
         dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
     )
 
     leave_requests = pd.read_csv(
-        data_dir / "leave_requests.csv",
+        processed_dir / "leave_requests.csv",
         dtype={
             "request_id": "string",
             "employee_id": "string",
@@ -138,7 +119,7 @@ def main() -> int:
     )
 
     timesheets = pd.read_csv(
-        data_dir / "timesheets.csv",
+        processed_dir / "timesheets.csv",
         dtype={
             "employee_id": "string",
             "timesheet_status": "string",
@@ -146,21 +127,15 @@ def main() -> int:
     )
 
     snapshot = pd.read_csv(
-        data_dir / "leave_balances.csv",
+        processed_dir / "balances_snapshot.csv",
         dtype={"employee_id": "string", "leave_type": "string"},
     )
 
     # Derive LEAVE data window from client ledger
     dates = _extract_dates_from_leave_ledger_df(ledger)
     if dates:
-        modules_dir = Path("outputs") / "modules"
-        window_path = modules_dir / "leave_data_window.csv"
+        window_path = output_dir / "leave_data_window.csv"
         write_data_window(window_path, dates)
-
-    snapshot = pd.read_csv(
-        data_dir / "balances_snapshot.csv",
-        dtype={"employee_id": "string", "leave_type": "string"},
-    )
 
     for df in (employees, ledger, snapshot, leave_requests, timesheets):
         df["employee_id"] = df["employee_id"].astype(str).str.strip()
@@ -178,9 +153,15 @@ def main() -> int:
     ledger["event_date"] = pd.to_datetime(ledger["event_date"], errors="coerce")
     snapshot["as_of_date"] = pd.to_datetime(snapshot["as_of_date"], errors="coerce")
 
-    leave_requests["request_start_date"] = pd.to_datetime(leave_requests["request_start_date"], errors="coerce")
-    leave_requests["request_end_date"] = pd.to_datetime(leave_requests["request_end_date"], errors="coerce")
-    leave_requests["approval_date"] = pd.to_datetime(leave_requests["approval_date"], errors="coerce")
+    leave_requests["request_start_date"] = pd.to_datetime(
+        leave_requests["request_start_date"], errors="coerce"
+    )
+    leave_requests["request_end_date"] = pd.to_datetime(
+        leave_requests["request_end_date"], errors="coerce"
+    )
+    leave_requests["approval_date"] = pd.to_datetime(
+        leave_requests["approval_date"], errors="coerce"
+    )
 
     timesheets["work_date"] = pd.to_datetime(timesheets["work_date"], errors="coerce")
 
@@ -215,7 +196,9 @@ def main() -> int:
         how="left",
     )
 
-    merged = merged[merged["event_date"].isna() | (merged["event_date"] <= merged["as_of_date"])]
+    merged = merged[
+        merged["event_date"].isna() | (merged["event_date"] <= merged["as_of_date"])
+    ]
 
     ledger_bal = (
         merged.groupby(["employee_id", "leave_type", "as_of_date"], as_index=False)["units"]
@@ -247,7 +230,7 @@ def main() -> int:
         findings.extend(run_rule(rule, datasets, context=context))
 
     # ----------------------------
-    # Write findings output (module-level)
+    # Write findings output
     # ----------------------------
     if findings:
         findings_df = pd.DataFrame([f.__dict__ for f in findings])
@@ -267,11 +250,11 @@ def main() -> int:
             ]
         )
 
-    findings_path = modules_dir / "leave_leakage_findings.csv"
+    findings_path = output_dir / "leave_leakage_findings.csv"
     findings_df.to_csv(findings_path, index=False)
 
     # ----------------------------
-    # Summary output (counts by rule and severity, module-level)
+    # Summary output (counts by rule and severity)
     # ----------------------------
     if len(findings_df) == 0:
         summary_df = pd.DataFrame(columns=["rule_code", "severity", "finding_count"])
@@ -283,7 +266,7 @@ def main() -> int:
             .sort_values(["severity", "finding_count"], ascending=[True, False])
         )
 
-    summary_path = modules_dir / "leave_leakage_summary.csv"
+    summary_path = output_dir / "leave_leakage_summary.csv"
     summary_df.to_csv(summary_path, index=False)
 
     print(f"Wrote: {findings_path}")
@@ -291,7 +274,7 @@ def main() -> int:
     print(summary_df.to_string(index=False))
 
     # ----------------------------
-    # Summary output (totals by severity, module-level)
+    # Summary output (totals by severity)
     # ----------------------------
     if len(findings_df) == 0:
         severity_summary_df = pd.DataFrame(columns=["severity", "finding_count"])
@@ -303,14 +286,14 @@ def main() -> int:
             .sort_values("finding_count", ascending=False)
         )
 
-    severity_summary_path = modules_dir / "leave_leakage_summary_by_severity.csv"
+    severity_summary_path = output_dir / "leave_leakage_summary_by_severity.csv"
     severity_summary_df.to_csv(severity_summary_path, index=False)
 
     print(f"Wrote: {severity_summary_path}")
     print(severity_summary_df.to_string(index=False))
 
     # ----------------------------
-    # Detailed leakage reconciliation report (suite-level)
+    # Detailed leakage reconciliation report
     # ----------------------------
     tolerance = 0.25  # 15 minutes in hours
     report["risk_flag"] = report["diff_units"].abs() > tolerance
@@ -318,12 +301,8 @@ def main() -> int:
         lambda x: "BALANCE_MISMATCH_LEDGER_VS_SNAPSHOT" if x else ""
     )
 
-    out_path = out_dir / "leakage_report.csv"
+    out_path = output_dir / "leakage_report.csv"
     report.sort_values(["employee_id", "leave_type", "as_of_date"]).to_csv(out_path, index=False)
 
     print(f"Wrote: {out_path}")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

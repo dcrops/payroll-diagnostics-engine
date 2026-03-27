@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 from datetime import date
 import pandas as pd
 import yaml
 
-from cross_module_integrity.models import Finding
-from cross_module_integrity.detectors.registry import run_rule
+from src.common.paths import get_processed_dir, get_outputs_dir
+from src.common.data_window import write_data_window
 
-from common.data_window import write_data_window
+from src.cross_module_integrity.models import Finding
+from src.cross_module_integrity.detectors.registry import run_rule
 
 
 REQUIRED_TERM = {"employee_id", "termination_date"}
@@ -31,54 +31,36 @@ def _load_rules(rules_path: Path) -> list[dict]:
     return payload.get("rules", [])
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Run cross module integrity module")
-    parser.add_argument(
-        "--data-dir",
-        type=str,
-        default=None,
-        help="Path to input data directory. Defaults to repo_root/data/sample",
-    )
-    args = parser.parse_args()
+def main(client: str, pilot: str) -> int:
+    processed_dir = get_processed_dir(client, pilot)
+    output_dir = get_outputs_dir(client, pilot)
 
-    repo_root = Path(__file__).resolve().parents[2]
-    out_dir = repo_root / "outputs"
-    modules_dir = out_dir / "modules"
     rules_path = Path(__file__).resolve().parent / "config" / "cross_module_rules.yml"
 
-    data_dir = (
-        Path(args.data_dir).resolve()
-        if args.data_dir
-        else repo_root / "data" / "sample"
-    )
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-    modules_dir.mkdir(parents=True, exist_ok=True)
-
-    print(f"[input] Using data directory: {data_dir}")
+    print(f"[input] Using processed directory: {processed_dir}")
 
     terminations = pd.read_csv(
-        data_dir / "terminations.csv",
+        processed_dir / "terminations.csv",
         dtype={"employee_id": "string"},
     )
 
     pay_events = pd.read_csv(
-        data_dir / "pay_events.csv",
+        processed_dir / "pay_events.csv",
         dtype={"employee_id": "string"},
     )
 
     employees = pd.read_csv(
-        data_dir / "employees.csv",
+        processed_dir / "employees.csv",
         dtype={"employee_id": "string"},
     )
 
     leave_snapshot = pd.read_csv(
-        data_dir / "balances_snapshot.csv",
+        processed_dir / "balances_snapshot.csv",
         dtype={"employee_id": "string", "leave_type": "string"},
     )
 
     leave_ledger = pd.read_csv(
-        data_dir / "leave_ledger.csv",
+        processed_dir / "leave_ledger.csv",
         dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
     )
 
@@ -125,7 +107,7 @@ def main() -> int:
         if not series.empty:
             window_dates.extend(series.dt.date.tolist())
 
-    write_data_window(modules_dir / "cross_module_data_window.csv", window_dates)
+    write_data_window(output_dir / "cross_module_data_window.csv", window_dates)
 
     rules = _load_rules(rules_path)
 
@@ -146,9 +128,9 @@ def main() -> int:
         findings.extend(run_rule(rule, datasets, context={}))
 
     if findings:
-        findings_df = pd.DataFrame([f.__dict__ for f in findings])
+        first_pass_df = pd.DataFrame([f.__dict__ for f in findings])
     else:
-        findings_df = pd.DataFrame(
+        first_pass_df = pd.DataFrame(
             columns=[
                 "employee_id",
                 "leave_type",
@@ -164,7 +146,7 @@ def main() -> int:
         )
 
     # Make first-pass findings available to CM-020
-    datasets["cross_module_findings"] = findings_df
+    datasets["cross_module_findings"] = first_pass_df
 
     # Pass 2: run CM-020 only
     for rule in rules:
@@ -190,7 +172,7 @@ def main() -> int:
             ]
         )
 
-    findings_path = modules_dir / "cross_module_findings.csv"
+    findings_path = output_dir / "cross_module_findings.csv"
     findings_df.to_csv(findings_path, index=False)
 
     if len(findings_df) == 0:
@@ -203,7 +185,7 @@ def main() -> int:
             .sort_values(["severity", "finding_count"], ascending=[True, False])
         )
 
-    summary_path = modules_dir / "cross_module_summary.csv"
+    summary_path = output_dir / "cross_module_summary.csv"
     summary_df.to_csv(summary_path, index=False)
 
     if len(findings_df) == 0:
@@ -216,7 +198,7 @@ def main() -> int:
             .sort_values("finding_count", ascending=False)
         )
 
-    severity_summary_path = modules_dir / "cross_module_summary_by_severity.csv"
+    severity_summary_path = output_dir / "cross_module_summary_by_severity.csv"
     severity_summary_df.to_csv(severity_summary_path, index=False)
 
     print(f"Wrote: {findings_path}")
@@ -224,7 +206,3 @@ def main() -> int:
     print(f"Wrote: {severity_summary_path}")
 
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

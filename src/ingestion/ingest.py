@@ -519,7 +519,6 @@ def main(client: str, pilot: str):
     leave_ledger.to_csv(PROCESSED / "leave_ledger.csv", index=False)
 
     leave_balances = append_lsl_snapshot_from_ledger(leave_balances, leave_ledger)
-    leave_balances.to_csv(PROCESSED / "leave_balances.csv", index=False)
     leave_balances.to_csv(PROCESSED / "balances_snapshot.csv", index=False)
 
     print("✅ leave_requests.csv created")

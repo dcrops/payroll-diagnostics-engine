@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 from datetime import date
 import pandas as pd
 import yaml
 
-from lsl_exposure.models import Finding
-from lsl_exposure.detectors.registry import run_rule
-from lsl_exposure.rules import prepare_lsl_state, compute_exposure_band
+from src.common.paths import get_processed_dir, get_outputs_dir
+from src.common.data_window import write_data_window
 
-from common.data_window import write_data_window
+from src.lsl_exposure.models import Finding
+from src.lsl_exposure.detectors.registry import run_rule
+from src.lsl_exposure.rules import prepare_lsl_state, compute_exposure_band
 
 
 REQUIRED_EMP = {"employee_id", "employment_type", "fte", "start_date"}
@@ -30,46 +30,28 @@ def _load_rules(rules_path: Path) -> list[dict]:
     return payload.get("rules", [])
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Run LSL exposure module")
-    parser.add_argument(
-        "--data-dir",
-        type=str,
-        default=None,
-        help="Path to input data directory. Defaults to repo_root/data/sample",
-    )
-    args = parser.parse_args()
+def main(client: str, pilot: str) -> int:
+    processed_dir = get_processed_dir(client, pilot)
+    output_dir = get_outputs_dir(client, pilot)
 
-    repo_root = Path(__file__).resolve().parents[2]
-    out_dir = repo_root / "outputs"
-    modules_dir = out_dir / "modules"
     rules_path = Path(__file__).resolve().parent / "config" / "lsl_rules.yml"
 
-    data_dir = (
-        Path(args.data_dir).resolve()
-        if args.data_dir
-        else repo_root / "data" / "sample"
-    )
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-    modules_dir.mkdir(parents=True, exist_ok=True)
-
     employees = pd.read_csv(
-        data_dir / "employees.csv",
+        processed_dir / "employees.csv",
         dtype={"employee_id": "string"},
     )
 
     snapshot = pd.read_csv(
-        data_dir / "balances_snapshot.csv",
+        processed_dir / "balances_snapshot.csv",
         dtype={"employee_id": "string", "leave_type": "string"},
     )
 
     ledger = pd.read_csv(
-        data_dir / "leave_ledger.csv",
+        processed_dir / "leave_ledger.csv",
         dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
     )
 
-    pay_rates_path = data_dir / "pay_rates.csv"
+    pay_rates_path = processed_dir / "pay_rates.csv"
     pay_rates = None
     if pay_rates_path.exists():
         pay_rates = pd.read_csv(
@@ -84,21 +66,15 @@ def main() -> int:
     _require_cols(snapshot, REQUIRED_SNAP, "balances_snapshot.csv")
     _require_cols(ledger, REQUIRED_LEDGER, "leave_ledger.csv")
 
-    employees["start_date"] = pd.to_datetime(
-        employees["start_date"], errors="coerce"
-    )
-    snapshot["as_of_date"] = pd.to_datetime(
-        snapshot["as_of_date"], errors="coerce"
-    )
-    ledger["event_date"] = pd.to_datetime(
-        ledger["event_date"], errors="coerce"
-    )
+    employees["start_date"] = pd.to_datetime(employees["start_date"], errors="coerce")
+    snapshot["as_of_date"] = pd.to_datetime(snapshot["as_of_date"], errors="coerce")
+    ledger["event_date"] = pd.to_datetime(ledger["event_date"], errors="coerce")
 
     bad_emp_dates = employees["start_date"].isna().sum()
     bad_snapshot_dates = snapshot["as_of_date"].isna().sum()
     bad_ledger_dates = ledger["event_date"].isna().sum()
 
-    print(f"[input] Using data directory: {data_dir}")
+    print(f"[input] Using processed directory: {processed_dir}")
     print(f"[input] Unparseable employee start_date rows: {bad_emp_dates}")
     print(f"[input] Unparseable snapshot as_of_date rows: {bad_snapshot_dates}")
     print(f"[input] Unparseable ledger event_date rows: {bad_ledger_dates}")
@@ -116,7 +92,7 @@ def main() -> int:
     if not ledger_dates.empty:
         window_dates.extend(ledger_dates.dt.date.tolist())
 
-    write_data_window(modules_dir / "lsl_data_window.csv", window_dates)
+    write_data_window(output_dir / "lsl_data_window.csv", window_dates)
 
     snapshot_date = snapshot["as_of_date"].max()
 
@@ -171,7 +147,7 @@ def main() -> int:
             ]
         )
 
-    findings_path = modules_dir / "lsl_findings.csv"
+    findings_path = output_dir / "lsl_findings.csv"
     findings_df.to_csv(findings_path, index=False)
 
     if len(findings_df) == 0:
@@ -184,7 +160,7 @@ def main() -> int:
             .sort_values(["severity", "finding_count"], ascending=[True, False])
         )
 
-    summary_path = modules_dir / "lsl_summary.csv"
+    summary_path = output_dir / "lsl_summary.csv"
     summary_df.to_csv(summary_path, index=False)
 
     if len(findings_df) == 0:
@@ -197,10 +173,10 @@ def main() -> int:
             .sort_values("finding_count", ascending=False)
         )
 
-    severity_summary_path = modules_dir / "lsl_summary_by_severity.csv"
+    severity_summary_path = output_dir / "lsl_summary_by_severity.csv"
     severity_summary_df.to_csv(severity_summary_path, index=False)
 
-    exposure_path = modules_dir / "lsl_exposure_summary.csv"
+    exposure_path = output_dir / "lsl_exposure_summary.csv"
     pd.DataFrame(
         [
             {"metric": "estimated_exposure_low", "value": round(total_low, 2), "currency": "AUD"},
@@ -219,7 +195,3 @@ def main() -> int:
     print(f"Wrote: {exposure_path}")
 
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
