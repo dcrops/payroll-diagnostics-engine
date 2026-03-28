@@ -26,8 +26,35 @@ CRC is a modular diagnostics system that ingests payroll data, applies rule-base
   - Termination (TERM)
   - Record Keeping & Evidence Gaps (RKEG)  
 - Findings generation with structured evidence  
-- Reporting layer (Markdown → HTML → PDF)  
+- Reporting layer (Markdown → HTML → PDF)
 
+- ## Architecture Diagram
+
+```mermaid
+flowchart LR
+
+    A[Input Data<br/>Payroll / HR Extracts]
+    B[Data Ingestion]
+    C[Schema Validation]
+    D[Rule Engine<br/>(YAML-driven)]
+    E[Module Analysis<br/>LEAVE | LSL | TERM | RKEG]
+    F[Findings Generation<br/>Structured Evidence]
+    G[Reporting Layer<br/>Markdown → HTML → PDF]
+    H[Outputs<br/>Executive Reports & CSVs]
+
+    A --> B --> C --> D --> E --> F --> G --> H
+
+## AI Extension (In Progress)
+
+```mermaid
+flowchart LR
+
+    A[Findings]
+    B[RAG Copilot]
+    C[Explanation Layer]
+    D[User / Analyst]
+
+    A --> B --> C --> D
 ---
 
 ## Key Features
