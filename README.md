@@ -34,50 +34,6 @@ CRC is a modular diagnostics system that ingests payroll data, applies rule-base
 
 ```mermaid
 flowchart LR
-    A[Input Data - Payroll / HR Extracts] --> B[Data Ingestion]
-    B --> C[Schema Validation]
-    C --> D[Rule Engine YAML driven]
-    D --> E[Module Analysis LEAVE LSL TERM RKEG]
-    E --> F[Findings Generation Structured Evidence]
-    F --> G[Reporting Layer Markdown to HTML to PDF]
-    G --> H[Outputs Executive Reports and CSVs]
-
-# Chase Risk & Compliance (CRC)
-
-System for analysing payroll and operational data to surface hidden risks and governance issues
-
----
-
-## Problem
-
-Payroll and operational systems are designed to process transactions, but they do not identify structural inconsistencies, configuration drift, or hidden risks that accumulate over time.
-
----
-
-## Solution
-
-CRC is a modular diagnostics system that ingests payroll data, applies rule-based analysis across multiple domains, and generates structured outputs highlighting potential risks and inconsistencies.
-
----
-
-## Architecture
-
-- Data ingestion and schema validation  
-- Rule engine (YAML-driven, domain-based)  
-- Multi-module analysis:
-  - Leave (LEAVE)
-  - Long Service Leave (LSL)
-  - Termination (TERM)
-  - Record Keeping & Evidence Gaps (RKEG)  
-- Findings generation with structured evidence  
-- Reporting layer (Markdown → HTML → PDF)  
-
----
-
-## Architecture Diagram
-
-```mermaid
-flowchart LR
 
     A[Input Data - Payroll / HR Extracts]
     B[Data Ingestion]
