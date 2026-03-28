@@ -26,36 +26,73 @@ CRC is a modular diagnostics system that ingests payroll data, applies rule-base
   - Termination (TERM)
   - Record Keeping & Evidence Gaps (RKEG)  
 - Findings generation with structured evidence  
-- Reporting layer (Markdown → HTML → PDF)
+- Reporting layer (Markdown → HTML → PDF)  
 
-- ## Architecture Diagram
+---
+
+## Architecture Diagram
 
 ```mermaid
 flowchart LR
 
-    A[Input Data<br/>Payroll / HR Extracts]
+    A[Input Data - Payroll / HR Extracts]
     B[Data Ingestion]
     C[Schema Validation]
-    D[Rule Engine<br/>(YAML-driven)]
-    E[Module Analysis<br/>LEAVE | LSL | TERM | RKEG]
-    F[Findings Generation<br/>Structured Evidence]
-    G[Reporting Layer<br/>Markdown → HTML → PDF]
-    H[Outputs<br/>Executive Reports & CSVs]
+    D[Rule Engine (YAML-driven)]
+    E[Module Analysis: LEAVE | LSL | TERM | RKEG]
+    F[Findings Generation: Structured Evidence]
+    G[Reporting Layer: Markdown to HTML to PDF]
+    H[Outputs: Executive Reports & CSVs]
 
     A --> B --> C --> D --> E --> F --> G --> H
 
-## AI Extension (In Progress)
+# Chase Risk & Compliance (CRC)
+
+System for analysing payroll and operational data to surface hidden risks and governance issues
+
+---
+
+## Problem
+
+Payroll and operational systems are designed to process transactions, but they do not identify structural inconsistencies, configuration drift, or hidden risks that accumulate over time.
+
+---
+
+## Solution
+
+CRC is a modular diagnostics system that ingests payroll data, applies rule-based analysis across multiple domains, and generates structured outputs highlighting potential risks and inconsistencies.
+
+---
+
+## Architecture
+
+- Data ingestion and schema validation  
+- Rule engine (YAML-driven, domain-based)  
+- Multi-module analysis:
+  - Leave (LEAVE)
+  - Long Service Leave (LSL)
+  - Termination (TERM)
+  - Record Keeping & Evidence Gaps (RKEG)  
+- Findings generation with structured evidence  
+- Reporting layer (Markdown → HTML → PDF)  
+
+---
+
+## Architecture Diagram
 
 ```mermaid
 flowchart LR
 
-    A[Findings]
-    B[RAG Copilot]
-    C[Explanation Layer]
-    D[User / Analyst]
+    A[Input Data - Payroll / HR Extracts]
+    B[Data Ingestion]
+    C[Schema Validation]
+    D[Rule Engine (YAML-driven)]
+    E[Module Analysis: LEAVE | LSL | TERM | RKEG]
+    F[Findings Generation: Structured Evidence]
+    G[Reporting Layer: Markdown to HTML to PDF]
+    H[Outputs: Executive Reports & CSVs]
 
-    A --> B --> C --> D
----
+    A --> B --> C --> D --> E --> F --> G --> H
 
 ## Key Features
 
