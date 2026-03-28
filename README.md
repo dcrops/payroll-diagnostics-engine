@@ -30,18 +30,6 @@ CRC is a modular diagnostics system that ingests payroll data, applies rule-base
 
 ---
 
-## Architecture Diagram
-
-```mermaid
-flowchart LR
-    A[Input Data Payroll and HR Extracts] --> B[Data Ingestion]
-    B --> C[Schema Validation]
-    C --> D[Rule Engine YAML driven]
-    D --> E[Module Analysis LEAVE LSL TERM RKEG]
-    E --> F[Findings Generation Structured Evidence]
-    F --> G[Reporting Layer Markdown to HTML to PDF]
-    G --> H[Outputs Executive Reports and CSVs]
-
 ## Key Features
 
 - Deterministic rule-based detection of anomalies and inconsistencies  
