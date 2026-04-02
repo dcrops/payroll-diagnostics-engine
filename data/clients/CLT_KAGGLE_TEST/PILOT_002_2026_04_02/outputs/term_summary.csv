@@ -1,0 +1,3 @@
+rule_code,severity,finding_count
+TERM-005,HIGH,2
+TERM-017,MEDIUM,1

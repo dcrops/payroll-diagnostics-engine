@@ -1,0 +1,4 @@
+metric,value,currency
+estimated_exposure_low,0.0,AUD
+estimated_exposure_high,0.0,AUD
+note,"Indicative-only estimate based on heuristics, not statutory entitlement calculations.",
