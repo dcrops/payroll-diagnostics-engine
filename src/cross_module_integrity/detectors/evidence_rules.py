@@ -6,6 +6,14 @@ import pandas as pd
 from cross_module_integrity.models import Finding, _build_finding
 
 
+def _get_evidence_series(df: pd.DataFrame) -> pd.Series:
+    if "evidence_reference" in df.columns:
+        return df["evidence_reference"]
+    if "evidence_ref" in df.columns:
+        return df["evidence_ref"]
+    return pd.Series(index=df.index, dtype="object")
+
+
 def detect_termination_without_evidence_and_payroll_continues(
     rule: dict,
     datasets: dict[str, pd.DataFrame],
@@ -24,11 +32,9 @@ def detect_termination_without_evidence_and_payroll_continues(
     term["employee_id"] = term["employee_id"].astype(str).str.strip()
     term["termination_date"] = pd.to_datetime(term["termination_date"], errors="coerce")
 
-    term["evidence_ref_norm"] = (
-        term.get("evidence_ref", pd.Series(index=term.index, dtype="object"))
-        .fillna("")
-        .astype(str)
-        .str.strip()
+    evidence_series = _get_evidence_series(term)
+    term["evidence_reference_norm"] = (
+        evidence_series.fillna("").astype(str).str.strip()
     )
 
     pay = pay_events.copy()
@@ -36,7 +42,7 @@ def detect_termination_without_evidence_and_payroll_continues(
     pay["pay_date"] = pd.to_datetime(pay["pay_date"], errors="coerce")
 
     merged = pay.merge(
-        term[["employee_id", "termination_date", "evidence_ref_norm"]],
+        term[["employee_id", "termination_date", "evidence_reference_norm"]],
         on="employee_id",
         how="inner",
     )
@@ -44,7 +50,7 @@ def detect_termination_without_evidence_and_payroll_continues(
     bad = merged[
         merged["termination_date"].notna()
         & merged["pay_date"].notna()
-        & (merged["evidence_ref_norm"] == "")
+        & (merged["evidence_reference_norm"] == "")
         & ((merged["pay_date"] - merged["termination_date"]).dt.days > allowed_days_after_term)
     ].copy()
 
@@ -60,7 +66,7 @@ def detect_termination_without_evidence_and_payroll_continues(
                     "pay_date": str(row["pay_date"].date()),
                 },
                 "values": {
-                    "evidence_ref": None,
+                    "evidence_reference": None,
                     "days_after_termination": days_after,
                     "gross_amount": float(row["gross_amount"]) if "gross_amount" in row and pd.notna(row["gross_amount"]) else None,
                 },
@@ -83,6 +89,7 @@ def detect_termination_without_evidence_and_payroll_continues(
         )
 
     return findings
+
 
 def detect_termination_lacks_evidence_and_open_leave_balance_remains(
     rule: dict,
@@ -107,8 +114,8 @@ def detect_termination_lacks_evidence_and_open_leave_balance_remains(
     term["employee_id"] = term["employee_id"].astype(str).str.strip()
     term["termination_date"] = pd.to_datetime(term["termination_date"], errors="coerce")
 
-    evidence_series = term["evidence_ref"] if "evidence_ref" in term.columns else pd.Series(index=term.index, dtype="object")
-    term["evidence_ref_norm"] = evidence_series.fillna("").astype(str).str.strip()
+    evidence_series = _get_evidence_series(term)
+    term["evidence_reference_norm"] = evidence_series.fillna("").astype(str).str.strip()
 
     snap = leave_snapshot.copy()
     snap["employee_id"] = snap["employee_id"].astype(str).str.strip()
@@ -132,7 +139,7 @@ def detect_termination_lacks_evidence_and_open_leave_balance_remains(
     )
 
     merged = latest_snap.merge(
-        term[["employee_id", "termination_date", "evidence_ref_norm"]],
+        term[["employee_id", "termination_date", "evidence_reference_norm"]],
         on="employee_id",
         how="inner",
     )
@@ -140,7 +147,7 @@ def detect_termination_lacks_evidence_and_open_leave_balance_remains(
     bad = merged[
         merged["termination_date"].notna()
         & merged["as_of_date"].notna()
-        & (merged["evidence_ref_norm"] == "")
+        & (merged["evidence_reference_norm"] == "")
         & (merged["as_of_date"] > merged["termination_date"])
         & ((merged["as_of_date"] - merged["termination_date"]).dt.days >= snapshot_grace_days)
     ].copy()
@@ -156,7 +163,7 @@ def detect_termination_lacks_evidence_and_open_leave_balance_remains(
                     "leave_type": str(row["leave_type"]),
                 },
                 "values": {
-                    "evidence_ref": None,
+                    "evidence_reference": None,
                     "balance_units": float(row["balance_units"]) if pd.notna(row["balance_units"]) else None,
                 },
                 "thresholds": {

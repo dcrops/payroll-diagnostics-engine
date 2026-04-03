@@ -6,7 +6,13 @@ import pandas as pd
 from cross_module_integrity.models import Finding, _build_finding
 from common.nulls import is_missing
 
-
+def _get_evidence_series(df: pd.DataFrame) -> pd.Series:
+    if "evidence_reference" in df.columns:
+        return df["evidence_reference"]
+    if "evidence_ref" in df.columns:
+        return df["evidence_ref"]
+    return pd.Series(index=df.index, dtype="object")
+    
 def detect_terminated_employee_retains_material_leave_balance(
     rule: dict,
     datasets: dict[str, pd.DataFrame],
@@ -1397,7 +1403,11 @@ def detect_final_pay_without_termination_evidence(
         pay["is_final_pay"] = ""
 
     pay["is_final_pay_norm"] = (
-        pay["is_final_pay"].astype(str).str.strip().str.lower().isin({"y","yes","true","1"})
+        pay["is_final_pay"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .isin({"y", "yes", "true", "1"})
     )
 
     final_pays = pay[pay["is_final_pay_norm"]].copy()
@@ -1407,18 +1417,18 @@ def detect_final_pay_without_termination_evidence(
     term = terminations.copy()
     term["employee_id"] = term["employee_id"].astype(str).str.strip()
 
-    if "evidence_ref" not in term.columns:
-        term["evidence_ref"] = ""
-
-    term["evidence_ref_norm"] = term["evidence_ref"].astype(str).str.strip()
+    evidence_series = _get_evidence_series(term)
+    term["evidence_reference_norm"] = (
+        evidence_series.fillna("").astype(str).str.strip()
+    )
 
     merged = final_pays.merge(
-        term[["employee_id", "evidence_ref"]],
+        term[["employee_id", "evidence_reference_norm"]],
         on="employee_id",
         how="left"
     )
 
-    bad = merged[merged["evidence_ref"].apply(is_missing)]
+    bad = merged[merged["evidence_reference_norm"].apply(is_missing)]
 
     for _, row in bad.iterrows():
         findings.append(
@@ -1427,7 +1437,13 @@ def detect_final_pay_without_termination_evidence(
                 employee_id=str(row["employee_id"]),
                 leave_type=None,
                 as_of_date=str(row["pay_date"].date()) if pd.notna(row["pay_date"]) else None,
-                evidence_str=json.dumps({"issue": "final pay without evidence"}, ensure_ascii=False)
+                evidence_str=json.dumps(
+                    {
+                        "issue": "final pay without evidence",
+                        "evidence_reference": None,
+                    },
+                    ensure_ascii=False,
+                )
             )
         )
 
