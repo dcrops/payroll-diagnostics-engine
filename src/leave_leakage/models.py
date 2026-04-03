@@ -13,6 +13,7 @@ class Finding:
     as_of_date: Optional[str]
     rule_code: str
     severity: str
+    classification: str
     message: str
     diff_units: Optional[float] = None
     evidence: Optional[str] = None
@@ -56,6 +57,7 @@ def _build_finding(
         as_of_date=as_of_date,
         rule_code=rule["id"],
         severity=rule["severity"],
+        classification=rule.get("classification", "UNCLASSIFIED"),
         message=message,
         diff_units=diff_units,
         evidence=evidence_str,

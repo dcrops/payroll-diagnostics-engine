@@ -14,6 +14,17 @@ from src.rkeg.models import Finding, write_findings_csv
 from src.rkeg.detectors.registry import run_rule
 from src.rkeg.datasets import load_all_datasets
 
+from common.validation import (
+    ValidationResult,
+    add_issue,
+    check_dataset_present,
+    check_required_columns,
+    check_critical_columns_not_all_missing,
+    make_result,
+    print_validation_result,
+    write_validation_outputs,
+)
+
 
 EVIDENCE_LAYER_MAP = {
     "structural_completeness": "Workforce Identity",
@@ -106,15 +117,227 @@ def _risk_score_and_rating(findings_df: pd.DataFrame) -> tuple[int, str]:
     return score, rating
 
 
+def validate_rkeg_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
+    module_name = "RKEG"
+    issues = []
+
+    employee_master = datasets.get("employee_master", pd.DataFrame())
+    pay_events = datasets.get("pay_events", pd.DataFrame())
+    terminations = datasets.get("terminations", pd.DataFrame())
+    leave_snapshot = datasets.get("leave_snapshot", pd.DataFrame())
+    leave_ledger = datasets.get("leave_ledger", pd.DataFrame())
+
+    employee_super = datasets.get("employee_super", pd.DataFrame())
+    super_payments = datasets.get("super_payments", pd.DataFrame())
+    rate_history = datasets.get("rate_history", pd.DataFrame())
+    pay_overrides = datasets.get("pay_overrides", pd.DataFrame())
+
+    # Presence checks
+    check_dataset_present(issues, module_name, "employee_master", employee_master, required=False)
+    check_dataset_present(issues, module_name, "pay_events", pay_events, required=False)
+    check_dataset_present(issues, module_name, "terminations", terminations, required=False)
+    check_dataset_present(issues, module_name, "leave_snapshot", leave_snapshot, required=False)
+    check_dataset_present(issues, module_name, "leave_ledger", leave_ledger, required=False)
+    check_dataset_present(issues, module_name, "employee_super", employee_super, required=False)
+    check_dataset_present(issues, module_name, "super_payments", super_payments, required=False)
+    check_dataset_present(issues, module_name, "rate_history", rate_history, required=False)
+    check_dataset_present(issues, module_name, "pay_overrides", pay_overrides, required=False)
+
+    core_datasets = [
+        employee_master,
+        pay_events,
+        terminations,
+        leave_snapshot,
+        leave_ledger,
+    ]
+    if all(df is None or df.empty for df in core_datasets):
+        add_issue(
+            issues,
+            module_name,
+            "ERROR",
+            "module",
+            None,
+            "NO_USABLE_DATASETS",
+            "No usable datasets were supplied to RKEG; governance checks cannot be assessed.",
+        )
+        return make_result(module_name, issues)
+
+    # employee_master
+    if not employee_master.empty:
+        check_required_columns(
+            issues, module_name, "employee_master", employee_master, ["employee_id"], level="WARNING"
+        )
+        check_critical_columns_not_all_missing(
+            issues, module_name, "employee_master", employee_master, ["employee_id"], level="ERROR"
+        )
+
+        for col in ["start_date", "employment_type", "base_rate"]:
+            if col not in employee_master.columns:
+                add_issue(
+                    issues,
+                    module_name,
+                    "WARNING",
+                    "employee_master",
+                    col,
+                    "MISSING_OPTIONAL_COLUMN",
+                    f"Employee master column '{col}' is missing; some employee/pay governance rules may have reduced coverage.",
+                )
+
+    # pay_events
+    if not pay_events.empty:
+        check_required_columns(
+            issues, module_name, "pay_events", pay_events, ["employee_id", "pay_date"], level="WARNING"
+        )
+        check_critical_columns_not_all_missing(
+            issues, module_name, "pay_events", pay_events, ["employee_id", "pay_date"], level="WARNING"
+        )
+
+        for col in ["gross_amount", "is_final_pay", "pay_code"]:
+            if col not in pay_events.columns:
+                add_issue(
+                    issues,
+                    module_name,
+                    "WARNING",
+                    "pay_events",
+                    col,
+                    "MISSING_OPTIONAL_COLUMN",
+                    f"Pay events column '{col}' is missing; some pay governance rules may have reduced coverage.",
+                )
+
+    # terminations
+    if not terminations.empty:
+        check_required_columns(
+            issues, module_name, "terminations", terminations, ["employee_id", "termination_date"], level="WARNING"
+        )
+        check_critical_columns_not_all_missing(
+            issues, module_name, "terminations", terminations, ["employee_id", "termination_date"], level="WARNING"
+        )
+
+        if "evidence_reference" not in terminations.columns and "evidence_ref" not in terminations.columns:
+            add_issue(
+                issues,
+                module_name,
+                "WARNING",
+                "terminations",
+                "evidence_reference",
+                "MISSING_EVIDENCE_FIELD",
+                "Termination evidence field not found; evidence-traceability rules may have reduced coverage.",
+            )
+
+    # leave_snapshot
+    if not leave_snapshot.empty:
+        check_required_columns(
+            issues,
+            module_name,
+            "leave_snapshot",
+            leave_snapshot,
+            ["employee_id", "leave_type", "balance_units"],
+            level="WARNING",
+        )
+        check_critical_columns_not_all_missing(
+            issues,
+            module_name,
+            "leave_snapshot",
+            leave_snapshot,
+            ["employee_id", "leave_type", "balance_units"],
+            level="WARNING",
+        )
+
+        if "as_of_date" not in leave_snapshot.columns:
+            add_issue(
+                issues,
+                module_name,
+                "WARNING",
+                "leave_snapshot",
+                "as_of_date",
+                "MISSING_OPTIONAL_COLUMN",
+                "Leave snapshot 'as_of_date' is missing; timing-based leave governance checks may have reduced confidence.",
+            )
+        elif leave_snapshot["as_of_date"].isna().all():
+            add_issue(
+                issues,
+                module_name,
+                "WARNING",
+                "leave_snapshot",
+                "as_of_date",
+                "ALL_VALUES_MISSING",
+                "Leave snapshot 'as_of_date' is fully null/blank; timing-based leave governance checks may have reduced confidence.",
+            )
+
+    # leave_ledger
+    if not leave_ledger.empty:
+        check_required_columns(
+            issues,
+            module_name,
+            "leave_ledger",
+            leave_ledger,
+            ["employee_id", "leave_type", "event_date", "units"],
+            level="WARNING",
+        )
+        check_critical_columns_not_all_missing(
+            issues,
+            module_name,
+            "leave_ledger",
+            leave_ledger,
+            ["employee_id", "leave_type", "event_date", "units"],
+            level="WARNING",
+        )
+
+        for col in ["event_type", "transaction_id"]:
+            if col not in leave_ledger.columns:
+                add_issue(
+                    issues,
+                    module_name,
+                    "WARNING",
+                    "leave_ledger",
+                    col,
+                    "MISSING_OPTIONAL_COLUMN",
+                    f"Leave ledger column '{col}' is missing; some evidence and traceability rules may have reduced coverage.",
+                )
+
+    # Assessability warnings
+    if pay_events.empty:
+        add_issue(
+            issues,
+            module_name,
+            "WARNING",
+            "pay_events",
+            None,
+            "DOMAIN_REDUCED_COVERAGE",
+            "PAY governance checks are not assessable because pay_events is missing or empty.",
+        )
+
+    if terminations.empty:
+        add_issue(
+            issues,
+            module_name,
+            "WARNING",
+            "terminations",
+            None,
+            "DOMAIN_REDUCED_COVERAGE",
+            "Termination governance checks are not assessable because terminations is missing or empty.",
+        )
+
+    if leave_snapshot.empty and leave_ledger.empty:
+        add_issue(
+            issues,
+            module_name,
+            "WARNING",
+            "leave",
+            None,
+            "DOMAIN_REDUCED_COVERAGE",
+            "Leave governance checks are not assessable because both leave_snapshot and leave_ledger are missing or empty.",
+        )
+
+    return make_result(module_name, issues)
+
+
 def main(client: str, pilot: str) -> int:
     processed_dir = get_processed_dir(client, pilot)
     output_dir = get_outputs_dir(client, pilot)
 
     rules_yaml_path = Path(__file__).resolve().parent / "config" / "rkeg_rules.yml"
 
-    # ----------------------------
-    # Output paths
-    # ----------------------------
     findings_path = output_dir / "rkeg_findings.csv"
     summary_path = output_dir / "rkeg_summary.csv"
     severity_summary_path = output_dir / "rkeg_summary_by_severity.csv"
@@ -127,9 +350,6 @@ def main(client: str, pilot: str) -> int:
     layer_summary_path = output_dir / "rkeg_evidence_integrity_map.csv"
     rkeg_window_path = output_dir / "rkeg_data_window.csv"
 
-    # ----------------------------
-    # Load datasets
-    # ----------------------------
     datasets = load_all_datasets(processed_dir)
 
     print("[RKEG] Using processed directory:", processed_dir)
@@ -172,9 +392,27 @@ def main(client: str, pilot: str) -> int:
     if not terminations.empty:
         _require_cols(terminations, REQUIRED_TERM, "terminations.csv")
 
-    # ----------------------------
+    # Module validation
+    engine_datasets = dict(datasets)
+    engine_datasets["employee_master"] = employees
+    engine_datasets["pay_events"] = pay_events
+    engine_datasets["leave_ledger"] = leave_ledger
+    engine_datasets["leave_snapshot"] = leave_snapshot
+    engine_datasets["terminations"] = terminations
+    engine_datasets["employee_super"] = employee_super
+    engine_datasets["super_payments"] = super_payments
+    engine_datasets["rate_history"] = rate_history
+    engine_datasets["pay_overrides"] = pay_overrides
+
+    validation = validate_rkeg_inputs(engine_datasets)
+    print_validation_result(validation)
+    write_validation_outputs(validation, output_dir, "rkeg")
+
+    if not validation.can_run:
+        print("RKEG module blocked due to validation errors.")
+        return 1
+
     # Data window
-    # ----------------------------
     rkeg_dates: list[date] = []
     rkeg_dates += _collect_dates_from_df(pay_events, ["pay_date", "period_start", "period_end"])
     rkeg_dates += _collect_dates_from_df(leave_ledger, ["as_of_date", "event_date"])
@@ -193,20 +431,7 @@ def main(client: str, pilot: str) -> int:
     else:
         print("[RKEG] No usable dates found for data window - rkeg_data_window.csv not written")
 
-    # ----------------------------
     # Run RKEG engine
-    # ----------------------------
-    engine_datasets = dict(datasets)
-    engine_datasets["employee_master"] = employees
-    engine_datasets["pay_events"] = pay_events
-    engine_datasets["leave_ledger"] = leave_ledger
-    engine_datasets["leave_snapshot"] = leave_snapshot
-    engine_datasets["terminations"] = terminations
-    engine_datasets["employee_super"] = employee_super
-    engine_datasets["super_payments"] = super_payments
-    engine_datasets["rate_history"] = rate_history
-    engine_datasets["pay_overrides"] = pay_overrides
-
     all_rules = _load_rules(rules_yaml_path)
     rules = [r for r in all_rules if int(r.get("tier", 1)) in {1, 2}]
 
@@ -216,19 +441,13 @@ def main(client: str, pilot: str) -> int:
     for rule in rules:
         findings.extend(run_rule(rule, engine_datasets, context=context))
 
-    # ----------------------------
-    # Findings df
-    # ----------------------------
     write_findings_csv(findings, findings_path)
 
     if findings:
         findings_df = pd.DataFrame([f.__dict__ for f in findings])
     else:
-        findings_df = pd.DataFrame(columns=["rule_code", "severity"])
+        findings_df = pd.DataFrame(columns=["rule_code", "severity", "classification"])
 
-    # ----------------------------
-    # Summary dfs
-    # ----------------------------
     if len(findings_df) == 0:
         summary_df = pd.DataFrame(columns=["rule_code", "severity", "finding_count"])
         severity_summary_df = pd.DataFrame(columns=["severity", "finding_count"])
@@ -247,9 +466,6 @@ def main(client: str, pilot: str) -> int:
             .sort_values("finding_count", ascending=False)
         )
 
-    # ----------------------------
-    # Risk dimension summaries
-    # ----------------------------
     risk_dim_summary_df = pd.DataFrame(columns=["risk_dimension", "finding_count"])
     risk_x_sev_df = pd.DataFrame(columns=["risk_dimension", "severity", "finding_count"])
     pivot = pd.DataFrame(columns=["risk_dimension", "HIGH", "MEDIUM", "LOW", "TOTAL"])
@@ -311,9 +527,6 @@ def main(client: str, pilot: str) -> int:
             pivot["TOTAL"] = pivot.sum(axis=1)
             pivot = pivot.sort_values("TOTAL", ascending=False).reset_index()
 
-    # ----------------------------
-    # Payroll Evidence Integrity Map
-    # ----------------------------
     layer_df = pd.DataFrame(columns=["evidence_layer", "finding_count"])
 
     if len(findings_df) > 0:
@@ -330,9 +543,6 @@ def main(client: str, pilot: str) -> int:
 
     layer_df.to_csv(layer_summary_path, index=False)
 
-    # ----------------------------
-    # Exec narrative
-    # ----------------------------
     if len(findings_df) == 0:
         exec_md = "# RKEG - Executive Risk Summary\n\nNo findings were generated.\n"
     else:
@@ -429,9 +639,6 @@ The dominant exposure is **{top_dimension}**, indicating gaps in the organisatio
 - This output is diagnostics-focused and does not constitute legal advice.
 """
 
-    # ----------------------------
-    # Write outputs
-    # ----------------------------
     summary_df.to_csv(summary_path, index=False)
     severity_summary_df.to_csv(severity_summary_path, index=False)
     risk_dim_summary_df.to_csv(risk_dim_summary_path, index=False)

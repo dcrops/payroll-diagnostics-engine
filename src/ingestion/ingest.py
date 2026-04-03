@@ -223,12 +223,10 @@ def create_employees(raw_dir: Path, mapping: dict) -> pd.DataFrame:
         ],
     )
 
-    # Normalise employee_id
     df["employee_id"] = _normalise_blank_strings(
         df["employee_id"].astype("string").str.strip()
     )
 
-    # Dates
     df["start_date"] = _parse_dates(
         df["start_date"],
         dataset_name="employees",
@@ -236,7 +234,6 @@ def create_employees(raw_dir: Path, mapping: dict) -> pd.DataFrame:
         fail_if_all_non_null_unparsed=False,
     )
 
-    # Numeric fields
     for col in ["standard_hours", "fte", "base_rate"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -252,7 +249,6 @@ def create_employees(raw_dir: Path, mapping: dict) -> pd.DataFrame:
         ["start_date", "employment_type"],
     )
 
-    # Derive annual_salary only when possible
     if "annual_salary" not in df.columns:
         df["annual_salary"] = pd.NA
 
@@ -263,7 +259,6 @@ def create_employees(raw_dir: Path, mapping: dict) -> pd.DataFrame:
             annual_salary = df["base_rate"] * df["standard_hours"].fillna(38) * 52
             df["annual_salary"] = annual_salary.round(2)
 
-    # Optional fields often present in older/synthetic datasets
     optional_cols = [
         "job_title",
         "overtime_flag",
@@ -279,41 +274,16 @@ def create_employees(raw_dir: Path, mapping: dict) -> pd.DataFrame:
         df["employment_type"].astype("string").str.strip().str.upper()
     )
 
-    # Defaults
     if df["employment_type"].isna().all():
         df["employment_type"] = "UNKNOWN"
 
     if df["fte"].isna().all():
         df["fte"] = 1.0
 
-    # Placeholder termination_date until merged from terminations
     df["termination_date"] = pd.NA
 
-    # If source status exists, keep it for now
     df["employment_status"] = _normalise_blank_strings(
         df["employment_status"].astype("string").str.strip().str.upper()
-    )
-
-        # Normalise employee_id
-    df["employee_id"] = df["employee_id"].astype(str).str.strip()
-
-    # Dates
-    df["start_date"] = pd.to_datetime(df["start_date"], errors="coerce").dt.strftime("%Y-%m-%d")
-
-    # Numeric fields
-    for col in ["standard_hours", "fte", "base_rate"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    _validate_critical_fields(
-        "employees",
-        df,
-        ["employee_id"],
-    )
-
-    _warn_if_all_null(
-        "employees",
-        df,
-        ["start_date", "employment_type"],
     )
 
     employees = df[

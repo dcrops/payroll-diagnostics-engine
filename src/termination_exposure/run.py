@@ -12,6 +12,16 @@ from src.termination_exposure.models import Finding
 from src.termination_exposure.detectors.registry import run_rule
 from src.termination_exposure.rules import prepare_term_state
 
+from common.validation import (
+    ValidationResult,
+    add_issue,
+    check_dataset_present,
+    check_required_columns,
+    check_critical_columns_not_all_missing,
+    make_result,
+    print_validation_result,
+    write_validation_outputs,
+)
 
 REQUIRED_TERM = {"employee_id", "termination_date"}
 REQUIRED_PAY = {"employee_id", "pay_date"}
@@ -31,6 +41,75 @@ def _load_rules(rules_path: Path) -> list[dict]:
         payload = yaml.safe_load(f)
     return payload.get("rules", [])
 
+def validate_term_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
+    module_name = "TERM"
+    issues = []
+
+    terminations = datasets.get("terminations", pd.DataFrame())
+    pay_events = datasets.get("pay_events", pd.DataFrame())
+    employee_master = datasets.get("employee_master", pd.DataFrame())
+
+    check_dataset_present(issues, module_name, "terminations", terminations, required=True)
+    check_dataset_present(issues, module_name, "pay_events", pay_events, required=True)
+    check_dataset_present(issues, module_name, "employee_master", employee_master, required=False)
+
+    check_required_columns(
+        issues,
+        module_name,
+        "terminations",
+        terminations,
+        ["employee_id", "termination_date"],
+    )
+    check_required_columns(
+        issues,
+        module_name,
+        "pay_events",
+        pay_events,
+        ["employee_id", "pay_date"],
+    )
+
+    check_critical_columns_not_all_missing(
+        issues,
+        module_name,
+        "terminations",
+        terminations,
+        ["employee_id", "termination_date"],
+    )
+    check_critical_columns_not_all_missing(
+        issues,
+        module_name,
+        "pay_events",
+        pay_events,
+        ["employee_id", "pay_date"],
+    )
+
+    # Useful warnings, not blockers
+    if not terminations.empty:
+        if "evidence_reference" not in terminations.columns and "evidence_ref" not in terminations.columns:
+            add_issue(
+                issues,
+                module_name,
+                "WARNING",
+                "terminations",
+                "evidence_reference",
+                "MISSING_EVIDENCE_FIELD",
+                "Termination evidence field not found; evidence-based TERM rules may have reduced coverage.",
+            )
+
+    if not employee_master.empty:
+        for col in ["start_date", "employment_type"]:
+            if col not in employee_master.columns:
+                add_issue(
+                    issues,
+                    module_name,
+                    "WARNING",
+                    "employee_master",
+                    col,
+                    "MISSING_OPTIONAL_COLUMN",
+                    f"Optional employee master column '{col}' is missing; some TERM context may be reduced.",
+                )
+
+    return make_result(module_name, issues)
 
 def main(client: str, pilot: str) -> int:
     processed_dir = get_processed_dir(client, pilot)
@@ -83,6 +162,25 @@ def main(client: str, pilot: str) -> int:
     leave_snapshot["as_of_date"] = pd.to_datetime(leave_snapshot["as_of_date"], errors="coerce")
     leave_ledger["event_date"] = pd.to_datetime(leave_ledger["event_date"], errors="coerce")
 
+        # ----------------------------
+    # Module validation
+    # ----------------------------
+    datasets = {
+        "terminations": terminations,
+        "pay_events": pay_events,
+        "employee_master": employees,
+        "leave_snapshot": leave_snapshot,
+        "leave_ledger": leave_ledger,
+    }
+
+    validation = validate_term_inputs(datasets)
+    print_validation_result(validation)
+    write_validation_outputs(validation, output_dir, "term")
+
+    if not validation.can_run:
+        print("TERM module blocked due to validation errors.")
+        return 1
+
     # ----------------------------
     # Data window
     # ----------------------------
@@ -112,14 +210,6 @@ def main(client: str, pilot: str) -> int:
 
     findings: list[Finding] = []
 
-    datasets = {
-        "terminations": terminations,
-        "pay_events": pay_events,
-        "employee_master": employees,
-        "leave_snapshot": leave_snapshot,
-        "leave_ledger": leave_ledger,
-    }
-
     context = {"state": state}
 
     for rule in rules:
@@ -138,6 +228,7 @@ def main(client: str, pilot: str) -> int:
                 "as_of_date",
                 "rule_code",
                 "severity",
+                "classification",
                 "message",
                 "diff_units",
                 "evidence",

@@ -139,6 +139,7 @@ def _pay_001_missing_or_invalid_pay_date(
                 as_of_date=None,
                 rule_code=rule["id"],
                 severity=rule["severity"],
+                classification=rule.get("classification", "UNCLASSIFIED"),
                 message=finding_msg,
                 diff_units=None,
                 evidence=evidence_str,
@@ -199,6 +200,7 @@ def _pay_002_missing_or_invalid_gross_amount(
                 as_of_date=None,
                 rule_code=rule["id"],
                 severity=rule["severity"],
+                classification=rule.get("classification", "UNCLASSIFIED"),
                 message=finding_msg,
                 diff_units=None,
                 evidence=evidence_str,
@@ -263,6 +265,7 @@ def _pay_003_missing_pay_run_reference(
                 as_of_date=None,
                 rule_code=rule["id"],
                 severity=rule["severity"],
+                classification=rule.get("classification", "UNCLASSIFIED"),
                 message=finding_msg,
                 diff_units=None,
                 evidence=evidence_str,
@@ -332,6 +335,7 @@ def _pay_004_pay_without_employee_record(
                 as_of_date=None,
                 rule_code=rule["id"],
                 severity=rule["severity"],
+                classification=rule.get("classification", "UNCLASSIFIED"),
                 message=finding_msg,
                 diff_units=None,
                 evidence=evidence_str,
@@ -412,6 +416,7 @@ def _pay_005_earnings_adjustment_without_proportional_super_recalculation(rule: 
                 as_of_date=None,
                 rule_code=rule["id"],
                 severity=severity,
+                classification=rule.get("classification", "UNCLASSIFIED"),
                 message=base_msg,
                 diff_units=None,
                 evidence=evidence,
@@ -520,6 +525,7 @@ def _pay_006_ordinary_earnings_without_base_rate(rule: dict, datasets: dict) -> 
                 as_of_date=None,
                 rule_code=rule["id"],
                 severity=severity,
+                classification=rule.get("classification", "UNCLASSIFIED"),
                 message=message,
                 diff_units=None,
                 evidence=evidence_str,
@@ -634,6 +640,7 @@ def _pay_007_negative_gross_pay_outside_expected_adjustment_patterns(rule: dict,
                 as_of_date=pay_date,
                 rule_code=rule["id"],
                 severity=severity,
+                classification=rule.get("classification", "UNCLASSIFIED"),
                 message=message,
                 diff_units=None,
                 evidence=evidence_str,
@@ -732,6 +739,7 @@ def _pay_008_unmatched_rate_history(rule: dict, datasets: Dict[str, pd.DataFrame
                     as_of_date=pay_date.date().isoformat(),
                     rule_code=rule["id"],
                     severity=severity,
+                    classification=rule.get("classification", "UNCLASSIFIED"),
                     message=message,
                     diff_units=None,
                     evidence=evidence,
@@ -794,6 +802,7 @@ def _pay_009_rate_history_gaps_or_overlaps(rule, datasets):
                     as_of_date=None,
                     rule_code=rule["id"],
                     severity=severity,
+                    classification=rule.get("classification", "UNCLASSIFIED"),
                     message=(
                         f"{text.get('finding')} Employee {employee_id} has an invalid "
                         f"rate history effective date range."
@@ -837,6 +846,7 @@ def _pay_009_rate_history_gaps_or_overlaps(rule, datasets):
                         as_of_date=None,
                         rule_code=rule["id"],
                         severity=severity,
+                        classification=rule.get("classification", "UNCLASSIFIED"),
                         message=(
                             f"{text.get('finding')} Employee {employee_id} has overlapping "
                             f"rate history periods."
@@ -869,6 +879,7 @@ def _pay_009_rate_history_gaps_or_overlaps(rule, datasets):
                         as_of_date=None,
                         rule_code=rule["id"],
                         severity=severity,
+                        classification=rule.get("classification", "UNCLASSIFIED"),
                         message=(
                             f"{text.get('finding')} Employee {employee_id} has a gap of "
                             f"{gap_days} day(s) between adjacent rate history periods."
@@ -1014,6 +1025,7 @@ def _pay_010_pay_events_outside_employment_period(
                 as_of_date=row["_pay_date"].date().isoformat() if pd.notna(row["_pay_date"]) else None,
                 rule_code=rule["id"],
                 severity=rule["severity"],
+                classification=rule.get("classification", "UNCLASSIFIED"),
                 message=finding_msg,
                 diff_units=None,
                 evidence=evidence_str,
@@ -1101,6 +1113,7 @@ def _pay_011_rate_history_missing_effective_date_fields(
                 as_of_date=None,
                 rule_code=rule["id"],
                 severity=rule["severity"],
+                classification=rule.get("classification", "UNCLASSIFIED"),
                 message=finding_msg,
                 diff_units=None,
                 evidence=evidence_str,

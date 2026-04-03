@@ -22,6 +22,7 @@ rules:
       - structural_completeness
       - evidence_traceability
       - calculation_integrity
+    classification: STRUCTURAL
 
   - id: LSL-002
     tier: 1
@@ -40,6 +41,7 @@ rules:
       - data_anomaly_sanity
       - evidence_traceability
       - calculation_integrity
+    classification: LOGICAL
 
   - id: LSL-003
     tier: 1
@@ -60,6 +62,7 @@ rules:
       - calculation_integrity
       - evidence_traceability
       - data_anomaly_sanity
+    classification: LOGICAL
 
   - id: LSL-004
     tier: 2
@@ -81,6 +84,7 @@ rules:
       - data_anomaly_sanity
       - calculation_integrity
       - evidence_traceability
+    classification: CONTEXTUAL
 
   - id: LSL-005
     tier: 1
@@ -100,6 +104,7 @@ rules:
     risk_dimension:
       - calculation_integrity
       - cross_module_linkage_risk
+    classification: LOGICAL
 
   - id: LSL-006
     tier: 1
@@ -119,6 +124,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - evidence_traceability
+    classification: STRUCTURAL
 
   - id: LSL-007
     tier: 1
@@ -138,6 +144,7 @@ rules:
     risk_dimension:
       - data_anomaly_sanity
       - calculation_integrity
+    classification: CONTEXTUAL
 
   - id: LSL-008
     tier: 1
@@ -154,6 +161,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - governance_exposure
+    classification: STRUCTURAL
 
   - id: LSL-009
     tier: 2
@@ -170,6 +178,7 @@ rules:
     risk_dimension:
       - data_anomaly_sanity
       - evidence_traceability
+    classification: STRUCTURAL
 
   - id: LSL-010
     tier: 2
@@ -190,6 +199,7 @@ rules:
     risk_dimension:
       - governance_monitoring_exposure
       - data_anomaly_sanity
+    classification: CONTEXTUAL
 
   - id: LSL-011
     tier: 2
@@ -211,6 +221,7 @@ rules:
     risk_dimension:
       - calculation_integrity
       - cross_module_linkage_risk
+    classification: CONTEXTUAL
 
   - id: LSL-012
     tier: 1
@@ -228,6 +239,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - evidence_traceability
+    classification: STRUCTURAL
 
   - id: LSL-013
     tier: 1
@@ -248,6 +260,7 @@ rules:
       - timing_integrity
       - calculation_integrity
       - cross_module_linkage_risk
+    classification: LOGICAL
 
   - id: LSL-014
     tier: 1
@@ -267,6 +280,7 @@ rules:
     risk_dimension:
       - calculation_integrity
       - evidence_traceability
+    classification: LOGICAL
 
   - id: LSL-015
     tier: 1
@@ -284,6 +298,7 @@ rules:
     risk_dimension:
       - timing_integrity
       - cross_module_linkage_risk
+    classification: LOGICAL
 
   - id: LSL-016
     tier: 1
@@ -300,6 +315,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - evidence_traceability
+    classification: STRUCTURAL
 
   - id: LSL-017
     tier: 2
@@ -320,6 +336,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - evidence_traceability
+    classification: STRUCTURAL
 
   - id: LSL-018
     tier: 2
@@ -340,6 +357,7 @@ rules:
     risk_dimension:
       - evidence_traceability
       - structural_completeness
+    classification: STRUCTURAL
 
   - id: LSL-019
     tier: 2
@@ -359,6 +377,7 @@ rules:
     risk_dimension:
       - timing_integrity
       - evidence_traceability
+    classification: CONTEXTUAL
 
   - id: LSL-020
     tier: 2
@@ -380,6 +399,7 @@ rules:
     risk_dimension:
       - calculation_integrity
       - data_anomaly_sanity
+    classification: CONTEXTUAL
 
   - id: LSL-021
     tier: 2
@@ -404,6 +424,7 @@ rules:
     risk_dimension:
       - evidence_traceability
       - governance_monitoring_exposure
+    classification: LOGICAL
 
   - id: LSL-022
     tier: 2
@@ -427,6 +448,7 @@ rules:
     risk_dimension:
       - calculation_integrity
       - evidence_traceability
+    classification: LOGICAL
 
   - id: LSL-023
     tier: 2
@@ -446,6 +468,7 @@ rules:
     risk_dimension:
       - timing_integrity
       - data_anomaly_sanity
+    classification: STRUCTURAL
 
   - id: LSL-024
     tier: 2
@@ -478,3 +501,4 @@ rules:
     risk_dimension:
       - cross_module_linkage_risk
       - exception_handling
+    classification: CONTEXTUAL

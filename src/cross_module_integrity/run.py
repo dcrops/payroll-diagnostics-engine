@@ -164,6 +164,7 @@ def main(client: str, pilot: str) -> int:
                 "as_of_date",
                 "rule_code",
                 "severity",
+                "classification",
                 "message",
                 "diff_units",
                 "evidence",

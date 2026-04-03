@@ -72,6 +72,7 @@ EXEC_PACK_MD_PATH = OUTPUTS_DIR / "crc_executive_pack.md"
 class Finding:
     rule_code: str
     severity: str
+    classification: str
     employee_id: str
     leave_type: str
     as_of_date: str
