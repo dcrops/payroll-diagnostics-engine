@@ -107,24 +107,32 @@ def main(client: str, pilot: str) -> int:
         dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
     )
 
-    leave_requests = pd.read_csv(
-        processed_dir / "leave_requests.csv",
-        dtype={
-            "request_id": "string",
-            "employee_id": "string",
-            "leave_type": "string",
-            "approval_status": "string",
-            "approved_by": "string",
-        },
-    )
+    leave_requests_path = processed_dir / "leave_requests.csv"
+    if leave_requests_path.exists():
+        leave_requests = pd.read_csv(
+            leave_requests_path,
+            dtype={
+                "request_id": "string",
+                "employee_id": "string",
+                "leave_type": "string",
+                "approval_status": "string",
+                "approved_by": "string",
+            },
+        )
+    else:
+        leave_requests = pd.DataFrame()
 
-    timesheets = pd.read_csv(
-        processed_dir / "timesheets.csv",
-        dtype={
-            "employee_id": "string",
-            "timesheet_status": "string",
-        },
-    )
+    timesheets_path = processed_dir / "timesheets.csv"
+    if timesheets_path.exists():
+        timesheets = pd.read_csv(
+            timesheets_path,
+            dtype={
+                "employee_id": "string",
+                "timesheet_status": "string",
+            },
+        )
+    else:
+        timesheets = pd.DataFrame()
 
     snapshot = pd.read_csv(
         processed_dir / "balances_snapshot.csv",
@@ -138,13 +146,17 @@ def main(client: str, pilot: str) -> int:
         write_data_window(window_path, dates)
 
     for df in (employees, ledger, snapshot, leave_requests, timesheets):
-        df["employee_id"] = df["employee_id"].astype(str).str.strip()
+        if not df.empty and "employee_id" in df.columns:
+            df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
     _require_cols(employees, REQUIRED_EMP, "employees.csv")
     _require_cols(ledger, REQUIRED_LEDGER, "leave_ledger.csv")
     _require_cols(snapshot, REQUIRED_SNAP, "balances_snapshot.csv")
-    _require_cols(leave_requests, REQUIRED_REQUESTS, "leave_requests.csv")
-    _require_cols(timesheets, REQUIRED_TIMESHEETS, "timesheets.csv")
+    if not leave_requests.empty:
+        _require_cols(leave_requests, REQUIRED_REQUESTS, "leave_requests.csv")
+
+    if not timesheets.empty:
+        _require_cols(timesheets, REQUIRED_TIMESHEETS, "timesheets.csv")
 
     # Parse dates
     employees["start_date"] = pd.to_datetime(employees["start_date"], errors="coerce")
@@ -153,24 +165,46 @@ def main(client: str, pilot: str) -> int:
     ledger["event_date"] = pd.to_datetime(ledger["event_date"], errors="coerce")
     snapshot["as_of_date"] = pd.to_datetime(snapshot["as_of_date"], errors="coerce")
 
-    leave_requests["request_start_date"] = pd.to_datetime(
-        leave_requests["request_start_date"], errors="coerce"
-    )
-    leave_requests["request_end_date"] = pd.to_datetime(
-        leave_requests["request_end_date"], errors="coerce"
-    )
-    leave_requests["approval_date"] = pd.to_datetime(
-        leave_requests["approval_date"], errors="coerce"
-    )
+    if not leave_requests.empty:
+        leave_requests["request_start_date"] = pd.to_datetime(
+            leave_requests["request_start_date"], errors="coerce"
+        )
+        leave_requests["request_end_date"] = pd.to_datetime(
+            leave_requests["request_end_date"], errors="coerce"
+        )
+        leave_requests["approval_date"] = pd.to_datetime(
+            leave_requests["approval_date"], errors="coerce"
+        )
 
-    timesheets["work_date"] = pd.to_datetime(timesheets["work_date"], errors="coerce")
+    if not timesheets.empty:
+        timesheets["work_date"] = pd.to_datetime(timesheets["work_date"], errors="coerce")
 
     bad_ledger_dates = ledger["event_date"].isna().sum()
     bad_snapshot_dates = snapshot["as_of_date"].isna().sum()
-    bad_request_start_dates = leave_requests["request_start_date"].isna().sum()
-    bad_request_end_dates = leave_requests["request_end_date"].isna().sum()
-    bad_request_approval_dates = leave_requests["approval_date"].isna().sum()
-    bad_timesheet_dates = timesheets["work_date"].isna().sum()
+
+    bad_request_start_dates = (
+        leave_requests["request_start_date"].isna().sum()
+        if not leave_requests.empty and "request_start_date" in leave_requests.columns
+        else 0
+    )
+
+    bad_request_end_dates = (
+        leave_requests["request_end_date"].isna().sum()
+        if not leave_requests.empty and "request_end_date" in leave_requests.columns
+        else 0
+    )
+
+    bad_request_approval_dates = (
+        leave_requests["approval_date"].isna().sum()
+        if not leave_requests.empty and "approval_date" in leave_requests.columns
+        else 0
+    )
+
+    bad_timesheet_dates = (
+        timesheets["work_date"].isna().sum()
+        if not timesheets.empty and "work_date" in timesheets.columns
+        else 0
+    )
 
     print(f"[input] Unparseable ledger event_date rows: {bad_ledger_dates}")
     print(f"[input] Unparseable snapshot as_of_date rows: {bad_snapshot_dates}")
@@ -292,6 +326,43 @@ def main(client: str, pilot: str) -> int:
 
     print(f"Wrote: {severity_summary_path}")
     print(severity_summary_df.to_string(index=False))
+
+        # ----------------------------
+    # Classification summaries
+    # ----------------------------
+    if "classification" not in findings_df.columns:
+        findings_df["classification"] = "UNCLASSIFIED"
+    else:
+        findings_df["classification"] = findings_df["classification"].fillna("UNCLASSIFIED")
+
+    if len(findings_df) == 0:
+        classification_summary_df = pd.DataFrame(columns=["classification", "finding_count"])
+        classification_x_severity_df = pd.DataFrame(
+            columns=["classification", "severity", "finding_count"]
+        )
+    else:
+        classification_summary_df = (
+            findings_df.groupby("classification", as_index=False)
+            .size()
+            .rename(columns={"size": "finding_count"})
+            .sort_values("finding_count", ascending=False)
+        )
+
+        classification_x_severity_df = (
+            findings_df.groupby(["classification", "severity"], as_index=False)
+            .size()
+            .rename(columns={"size": "finding_count"})
+            .sort_values(["classification", "severity"])
+        )
+
+    classification_summary_path = output_dir / "leave_leakage_summary_by_classification.csv"
+    classification_x_severity_path = output_dir / "leave_leakage_summary_classification_x_severity.csv"
+
+    classification_summary_df.to_csv(classification_summary_path, index=False)
+    classification_x_severity_df.to_csv(classification_x_severity_path, index=False)
+
+    print(f"Wrote: {classification_summary_path}")
+    print(f"Wrote: {classification_x_severity_path}")
 
     # ----------------------------
     # Detailed leakage reconciliation report

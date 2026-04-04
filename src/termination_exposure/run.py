@@ -272,8 +272,44 @@ def main(client: str, pilot: str) -> int:
     severity_summary_path = output_dir / "term_summary_by_severity.csv"
     severity_summary_df.to_csv(severity_summary_path, index=False)
 
+        # ----------------------------
+    # Classification summaries
+    # ----------------------------
+    if "classification" not in findings_df.columns:
+        findings_df["classification"] = "UNCLASSIFIED"
+    else:
+        findings_df["classification"] = findings_df["classification"].fillna("UNCLASSIFIED")
+
+    if len(findings_df) == 0:
+        classification_summary_df = pd.DataFrame(columns=["classification", "finding_count"])
+        classification_x_severity_df = pd.DataFrame(
+            columns=["classification", "severity", "finding_count"]
+        )
+    else:
+        classification_summary_df = (
+            findings_df.groupby("classification", as_index=False)
+            .size()
+            .rename(columns={"size": "finding_count"})
+            .sort_values("finding_count", ascending=False)
+        )
+
+        classification_x_severity_df = (
+            findings_df.groupby(["classification", "severity"], as_index=False)
+            .size()
+            .rename(columns={"size": "finding_count"})
+            .sort_values(["classification", "severity"])
+        )
+
+    classification_summary_path = output_dir / "term_summary_by_classification.csv"
+    classification_x_severity_path = output_dir / "term_summary_classification_x_severity.csv"
+
+    classification_summary_df.to_csv(classification_summary_path, index=False)
+    classification_x_severity_df.to_csv(classification_x_severity_path, index=False)
+
     print(f"Wrote: {findings_path}")
     print(f"Wrote: {summary_path}")
     print(f"Wrote: {severity_summary_path}")
+    print(f"Wrote: {classification_summary_path}")
+    print(f"Wrote: {classification_x_severity_path}")
 
     return 0

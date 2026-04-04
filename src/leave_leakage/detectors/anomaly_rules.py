@@ -136,7 +136,7 @@ def _run_leave_015_zero_unit_event(rule: dict, ledger: pd.DataFrame) -> list[Fin
 def _run_leave_019_invalid_event_type(rule: dict, ledger: pd.DataFrame) -> list[Finding]:
     findings: list[Finding] = []
 
-    allowed = {"ACCRUAL", "TAKEN", "ADJUSTMENT"}
+    allowed = {"ACCRUAL", "TAKEN", "ADJUSTMENT", "PAYOUT"}
 
     bad = ledger[~ledger["event_type"].astype(str).str.upper().isin(allowed)]
 

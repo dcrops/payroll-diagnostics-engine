@@ -1,0 +1,4 @@
+classification,severity,finding_count
+CONTEXTUAL,HIGH,3
+CONTEXTUAL,MEDIUM,6
+LOGICAL,HIGH,9
