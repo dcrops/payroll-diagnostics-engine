@@ -64,6 +64,15 @@ def interpret_signals(signals: dict) -> dict:
     class_summary = signals.get("class_summary", {})
     severity_summary = signals.get("severity_summary", {})
 
+    narrative_labels = {
+        "TERM": "termination handling",
+        "RKEG": "record-keeping controls",
+        "LEAVE": "leave calculation and balance integrity",
+        "LSL": "long service leave eligibility and accrual",
+        "CROSS_MODULE": "cross-module lifecycle consistency",
+    }
+    friendly_modules = [narrative_labels.get(m, m) for m in top_modules]
+
     lines = []
     lines.append(f"CRC identified {total} findings across the reviewed modules.")
 
@@ -115,14 +124,14 @@ def interpret_signals(signals: dict) -> dict:
         )
 
     # Module focus
-    if len(top_modules) >= 2:
+    if len(friendly_modules) >= 2:
         lines.append(
-            f"High-severity findings are concentrated in {top_modules[0]} and {top_modules[1]}, "
-            "indicating the strongest exposure sits in termination handling and record-keeping integrity."
+            f"High-severity findings are concentrated in {friendly_modules[0]} and {friendly_modules[1]}, "
+            "indicating the strongest exposure sits in those areas."
         )
-    elif len(top_modules) == 1:
+    elif len(friendly_modules) == 1:
         lines.append(
-            f"High-severity findings are concentrated in {top_modules[0]}, indicating this is the strongest area of exposure."
+            f"High-severity findings are concentrated in {friendly_modules[0]}, indicating this is the strongest area of exposure."
         )
 
     # Structural insight
@@ -146,14 +155,14 @@ def interpret_signals(signals: dict) -> dict:
         )
 
     # Recommended focus
-    if len(top_modules) >= 2:
+    if len(friendly_modules) >= 2:
         recommendation = (
-            f"Prioritise detailed review of {top_modules[0]} and {top_modules[1]} first, "
+            f"Prioritise detailed review of {friendly_modules[0]} and {friendly_modules[1]} first, "
             "then address structural data gaps that may weaken evidentiary confidence."
         )
-    elif len(top_modules) == 1:
+    elif len(friendly_modules) == 1:
         recommendation = (
-            f"Prioritise detailed review of {top_modules[0]} first, "
+            f"Prioritise detailed review of {friendly_modules[0]} first, "
             "then address structural data gaps that may weaken evidentiary confidence."
         )
     else:

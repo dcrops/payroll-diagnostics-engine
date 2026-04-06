@@ -339,13 +339,27 @@ def print_exec_pack_preflight(base_output_dir: Path, included_modules: set[str])
 
 def load_executive_summary_md(base_output_dir: Path) -> str:
     path = base_output_dir / "executive" / "executive_summary.md"
+
     if not path.exists():
         print(f"⚠ Missing executive summary markdown: {path}")
         return (
             "_Executive summary not available for this run. "
             "Generate the executive summary layer before building the Exec Pack._"
         )
-    return path.read_text(encoding="utf-8").strip()
+
+    text = path.read_text(encoding="utf-8").strip()
+
+    lines = text.splitlines()
+
+    # 🔥 Remove top-level header if present (prevents duplicate headings)
+    if lines and lines[0].strip().startswith("#"):
+        lines = lines[1:]
+
+        # Also remove empty line after header if it exists
+        if lines and not lines[0].strip():
+            lines = lines[1:]
+
+    return "\n".join(lines).strip()
 
 
 def load_executive_summary_json(base_output_dir: Path) -> Dict:
@@ -359,6 +373,54 @@ def load_executive_summary_json(base_output_dir: Path) -> Dict:
 def build_executive_summary(base_output_dir: Path) -> str:
     return load_executive_summary_md(base_output_dir)
 
+def build_highlight_insights(base_output_dir: Path) -> str:
+    summary = load_executive_summary_json(base_output_dir)
+    if not summary:
+        return "_Highlight insights not available for this run._"
+
+    total_findings = summary.get("total_findings", 0)
+    dominant_classification = summary.get("dominant_classification", "Unknown")
+    dominant_severity = summary.get("dominant_severity", "Unknown")
+    top_high_modules = summary.get("top_high_modules", [])
+
+    narrative_labels = {
+        "TERM": "termination handling",
+        "RKEG": "record-keeping controls",
+        "LEAVE": "leave calculation and balance integrity",
+        "LSL": "long service leave eligibility and accrual",
+        "CROSS_MODULE": "cross-module lifecycle consistency",
+    }
+
+    friendly_modules = [narrative_labels.get(m, m) for m in top_high_modules[:2]]
+
+    if len(friendly_modules) >= 2:
+        module_text = f"{friendly_modules[0]} and {friendly_modules[1]}"
+    elif len(friendly_modules) == 1:
+        module_text = friendly_modules[0]
+    else:
+        module_text = "the highest-severity areas identified"
+
+    lines: List[str] = []
+    lines.append("The following points summarise the most important observations from the analysis:")
+    lines.append("")
+    lines.append(f"- The strongest concentration of risk sits in **{module_text}**.")
+    lines.append(
+        f"- The overall profile is dominated by **{dominant_classification.lower()}** findings rather than primarily structural data issues."
+    )
+    lines.append(
+        f"- A meaningful share of findings are **{dominant_severity.lower()} severity**, indicating that the results warrant targeted follow-up rather than simple monitoring."
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+    return "\n".join(lines)
+
+def _fmt_count_pct(count: int, total: int) -> str:
+    if not total:
+        return str(count)
+    pct = round((count / total) * 100)
+    return f"{count} ({pct}%)"
 
 def build_risk_profile_overview(base_output_dir: Path) -> str:
     summary = load_executive_summary_json(base_output_dir)
@@ -392,18 +454,25 @@ def build_risk_profile_overview(base_output_dir: Path) -> str:
         "This section summarises the overall risk profile across all included modules using the consolidated CRC summary outputs."
     )
     lines.append("")
-    lines.append("| Metric | Value |")
-    lines.append("|---|---:|")
-    lines.append(f"| Total findings | {total_findings} |")
-    lines.append(f"| Dominant classification | {dominant_classification} |")
-    lines.append(f"| Dominant severity | {dominant_severity} |")
-    lines.append(f"| Logical findings | {logical_count} |")
-    lines.append(f"| Structural findings | {structural_count} |")
-    lines.append(f"| Contextual findings | {contextual_count} |")
-    lines.append(f"| High severity findings | {high_count} |")
-    lines.append(f"| Medium severity findings | {medium_count} |")
-    lines.append(f"| Low severity findings | {low_count} |")
+
+    lines.append('<table class="summary-table">')
+    lines.append("  <thead>")
+    lines.append("    <tr><th>Metric</th><th>Value</th></tr>")
+    lines.append("  </thead>")
+    lines.append("  <tbody>")
+    lines.append(f"    <tr><td>Total findings</td><td>{total_findings}</td></tr>")
+    lines.append(f"    <tr><td>Dominant classification</td><td>{dominant_classification}</td></tr>")
+    lines.append(f"    <tr><td>Dominant severity</td><td>{dominant_severity}</td></tr>")
+    lines.append(f"    <tr><td>Logical findings</td><td>{_fmt_count_pct(logical_count, total_findings)}</td></tr>")
+    lines.append(f"    <tr><td>Structural findings</td><td>{_fmt_count_pct(structural_count, total_findings)}</td></tr>")
+    lines.append(f"    <tr><td>Contextual findings</td><td>{_fmt_count_pct(contextual_count, total_findings)}</td></tr>")
+    lines.append(f"    <tr><td>High severity findings</td><td>{_fmt_count_pct(high_count, total_findings)}</td></tr>")
+    lines.append(f"    <tr><td>Medium severity findings</td><td>{_fmt_count_pct(medium_count, total_findings)}</td></tr>")
+    lines.append(f"    <tr><td>Low severity findings</td><td>{_fmt_count_pct(low_count, total_findings)}</td></tr>")
+    lines.append("  </tbody>")
+    lines.append("</table>")
     lines.append("")
+
     lines.append(f"**Highest concentration of high-severity findings:** {module_text}")
     lines.append("")
     lines.append(
@@ -412,6 +481,7 @@ def build_risk_profile_overview(base_output_dir: Path) -> str:
     lines.append("")
     lines.append("---")
     lines.append("")
+
     return "\n".join(lines)
 
 
@@ -528,6 +598,41 @@ def load_term_severity_counts(base_output_dir: Path) -> Dict[str, int]:
 
     return counts
 
+def load_cross_module_severity_counts(base_output_dir: Path) -> Dict[str, int]:
+    counts: Dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    summary_path = base_output_dir / "cross_module_summary_by_severity.csv"
+    findings_path = base_output_dir / "cross_module_findings.csv"
+
+    summary_rows = _load_csv(summary_path)
+    if summary_rows:
+        sev_candidates = ["severity", "Severity"]
+        count_candidates = ["finding_count", "count", "Count", "n", "N", "value", "Value"]
+
+        first = summary_rows[0]
+        sev_col = next((c for c in sev_candidates if c in first), None)
+        count_col = next((c for c in count_candidates if c in first), None)
+
+        if sev_col and count_col:
+            for r in summary_rows:
+                sev = (r.get(sev_col) or "").strip().upper()
+                if not sev:
+                    continue
+                try:
+                    n = int(float((r.get(count_col) or "0") or "0"))
+                except ValueError:
+                    n = 0
+                if sev in counts:
+                    counts[sev] += n
+            return counts
+
+    finding_rows = _load_csv(findings_path)
+    for r in finding_rows:
+        sev = (r.get("severity") or r.get("Severity") or "").strip().upper()
+        if sev in counts:
+            counts[sev] += 1
+
+    return counts
+
 
 # ---------- Sorting ----------
 
@@ -553,7 +658,11 @@ def build_header(report_title: str, organisation_name: str, review_period: str) 
 **Review period:** {review_period}  
 **Report prepared as at:** {report_date}  
 
-> This report highlights potential risk signals and process issues based on the data provided. It does not constitute legal, accounting, or industrial relations advice.
+**Important note**
+
+This report highlights potential risk signals and process issues based on the data provided. 
+It does not constitute legal, accounting, or industrial relations advice.
+
 
 ---
 """
@@ -597,6 +706,12 @@ def build_interpretation_block_exec(included_modules: set[str]) -> str:
             "events and final pay. They indicate how readily the organisation could evidence termination processing if challenged."
         )
 
+    if MODULE_CROSS in mods:
+        lines.append(
+            "- **Cross-Module Integrity findings** highlight inconsistencies between related datasets, such as employee lifecycle status, "
+            "leave activity, and payroll events. They indicate where linked records may not align cleanly across the broader payroll data environment."
+        )
+
     if MODULE_RKEG in mods:
         lines.append(
             "- **Record-Keeping & Evidence Gaps (RKEG) findings** assess the strength of the evidentiary trail supporting "
@@ -622,8 +737,6 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
     ordered = included_modules_in_order(mods)
 
     lines: List[str] = []
-    lines.append("Scope & Methodology")
-    lines.append("")
     lines.append("**Modules included in this engagement:**")
     lines.append("")
 
@@ -636,7 +749,7 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
     lines.append("")
 
     if MODULE_LEAVE in mods:
-        lines.append(f"### 3.{subsection_no} **Leave & Entitlement Leakage – Scope & Methodology**")
+        lines.append(f"### 5.{subsection_no} **Leave & Entitlement Leakage – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
@@ -684,7 +797,7 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         subsection_no += 1
 
     if MODULE_LSL in mods:
-        lines.append(f"### 3.{subsection_no} **Long Service Leave (LSL) Exposure – Scope & Methodology**")
+        lines.append(f"### 5.{subsection_no} **Long Service Leave (LSL) Exposure – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
@@ -727,7 +840,7 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         subsection_no += 1
 
     if MODULE_TERM in mods:
-        lines.append(f"### 3.{subsection_no} **Termination Exposure – Scope & Methodology**")
+        lines.append(f"### 5.{subsection_no} **Termination Exposure – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
@@ -779,7 +892,7 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         subsection_no += 1
 
     if MODULE_RKEG in mods:
-        lines.append(f"### 3.{subsection_no} **Record-Keeping & Evidence Gaps (RKEG) – Scope & Methodology**")
+        lines.append(f"### 5.{subsection_no} **Record-Keeping & Evidence Gaps (RKEG) – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
@@ -819,6 +932,54 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         lines.append("")
         lines.append(
             "RKEG findings should be interpreted as evidential risk indicators. Addressing them improves defensibility and reduces audit effort, but does not necessarily imply a payroll outcome is incorrect."
+        )
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        subsection_no += 1
+
+    if MODULE_CROSS in mods:
+        lines.append(f"### 5.{subsection_no} **Cross-Module Integrity – Scope & Methodology**")
+        lines.append("")
+        lines.append("**Scope**")
+        lines.append("")
+        lines.append(
+            "The Cross-Module Integrity review assesses whether related payroll datasets align consistently across employee lifecycle, leave, payroll event, and termination records."
+        )
+        lines.append("")
+        lines.append(
+            "The purpose of this review is to identify inconsistencies between linked datasets that may indicate sequencing issues, lifecycle mismatches, incomplete integrations, or broader payroll data integrity weaknesses."
+        )
+        lines.append("")
+        lines.append(
+            "This review is designed to support payroll, HR, finance, and governance teams in identifying where records may not align cleanly across the broader payroll data environment. Findings are integrity signals only and do not, on their own, confirm non-compliance, underpayment, or payroll error."
+        )
+        lines.append("")
+        lines.append("**Data reviewed**")
+        lines.append("")
+        lines.append("- employee master data (where supplied)")
+        lines.append("- leave balances and leave movement data (where supplied)")
+        lines.append("- payroll event / payroll transaction extracts (where supplied)")
+        lines.append("- termination and lifecycle-related records where included in the engagement data pack")
+        lines.append("")
+        lines.append("**Checks performed**")
+        lines.append("")
+        lines.append("- consistency checks between employee lifecycle status and payroll activity")
+        lines.append("- identification of mismatches between leave activity and termination or employment status")
+        lines.append("- cross-dataset linkage checks for related employee and payroll records")
+        lines.append("- detection of sequencing anomalies between linked events across modules")
+        lines.append("")
+        lines.append("**Out of scope**")
+        lines.append("")
+        lines.append("This review does not:")
+        lines.append("")
+        lines.append("- calculate entitlements, underpayments or overpayments")
+        lines.append("- interpret awards, enterprise agreements, or employment contracts")
+        lines.append("- provide legal, accounting, or industrial relations advice")
+        lines.append("- assert contraventions of legislation or confirm non-compliance.")
+        lines.append("")
+        lines.append(
+            "Cross-module findings should be interpreted as data integrity and linkage risk indicators. They highlight where records may not align cleanly across datasets and may require investigation before conclusions are drawn."
         )
         lines.append("")
         lines.append("---")
@@ -877,6 +1038,16 @@ def build_data_sources_section(included_modules: set[str] | list[str] | None, ba
             if rkeg_findings.exists():
                 lines.append(f"- `{rkeg_findings.relative_to(base_output_dir)}`  ")
 
+        elif m == MODULE_CROSS:
+            cross_findings = modules_dir / "cross_module_findings.csv"
+            cross_summary = modules_dir / "cross_module_summary_by_severity.csv"
+            if cross_summary.exists():
+                rel_path = str(cross_summary.relative_to(base_output_dir)).replace("\\", "/")
+                lines.append(f"- `{rel_path}`  ")
+            if cross_findings.exists():
+                rel_path = str(cross_findings.relative_to(base_output_dir)).replace("\\", "/")
+                lines.append(f"- `{rel_path}`  ")
+
     exec_summary_md = base_output_dir / "executive" / "executive_summary.md"
     exec_summary_json = base_output_dir / "executive" / "executive_summary.json"
     if exec_summary_md.exists():
@@ -896,9 +1067,7 @@ def build_data_sources_section(included_modules: set[str] | list[str] | None, ba
 
 def build_rkeg_summary(rkeg_counts: Dict[str, int]) -> str:
     if not any(rkeg_counts.values()):
-        return ""
-
-    severity_overview = build_rkeg_severity_overview_table(rkeg_counts)
+        return "No material record-keeping or evidence gaps were identified in the current dataset.\n\n---"
 
     return f"""
 As part of this review, a Record-Keeping & Evidence Gaps (RKEG) assessment was performed to evaluate whether payroll-related records are sufficiently complete, consistent and traceable to support payroll decisions if subject to audit or regulatory review.
@@ -907,7 +1076,34 @@ The RKEG assessment focuses on evidential strength only. It does not determine w
 
 The table below summarises the number of record-keeping and evidence gaps identified by severity. Counts reflect **evidential risk** only and do not represent confirmed non-compliance or quantified financial exposure.
 
-{severity_overview}
+<table class="summary-table">
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Count</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge-high">High</span></td>
+      <td>{rkeg_counts["HIGH"]}</td>
+      <td>Absence or weakness of core evidence or entitlement configuration that would materially impair the organisation’s ability to evidence payroll decisions if reviewed by auditors or regulators.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-medium">Medium</span></td>
+      <td>{rkeg_counts["MEDIUM"]}</td>
+      <td>Evidence is incomplete, inconsistent or fragile. Decisions may still be defensible but require greater reliance on manual reconstruction, judgement, or explanation.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-low">Low</span></td>
+      <td>{rkeg_counts["LOW"]}</td>
+      <td>Record-keeping or data quality weaknesses that are unlikely to be challenged in isolation but should be improved over time to support efficient and reliable payroll operations.</td>
+    </tr>
+  </tbody>
+</table>
+
+---
 """.strip()
 
 
@@ -917,11 +1113,32 @@ def build_lsl_severity_summary(lsl_counts: Dict[str, int]) -> str:
 
     return f"""Where an LSL Exposure review was performed, the table below summarises the number of LSL-related risk indicators identified by severity. Counts reflect **risk indicators only** and do not represent confirmed underpayments, quantified exposure, or remediation priority.
 
-| Severity | Count | Description |
-|---------|:-------------:|---------------------------|
-| <span class="badge-high">High</span>    | {lsl_counts["HIGH"]}   | Indicators likely to require prompt validation due to potential material impact or audit defensibility concerns. |
-| <span class="badge-medium">Medium</span>  | {lsl_counts["MEDIUM"]} | Indicators that may reflect configuration, data quality, or timing weaknesses requiring review. |
-| <span class="badge-low">Low</span>     | {lsl_counts["LOW"]}    | Lower-impact indicators that should be improved over time. |
+<table class="summary-table">
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Count</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge-high">High</span></td>
+      <td>{lsl_counts["HIGH"]}</td>
+      <td>Indicators likely to require prompt validation due to potential material impact or audit defensibility concerns.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-medium">Medium</span></td>
+      <td>{lsl_counts["MEDIUM"]}</td>
+      <td>Indicators that may reflect configuration, data quality, or timing weaknesses requiring review.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-low">Low</span></td>
+      <td>{lsl_counts["LOW"]}</td>
+      <td>Lower-impact indicators that should be improved over time.</td>
+    </tr>
+  </tbody>
+</table>
 
 ---
 """.strip()
@@ -929,15 +1146,74 @@ def build_lsl_severity_summary(lsl_counts: Dict[str, int]) -> str:
 
 def build_term_severity_summary(term_counts: Dict[str, int]) -> str:
     if not any(term_counts.values()):
-        return ""
+        return "No material termination-related findings were identified in the current dataset.\n\n---"
 
-    return f"""Where a Termination Exposure review was performed, the table below summarises the number of termination-related evidential issues identified by severity. Counts reflect **evidential risk** only and do not represent confirmed non-compliance or quantified financial exposure, or remediation priority.
+    return f"""
+Where a Termination Exposure review was performed, the table below summarises the number of termination-related evidential issues identified by severity. Counts reflect **evidential risk only** and do not represent confirmed non-compliance or quantified financial exposure, or remediation priority.
 
-| Severity | Count | Description |
-|---------|:-------------:|---------------------------|
-| <span class="badge-high">High</span>    | {term_counts["HIGH"]}   | Absence or weakness of core termination or final pay evidence that would materially impair the organisation’s ability to evidence termination decisions if reviewed by auditors or regulators. |
-| <span class="badge-medium">Medium</span>  | {term_counts["MEDIUM"]} | Termination evidence exists but is incomplete, delayed or ambiguous and may require additional explanation or manual reconstruction. |
-| <span class="badge-low">Low</span>     | {term_counts["LOW"]}    | Minor record-keeping or data quality weaknesses in termination records that should be improved over time to support efficient and reliable payroll operations. |
+<table class="summary-table">
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Count</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge-high">High</span></td>
+      <td>{term_counts["HIGH"]}</td>
+      <td>Absence or weakness of core termination or final pay evidence that would materially impair the organisation’s ability to evidence termination decisions if reviewed by auditors or regulators.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-medium">Medium</span></td>
+      <td>{term_counts["MEDIUM"]}</td>
+      <td>Termination evidence exists but is incomplete, delayed or ambiguous and may require additional explanation or manual reconstruction.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-low">Low</span></td>
+      <td>{term_counts["LOW"]}</td>
+      <td>Minor record-keeping or data quality weaknesses in termination records that should be improved over time to support efficient and reliable payroll operations.</td>
+    </tr>
+  </tbody>
+</table>
+
+---
+""".strip()
+
+
+def build_cross_module_summary(cross_counts: Dict[str, int]) -> str:
+    if not any(cross_counts.values()):
+        return "No material cross-module integrity findings were identified in the current dataset.\n\n---"
+
+    return f"""Where a Cross-Module Integrity review was performed, the table below summarises the number of cross-module inconsistencies identified by severity. Counts reflect **integrity risk indicators only** and do not represent confirmed non-compliance or quantified financial exposure.
+
+<table class="summary-table">
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Count</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge-high">High</span></td>
+      <td>{cross_counts["HIGH"]}</td>
+      <td>Cross-dataset inconsistencies that may materially affect confidence in employee lifecycle, payroll sequencing, or linked record integrity.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-medium">Medium</span></td>
+      <td>{cross_counts["MEDIUM"]}</td>
+      <td>Cross-module mismatches or data linkage issues that warrant review but may be explainable through timing, process, or source-system differences.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-low">Low</span></td>
+      <td>{cross_counts["LOW"]}</td>
+      <td>Lower-impact cross-module inconsistencies that should be monitored and improved over time.</td>
+    </tr>
+  </tbody>
+</table>
 
 ---
 """.strip()
@@ -958,11 +1234,32 @@ def build_key_findings_overview(findings: List[Finding]) -> str:
 
     return f"""The automated checks identified the following potential issues in the leave and entitlement data reviewed. Severity reflects the relative level of risk to payroll accuracy and audit defensibility, not a confirmed breach.
 
-| Severity | Count | Description |
-|---------|:-----:|-------------|
-| <span class="badge-high">High</span>    | {high}   | {high_desc} |
-| <span class="badge-medium">Medium</span>  | {med}   | {med_desc}  |
-| <span class="badge-low">Low</span>     | {low}   | {low_desc}  |
+<table class="summary-table">
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Count</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge-high">High</span></td>
+      <td>{high}</td>
+      <td>{high_desc}</td>
+    </tr>
+    <tr>
+      <td><span class="badge-medium">Medium</span></td>
+      <td>{med}</td>
+      <td>{med_desc}</td>
+    </tr>
+    <tr>
+      <td><span class="badge-low">Low</span></td>
+      <td>{low}</td>
+      <td>{low_desc}</td>
+    </tr>
+  </tbody>
+</table>
 
 ---
 """.strip()
@@ -984,9 +1281,7 @@ def build_next_steps(base_output_dir: Path) -> str:
     summary = load_executive_summary_json(base_output_dir)
 
     if not summary:
-        return """Recommended Next Steps
-
-1. Validate the highest-severity findings first.
+        return """1. Validate the highest-severity findings first.
 2. Review the most affected modules and confirm whether findings reflect genuine control issues or data limitations.
 3. Address structural data gaps that weaken evidentiary confidence.
 4. Confirm root causes before remediation.
@@ -1002,7 +1297,7 @@ def build_next_steps(base_output_dir: Path) -> str:
 
     action_labels = {
         "TERM": "termination handling",
-        "RKEG": "record-keeping and evidence controls",
+        "RKEG": "record-keeping controls",
         "LEAVE": "leave calculation and balance integrity",
         "LSL": "long service leave eligibility and accrual",
         "CROSS_MODULE": "cross-module lifecycle consistency",
@@ -1032,9 +1327,7 @@ def build_next_steps(base_output_dir: Path) -> str:
             "3. Address any structural data gaps identified, particularly where they reduce confidence in validation or audit defensibility."
         )
 
-    return f"""Recommended Next Steps
-
-{first_line}
+    return f"""{first_line}
 2. Confirm whether the identified findings reflect configuration weaknesses, process breakdowns, incomplete records, or isolated data anomalies.
 {structural_line}
 4. Validate substantive logical integrity findings before remediation decisions are made.
@@ -1092,6 +1385,15 @@ def build_appendices(included_modules: set[str], base_output_dir: Path) -> str:
         lines.append("- Missing or inconsistent termination attributes")
         lines.append("")
 
+    if MODULE_CROSS in mods:
+        lines.append("#### Cross-Module Integrity (CROSS_MODULE)")
+        lines.append("")
+        lines.append("- Employee lifecycle mismatches across datasets")
+        lines.append("- Leave activity inconsistent with employment or termination status")
+        lines.append("- Payroll events inconsistent with linked employee or termination records")
+        lines.append("- Cross-dataset linkage or sequencing anomalies")
+        lines.append("")
+
     lines.append("---")
     lines.append("")
     lines.append("### Appendix B – Data Fields Used")
@@ -1108,6 +1410,7 @@ def build_appendices(included_modules: set[str], base_output_dir: Path) -> str:
             "- `as_of_date`",
             "- `rule_code`",
             "- `severity`",
+            "- `classification`",
             "- `message`",
             "- `diff_units`",
             "- `finding_id`",
@@ -1124,6 +1427,7 @@ def build_appendices(included_modules: set[str], base_output_dir: Path) -> str:
             "- `as_of_date`",
             "- `rule_code`",
             "- `severity`",
+            "- `classification`",
             "- `message`",
             "- `diff_units`",
             "- `finding_id`",
@@ -1140,6 +1444,7 @@ def build_appendices(included_modules: set[str], base_output_dir: Path) -> str:
             "- `final_pay_date`",
             "- `rule_code`",
             "- `severity`",
+            "- `classification`",
             "- `message`",
             "- `days_gap`",
             "- `evidence`",
@@ -1157,6 +1462,25 @@ def build_appendices(included_modules: set[str], base_output_dir: Path) -> str:
             "- `as_of_date`",
             "- `rule_code`",
             "- `severity`",
+            "- `classification`",
+            "- `message`",
+            "- `diff_units`",
+            "- `evidence`",
+            "- `finding_id`",
+            "- `next_action`",
+            "",
+        ])
+
+    if MODULE_CROSS in mods:
+        lines.append("**Cross Module Integrity (CROSS_MODULE)**")
+        lines.append("")
+        lines.extend([
+            "- `employee_id`",
+            "- `leave_type`",
+            "- `as_of_date`",
+            "- `rule_code`",
+            "- `severity`",
+            "- `classification`",
             "- `message`",
             "- `diff_units`",
             "- `evidence`",
@@ -1207,6 +1531,16 @@ def build_appendices(included_modules: set[str], base_output_dir: Path) -> str:
         if rkeg_summary.exists():
             lines.append(f"- `{rkeg_summary.relative_to(base_output_dir)}`")
 
+    if MODULE_CROSS in mods:
+        cross_findings = modules_dir / "cross_module_findings.csv"
+        cross_summary = modules_dir / "cross_module_summary_by_severity.csv"
+        if cross_findings.exists():
+            rel_path = str(cross_findings.relative_to(base_output_dir)).replace("\\", "/")
+            lines.append(f"- `{rel_path}`")
+        if cross_summary.exists():
+            rel_path = str(cross_summary.relative_to(base_output_dir)).replace("\\", "/")
+            lines.append(f"- `{rel_path}`")
+
     exec_summary_md = base_output_dir / "executive" / "executive_summary.md"
     exec_summary_json = base_output_dir / "executive" / "executive_summary.json"
     if exec_summary_md.exists():
@@ -1251,15 +1585,15 @@ def generate_exec_pack(
         print(" -", m, "=>", _module_ran(m, target_dir))
     print_exec_pack_preflight(target_dir, included)
 
-    leave_findings = []
     if MODULE_LEAVE in included:
-        leave_findings_path = target_dir / "modules" / "leave_leakage_findings.csv"
+        leave_findings_path = target_dir / "leave_leakage_findings.csv"
         leave_findings = [Finding.from_row(r) for r in load_csv(leave_findings_path)]
 
     sorted_findings = sort_findings(leave_findings) if leave_findings else []
     rkeg_counts = load_rkeg_severity_counts(target_dir) if MODULE_RKEG in included else {}
     term_counts = load_term_severity_counts(target_dir) if MODULE_TERM in included else {}
     lsl_counts = load_lsl_severity_counts(target_dir) if MODULE_LSL in included else {}
+    cross_counts = load_cross_module_severity_counts(target_dir) if MODULE_CROSS in included else {}
 
     if review_period is None:
         review_period = derive_exec_review_period_from_data(included, target_dir)
@@ -1269,11 +1603,12 @@ def generate_exec_pack(
     structure = ReportStructure()
 
     structure.add("Executive Summary", 1, lambda: build_executive_summary(target_dir))
+    structure.add("Highlight Insights", 1, lambda: build_highlight_insights(target_dir))
     structure.add("Risk Profile Overview", 1, lambda: build_risk_profile_overview(target_dir))
     structure.add("Data Sources", 1, lambda: build_data_sources_section(included, target_dir))
     structure.add("Scope & Methodology", 1, lambda: build_scope_and_methodology(included))
 
-    summary_modules = {MODULE_LEAVE, MODULE_LSL, MODULE_TERM, MODULE_RKEG}
+    summary_modules = {MODULE_LEAVE, MODULE_LSL, MODULE_TERM, MODULE_RKEG, MODULE_CROSS}
     if any(m in included for m in summary_modules):
         structure.add("Module Summary Overview", 1, lambda: "")
 
@@ -1284,7 +1619,7 @@ def generate_exec_pack(
                 lambda: build_key_findings_overview(sorted_findings),
             )
 
-        if MODULE_LSL in included:
+        if MODULE_LSL in included and any(lsl_counts.values()):
             structure.add(
                 "Long Service Leave (LSL) Exposure – Severity Overview",
                 2,
@@ -1303,6 +1638,13 @@ def generate_exec_pack(
                 "Record-Keeping & Evidence Gaps (RKEG) – Severity Overview",
                 2,
                 lambda: build_rkeg_summary(rkeg_counts),
+            )
+
+        if MODULE_CROSS in included:
+            structure.add(
+                "Cross-Module Integrity – Summary Overview",
+                2,
+                lambda: build_cross_module_summary(cross_counts),
             )
 
         structure.add(
