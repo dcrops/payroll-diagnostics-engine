@@ -23,10 +23,9 @@ from common.validation import (
     write_validation_outputs,
 )
 
-
-REQUIRED_EMP = {"employee_id", "employment_type", "fte", "start_date"}
+REQUIRED_EMP = {"employee_id", "start_date"}
 REQUIRED_SNAP = {"employee_id", "leave_type", "as_of_date", "balance_units"}
-REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units", "event_type"}
+REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units"}
 
 
 def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
@@ -40,6 +39,7 @@ def _load_rules(rules_path: Path) -> list[dict]:
         payload = yaml.safe_load(f)
     return payload.get("rules", [])
 
+
 def validate_lsl_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
     module_name = "LSL"
     issues = []
@@ -52,7 +52,6 @@ def validate_lsl_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
     check_dataset_present(issues, module_name, "leave_snapshot", leave_snapshot, required=False)
     check_dataset_present(issues, module_name, "leave_ledger", leave_ledger, required=False)
 
-    # Hard block only if everything relevant is missing
     core_datasets = [employee_master, leave_snapshot, leave_ledger]
     if all(df is None or df.empty for df in core_datasets):
         add_issue(
@@ -176,7 +175,6 @@ def validate_lsl_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
                     f"Leave ledger column '{col}' is fully null/blank; some LSL ledger checks may have reduced coverage.",
                 )
 
-    # LSL-specific assessability check
     snapshot_has_lsl = False
     ledger_has_lsl = False
 
@@ -248,7 +246,6 @@ def main(client: str, pilot: str) -> int:
     )
 
     snapshot_path = processed_dir / "balances_snapshot.csv"
-
     if snapshot_path.exists() and snapshot_path.stat().st_size > 0:
         snapshot = pd.read_csv(
             snapshot_path,
@@ -272,18 +269,21 @@ def main(client: str, pilot: str) -> int:
         )
 
     for df in (employees, snapshot, ledger):
-        df["employee_id"] = df["employee_id"].astype(str).str.strip()
+        if not df.empty and "employee_id" in df.columns:
+            df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
     _require_cols(employees, REQUIRED_EMP, "employees.csv")
-    _require_cols(snapshot, REQUIRED_SNAP, "balances_snapshot.csv")
+    if not snapshot.empty:
+        _require_cols(snapshot, REQUIRED_SNAP, "balances_snapshot.csv")
     _require_cols(ledger, REQUIRED_LEDGER, "leave_ledger.csv")
 
     employees["start_date"] = pd.to_datetime(employees["start_date"], errors="coerce")
-    snapshot["as_of_date"] = pd.to_datetime(snapshot["as_of_date"], errors="coerce")
+    if not snapshot.empty:
+        snapshot["as_of_date"] = pd.to_datetime(snapshot["as_of_date"], errors="coerce")
     ledger["event_date"] = pd.to_datetime(ledger["event_date"], errors="coerce")
 
     bad_emp_dates = employees["start_date"].isna().sum()
-    bad_snapshot_dates = snapshot["as_of_date"].isna().sum()
+    bad_snapshot_dates = snapshot["as_of_date"].isna().sum() if not snapshot.empty else 0
     bad_ledger_dates = ledger["event_date"].isna().sum()
 
     print(f"[input] Using processed directory: {processed_dir}")
@@ -291,9 +291,6 @@ def main(client: str, pilot: str) -> int:
     print(f"[input] Unparseable snapshot as_of_date rows: {bad_snapshot_dates}")
     print(f"[input] Unparseable ledger event_date rows: {bad_ledger_dates}")
 
-    # ----------------------------
-    # Module validation
-    # ----------------------------
     datasets = {
         "employee_master": employees,
         "leave_snapshot": snapshot,
@@ -311,19 +308,21 @@ def main(client: str, pilot: str) -> int:
     window_dates: list[date] = []
 
     emp_dates = employees["start_date"].dropna()
-    snap_dates = snapshot["as_of_date"].dropna()
-    ledger_dates = ledger["event_date"].dropna()
-
     if not emp_dates.empty:
         window_dates.extend(emp_dates.dt.date.tolist())
-    if not snap_dates.empty:
-        window_dates.extend(snap_dates.dt.date.tolist())
+
+    if not snapshot.empty:
+        snap_dates = snapshot["as_of_date"].dropna()
+        if not snap_dates.empty:
+            window_dates.extend(snap_dates.dt.date.tolist())
+
+    ledger_dates = ledger["event_date"].dropna()
     if not ledger_dates.empty:
         window_dates.extend(ledger_dates.dt.date.tolist())
 
     write_data_window(output_dir / "lsl_data_window.csv", window_dates)
 
-    snapshot_date = snapshot["as_of_date"].max()
+    snapshot_date = snapshot["as_of_date"].max() if not snapshot.empty else None
 
     state = prepare_lsl_state(
         employees=employees,
@@ -333,9 +332,8 @@ def main(client: str, pilot: str) -> int:
     )
 
     rules = _load_rules(rules_path)
-    print([r["id"] for r in rules][-5:])
-
     findings: list[Finding] = []
+
     datasets = {
         "employee_master": employees,
         "leave_snapshot": snapshot,
@@ -406,9 +404,6 @@ def main(client: str, pilot: str) -> int:
     severity_summary_path = output_dir / "lsl_summary_by_severity.csv"
     severity_summary_df.to_csv(severity_summary_path, index=False)
 
-        # ----------------------------
-    # Classification summaries
-    # ----------------------------
     if "classification" not in findings_df.columns:
         findings_df["classification"] = "UNCLASSIFIED"
     else:
@@ -461,4 +456,3 @@ def main(client: str, pilot: str) -> int:
     print(f"Wrote: {exposure_path}")
 
     return 0
-

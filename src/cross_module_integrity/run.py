@@ -11,12 +11,11 @@ from src.common.data_window import write_data_window
 from src.cross_module_integrity.models import Finding
 from src.cross_module_integrity.detectors.registry import run_rule
 
-
 REQUIRED_TERM = {"employee_id", "termination_date"}
 REQUIRED_PAY = {"employee_id", "pay_date"}
 REQUIRED_EMP = {"employee_id"}
 REQUIRED_SNAPSHOT = {"employee_id", "leave_type", "as_of_date", "balance_units"}
-REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units", "event_type"}
+REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units"}
 
 
 def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
@@ -55,7 +54,6 @@ def main(client: str, pilot: str) -> int:
     )
 
     leave_snapshot_path = processed_dir / "balances_snapshot.csv"
-
     if leave_snapshot_path.exists() and leave_snapshot_path.stat().st_size > 0:
         leave_snapshot = pd.read_csv(
             leave_snapshot_path,
@@ -71,12 +69,14 @@ def main(client: str, pilot: str) -> int:
     )
 
     for df in (terminations, pay_events, employees, leave_snapshot, leave_ledger):
-        df["employee_id"] = df["employee_id"].astype(str).str.strip()
+        if not df.empty and "employee_id" in df.columns:
+            df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
     _require_cols(terminations, REQUIRED_TERM, "terminations.csv")
     _require_cols(pay_events, REQUIRED_PAY, "pay_events.csv")
     _require_cols(employees, REQUIRED_EMP, "employees.csv")
-    _require_cols(leave_snapshot, REQUIRED_SNAPSHOT, "balances_snapshot.csv")
+    if not leave_snapshot.empty:
+        _require_cols(leave_snapshot, REQUIRED_SNAPSHOT, "balances_snapshot.csv")
     _require_cols(leave_ledger, REQUIRED_LEDGER, "leave_ledger.csv")
 
     terminations["termination_date"] = pd.to_datetime(
@@ -85,16 +85,17 @@ def main(client: str, pilot: str) -> int:
     pay_events["pay_date"] = pd.to_datetime(
         pay_events["pay_date"], errors="coerce"
     )
-    leave_snapshot["as_of_date"] = pd.to_datetime(
-        leave_snapshot["as_of_date"], errors="coerce"
-    )
+    if not leave_snapshot.empty:
+        leave_snapshot["as_of_date"] = pd.to_datetime(
+            leave_snapshot["as_of_date"], errors="coerce"
+        )
     leave_ledger["event_date"] = pd.to_datetime(
         leave_ledger["event_date"], errors="coerce"
     )
 
     bad_term_dates = terminations["termination_date"].isna().sum()
     bad_pay_dates = pay_events["pay_date"].isna().sum()
-    bad_snapshot_dates = leave_snapshot["as_of_date"].isna().sum()
+    bad_snapshot_dates = leave_snapshot["as_of_date"].isna().sum() if not leave_snapshot.empty else 0
     bad_ledger_dates = leave_ledger["event_date"].isna().sum()
 
     print(f"[input] Unparseable termination_date rows: {bad_term_dates}")
@@ -107,7 +108,7 @@ def main(client: str, pilot: str) -> int:
     for series in (
         terminations["termination_date"].dropna(),
         pay_events["pay_date"].dropna(),
-        leave_snapshot["as_of_date"].dropna(),
+        leave_snapshot["as_of_date"].dropna() if not leave_snapshot.empty else pd.Series(dtype="datetime64[ns]"),
         leave_ledger["event_date"].dropna(),
     ):
         if not series.empty:
@@ -127,7 +128,6 @@ def main(client: str, pilot: str) -> int:
 
     findings: list[Finding] = []
 
-    # Pass 1: run all rules except CM-020
     for rule in rules:
         if rule["id"] == "CM-020":
             continue
@@ -143,6 +143,7 @@ def main(client: str, pilot: str) -> int:
                 "as_of_date",
                 "rule_code",
                 "severity",
+                "classification",
                 "message",
                 "diff_units",
                 "evidence",
@@ -151,10 +152,8 @@ def main(client: str, pilot: str) -> int:
             ]
         )
 
-    # Make first-pass findings available to CM-020
     datasets["cross_module_findings"] = first_pass_df
 
-    # Pass 2: run CM-020 only
     for rule in rules:
         if rule["id"] != "CM-020":
             continue
@@ -208,9 +207,6 @@ def main(client: str, pilot: str) -> int:
     severity_summary_path = output_dir / "cross_module_summary_by_severity.csv"
     severity_summary_df.to_csv(severity_summary_path, index=False)
 
-        # ----------------------------
-    # Classification summaries
-    # ----------------------------
     if "classification" not in findings_df.columns:
         findings_df["classification"] = "UNCLASSIFIED"
     else:

@@ -11,9 +11,8 @@ from src.common.paths import get_processed_dir, get_outputs_dir
 from src.leave_leakage.models import Finding
 from src.leave_leakage.detectors.registry import run_rule
 
-
-REQUIRED_EMP = {"employee_id", "employment_type", "fte", "start_date", "termination_date"}
-REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units", "event_type"}
+REQUIRED_EMP = {"employee_id", "termination_date"}
+REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units"}
 REQUIRED_SNAP = {"employee_id", "leave_type", "as_of_date", "balance_units"}
 REQUIRED_REQUESTS = {
     "request_id",
@@ -35,12 +34,6 @@ REQUIRED_TIMESHEETS = {
 
 
 def _extract_dates_from_leave_ledger_df(df: pd.DataFrame) -> list[date]:
-    """
-    Collect valid dates from the client leave ledger DataFrame.
-
-    We prefer the actual ledger date column and accept a few
-    common formats, ignoring anything that doesn't parse cleanly.
-    """
     if df is None or df.empty:
         return []
 
@@ -135,7 +128,6 @@ def main(client: str, pilot: str) -> int:
         timesheets = pd.DataFrame()
 
     snapshot_path = processed_dir / "balances_snapshot.csv"
-
     if snapshot_path.exists() and snapshot_path.stat().st_size > 0:
         snapshot = pd.read_csv(
             snapshot_path,
@@ -145,7 +137,6 @@ def main(client: str, pilot: str) -> int:
         print("INFO - balances_snapshot.csv not found or empty; continuing without snapshot data")
         snapshot = pd.DataFrame(columns=["employee_id", "leave_type", "as_of_date", "balance_units"])
 
-    # Derive LEAVE data window from client ledger
     dates = _extract_dates_from_leave_ledger_df(ledger)
     if dates:
         window_path = output_dir / "leave_data_window.csv"
@@ -157,19 +148,20 @@ def main(client: str, pilot: str) -> int:
 
     _require_cols(employees, REQUIRED_EMP, "employees.csv")
     _require_cols(ledger, REQUIRED_LEDGER, "leave_ledger.csv")
-    _require_cols(snapshot, REQUIRED_SNAP, "balances_snapshot.csv")
+    if not snapshot.empty:
+        _require_cols(snapshot, REQUIRED_SNAP, "balances_snapshot.csv")
     if not leave_requests.empty:
         _require_cols(leave_requests, REQUIRED_REQUESTS, "leave_requests.csv")
-
     if not timesheets.empty:
         _require_cols(timesheets, REQUIRED_TIMESHEETS, "timesheets.csv")
 
-    # Parse dates
-    employees["start_date"] = pd.to_datetime(employees["start_date"], errors="coerce")
+    if "start_date" in employees.columns:
+        employees["start_date"] = pd.to_datetime(employees["start_date"], errors="coerce")
     employees["termination_date"] = pd.to_datetime(employees["termination_date"], errors="coerce")
 
     ledger["event_date"] = pd.to_datetime(ledger["event_date"], errors="coerce")
-    snapshot["as_of_date"] = pd.to_datetime(snapshot["as_of_date"], errors="coerce")
+    if not snapshot.empty:
+        snapshot["as_of_date"] = pd.to_datetime(snapshot["as_of_date"], errors="coerce")
 
     if not leave_requests.empty:
         leave_requests["request_start_date"] = pd.to_datetime(
@@ -186,26 +178,23 @@ def main(client: str, pilot: str) -> int:
         timesheets["work_date"] = pd.to_datetime(timesheets["work_date"], errors="coerce")
 
     bad_ledger_dates = ledger["event_date"].isna().sum()
-    bad_snapshot_dates = snapshot["as_of_date"].isna().sum()
+    bad_snapshot_dates = snapshot["as_of_date"].isna().sum() if not snapshot.empty else 0
 
     bad_request_start_dates = (
         leave_requests["request_start_date"].isna().sum()
         if not leave_requests.empty and "request_start_date" in leave_requests.columns
         else 0
     )
-
     bad_request_end_dates = (
         leave_requests["request_end_date"].isna().sum()
         if not leave_requests.empty and "request_end_date" in leave_requests.columns
         else 0
     )
-
     bad_request_approval_dates = (
         leave_requests["approval_date"].isna().sum()
         if not leave_requests.empty and "approval_date" in leave_requests.columns
         else 0
     )
-
     bad_timesheet_dates = (
         timesheets["work_date"].isna().sum()
         if not timesheets.empty and "work_date" in timesheets.columns
@@ -219,42 +208,46 @@ def main(client: str, pilot: str) -> int:
     print(f"[input] Unparseable leave request approval rows: {bad_request_approval_dates}")
     print(f"[input] Unparseable timesheet work_date rows: {bad_timesheet_dates}")
 
-    # ----------------------------
-    # Load rule metadata
-    # ----------------------------
     rules = _load_rules(rules_path)
-
-    # ----------------------------
-    # Run rules
-    # ----------------------------
     findings: list[Finding] = []
 
-    # Join ledger to snapshot on employee + leave_type, then keep events up to as_of_date
-    merged = snapshot.merge(
-        ledger,
-        on=["employee_id", "leave_type"],
-        how="left",
-    )
+    if not snapshot.empty:
+        merged = snapshot.merge(
+            ledger,
+            on=["employee_id", "leave_type"],
+            how="left",
+        )
 
-    merged = merged[
-        merged["event_date"].isna() | (merged["event_date"] <= merged["as_of_date"])
-    ]
+        merged = merged[
+            merged["event_date"].isna() | (merged["event_date"] <= merged["as_of_date"])
+        ]
 
-    ledger_bal = (
-        merged.groupby(["employee_id", "leave_type", "as_of_date"], as_index=False)["units"]
-        .sum()
-        .rename(columns={"units": "ledger_balance_units"})
-    )
+        ledger_bal = (
+            merged.groupby(["employee_id", "leave_type", "as_of_date"], as_index=False)["units"]
+            .sum()
+            .rename(columns={"units": "ledger_balance_units"})
+        )
 
-    report = snapshot.merge(
-        ledger_bal,
-        on=["employee_id", "leave_type", "as_of_date"],
-        how="left",
-    )
-    report["ledger_balance_units"] = report["ledger_balance_units"].fillna(0.0)
-    report["diff_units"] = report["balance_units"] - report["ledger_balance_units"]
-    report["ledger_balance_units"] = report["ledger_balance_units"].round(2)
-    report["diff_units"] = report["diff_units"].round(2)
+        report = snapshot.merge(
+            ledger_bal,
+            on=["employee_id", "leave_type", "as_of_date"],
+            how="left",
+        )
+        report["ledger_balance_units"] = report["ledger_balance_units"].fillna(0.0)
+        report["diff_units"] = report["balance_units"] - report["ledger_balance_units"]
+        report["ledger_balance_units"] = report["ledger_balance_units"].round(2)
+        report["diff_units"] = report["diff_units"].round(2)
+    else:
+        report = pd.DataFrame(
+            columns=[
+                "employee_id",
+                "leave_type",
+                "as_of_date",
+                "balance_units",
+                "ledger_balance_units",
+                "diff_units",
+            ]
+        )
 
     datasets = {
         "employee_master": employees,
@@ -269,9 +262,6 @@ def main(client: str, pilot: str) -> int:
     for rule in rules:
         findings.extend(run_rule(rule, datasets, context=context))
 
-    # ----------------------------
-    # Write findings output
-    # ----------------------------
     if findings:
         findings_df = pd.DataFrame([f.__dict__ for f in findings])
     else:
@@ -294,9 +284,6 @@ def main(client: str, pilot: str) -> int:
     findings_path = output_dir / "leave_leakage_findings.csv"
     findings_df.to_csv(findings_path, index=False)
 
-    # ----------------------------
-    # Summary output (counts by rule and severity)
-    # ----------------------------
     if len(findings_df) == 0:
         summary_df = pd.DataFrame(columns=["rule_code", "severity", "finding_count"])
     else:
@@ -314,9 +301,6 @@ def main(client: str, pilot: str) -> int:
     print(f"Wrote: {summary_path}")
     print(summary_df.to_string(index=False))
 
-    # ----------------------------
-    # Summary output (totals by severity)
-    # ----------------------------
     if len(findings_df) == 0:
         severity_summary_df = pd.DataFrame(columns=["severity", "finding_count"])
     else:
@@ -333,9 +317,6 @@ def main(client: str, pilot: str) -> int:
     print(f"Wrote: {severity_summary_path}")
     print(severity_summary_df.to_string(index=False))
 
-        # ----------------------------
-    # Classification summaries
-    # ----------------------------
     if "classification" not in findings_df.columns:
         findings_df["classification"] = "UNCLASSIFIED"
     else:
@@ -370,17 +351,21 @@ def main(client: str, pilot: str) -> int:
     print(f"Wrote: {classification_summary_path}")
     print(f"Wrote: {classification_x_severity_path}")
 
-    # ----------------------------
-    # Detailed leakage reconciliation report
-    # ----------------------------
-    tolerance = 0.25  # 15 minutes in hours
-    report["risk_flag"] = report["diff_units"].abs() > tolerance
-    report["risk_reason"] = report["risk_flag"].map(
-        lambda x: "BALANCE_MISMATCH_LEDGER_VS_SNAPSHOT" if x else ""
-    )
+    tolerance = 0.25
+    if not report.empty:
+        report["risk_flag"] = report["diff_units"].abs() > tolerance
+        report["risk_reason"] = report["risk_flag"].map(
+            lambda x: "BALANCE_MISMATCH_LEDGER_VS_SNAPSHOT" if x else ""
+        )
+    else:
+        report["risk_flag"] = pd.Series(dtype="bool")
+        report["risk_reason"] = pd.Series(dtype="string")
 
     out_path = output_dir / "leakage_report.csv"
-    report.sort_values(["employee_id", "leave_type", "as_of_date"]).to_csv(out_path, index=False)
+    report.sort_values(
+        ["employee_id", "leave_type", "as_of_date"]
+        if not report.empty else ["employee_id"]
+    ).to_csv(out_path, index=False)
 
     print(f"Wrote: {out_path}")
     return 0

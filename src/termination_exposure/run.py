@@ -27,7 +27,7 @@ REQUIRED_TERM = {"employee_id", "termination_date"}
 REQUIRED_PAY = {"employee_id", "pay_date"}
 REQUIRED_EMP = {"employee_id"}
 REQUIRED_SNAPSHOT = {"employee_id", "leave_type", "as_of_date", "balance_units"}
-REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units", "event_type"}
+REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units"}
 
 
 def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
@@ -40,6 +40,7 @@ def _load_rules(rules_path: Path) -> list[dict]:
     with rules_path.open("r", encoding="utf-8") as f:
         payload = yaml.safe_load(f)
     return payload.get("rules", [])
+
 
 def validate_term_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
     module_name = "TERM"
@@ -83,7 +84,6 @@ def validate_term_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
         ["employee_id", "pay_date"],
     )
 
-    # Useful warnings, not blockers
     if not terminations.empty:
         if "evidence_reference" not in terminations.columns and "evidence_ref" not in terminations.columns:
             add_issue(
@@ -111,15 +111,13 @@ def validate_term_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
 
     return make_result(module_name, issues)
 
+
 def main(client: str, pilot: str) -> int:
     processed_dir = get_processed_dir(client, pilot)
     output_dir = get_outputs_dir(client, pilot)
 
     rules_path = Path(__file__).resolve().parent / "config" / "term_rules.yml"
 
-    # ----------------------------
-    # Load datasets
-    # ----------------------------
     terminations = pd.read_csv(
         processed_dir / "terminations.csv",
         dtype={"employee_id": "string"},
@@ -136,7 +134,6 @@ def main(client: str, pilot: str) -> int:
     )
 
     leave_snapshot_path = processed_dir / "balances_snapshot.csv"
-
     if leave_snapshot_path.exists() and leave_snapshot_path.stat().st_size > 0:
         leave_snapshot = pd.read_csv(
             leave_snapshot_path,
@@ -151,26 +148,23 @@ def main(client: str, pilot: str) -> int:
         dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
     )
 
-    # ----------------------------
-    # Clean + validate
-    # ----------------------------
     for df in (terminations, pay_events, employees, leave_snapshot, leave_ledger):
-        df["employee_id"] = df["employee_id"].astype(str).str.strip()
+        if not df.empty and "employee_id" in df.columns:
+            df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
     _require_cols(terminations, REQUIRED_TERM, "terminations.csv")
     _require_cols(pay_events, REQUIRED_PAY, "pay_events.csv")
     _require_cols(employees, REQUIRED_EMP, "employees.csv")
-    _require_cols(leave_snapshot, REQUIRED_SNAPSHOT, "balances_snapshot.csv")
+    if not leave_snapshot.empty:
+        _require_cols(leave_snapshot, REQUIRED_SNAPSHOT, "balances_snapshot.csv")
     _require_cols(leave_ledger, REQUIRED_LEDGER, "leave_ledger.csv")
 
     terminations["termination_date"] = pd.to_datetime(terminations["termination_date"], errors="coerce")
     pay_events["pay_date"] = pd.to_datetime(pay_events["pay_date"], errors="coerce")
-    leave_snapshot["as_of_date"] = pd.to_datetime(leave_snapshot["as_of_date"], errors="coerce")
+    if not leave_snapshot.empty:
+        leave_snapshot["as_of_date"] = pd.to_datetime(leave_snapshot["as_of_date"], errors="coerce")
     leave_ledger["event_date"] = pd.to_datetime(leave_ledger["event_date"], errors="coerce")
 
-        # ----------------------------
-    # Module validation
-    # ----------------------------
     datasets = {
         "terminations": terminations,
         "pay_events": pay_events,
@@ -187,15 +181,11 @@ def main(client: str, pilot: str) -> int:
         print("TERM module blocked due to validation errors.")
         return 1
 
-    # ----------------------------
-    # Data window
-    # ----------------------------
     window_dates: list[date] = []
-
     for series in [
         terminations["termination_date"],
         pay_events["pay_date"],
-        leave_snapshot["as_of_date"],
+        leave_snapshot["as_of_date"] if not leave_snapshot.empty else pd.Series(dtype="datetime64[ns]"),
         leave_ledger["event_date"],
     ]:
         valid = series.dropna()
@@ -204,26 +194,18 @@ def main(client: str, pilot: str) -> int:
 
     write_data_window(output_dir / "term_data_window.csv", window_dates)
 
-    # ----------------------------
-    # Prepare state + rules
-    # ----------------------------
     state = prepare_term_state(
         terminations=terminations,
         pay_events=pay_events,
     )
 
     rules = _load_rules(rules_path)
-
     findings: list[Finding] = []
-
     context = {"state": state}
 
     for rule in rules:
         findings.extend(run_rule(rule, datasets, context=context))
 
-    # ----------------------------
-    # Findings
-    # ----------------------------
     if findings:
         findings_df = pd.DataFrame([f.__dict__ for f in findings])
     else:
@@ -246,9 +228,6 @@ def main(client: str, pilot: str) -> int:
     findings_path = output_dir / "term_findings.csv"
     findings_df.to_csv(findings_path, index=False)
 
-    # ----------------------------
-    # Summary
-    # ----------------------------
     if len(findings_df) == 0:
         summary_df = pd.DataFrame(columns=["rule_code", "severity", "finding_count"])
     else:
@@ -262,9 +241,6 @@ def main(client: str, pilot: str) -> int:
     summary_path = output_dir / "term_summary.csv"
     summary_df.to_csv(summary_path, index=False)
 
-    # ----------------------------
-    # Severity summary
-    # ----------------------------
     if len(findings_df) == 0:
         severity_summary_df = pd.DataFrame(columns=["severity", "finding_count"])
     else:
@@ -278,9 +254,6 @@ def main(client: str, pilot: str) -> int:
     severity_summary_path = output_dir / "term_summary_by_severity.csv"
     severity_summary_df.to_csv(severity_summary_path, index=False)
 
-        # ----------------------------
-    # Classification summaries
-    # ----------------------------
     if "classification" not in findings_df.columns:
         findings_df["classification"] = "UNCLASSIFIED"
     else:
