@@ -136,12 +136,29 @@ def _run_leave_015_zero_unit_event(rule: dict, ledger: pd.DataFrame) -> list[Fin
 def _run_leave_019_invalid_event_type(rule: dict, ledger: pd.DataFrame) -> list[Finding]:
     findings: list[Finding] = []
 
+    if ledger.empty:
+        return findings
+
+    if "event_type" not in ledger.columns:
+        print("[LEAVE-019] Skipping: event_type column not present in leave_ledger")
+        return findings
+
+    event_type_series = ledger["event_type"].astype("string").str.strip()
+
+    # If the column exists but contains no usable values, skip the rule.
+    if event_type_series.isna().all() or (event_type_series == "").all():
+        print("[LEAVE-019] Skipping: event_type column exists but contains no usable values")
+        return findings
+
     allowed = {"ACCRUAL", "TAKEN", "ADJUSTMENT", "PAYOUT"}
 
-    bad = ledger[~ledger["event_type"].astype(str).str.upper().isin(allowed)]
+    normalised_event_type = event_type_series.str.upper()
+    bad = ledger[~normalised_event_type.isin(allowed)].copy()
+
+    if bad.empty:
+        return findings
 
     for _, row in bad.iterrows():
-
         evidence_str = json.dumps(
             {
                 "sources": ["leave_ledger.csv"],
@@ -151,7 +168,7 @@ def _run_leave_019_invalid_event_type(rule: dict, ledger: pd.DataFrame) -> list[
                     "event_date": str(row["event_date"].date()) if pd.notna(row["event_date"]) else None,
                 },
                 "values": {
-                    "event_type": str(row["event_type"]),
+                    "event_type": str(row["event_type"]) if pd.notna(row["event_type"]) else None,
                     "units": float(row["units"]) if pd.notna(row["units"]) else None,
                 },
                 "thresholds": {

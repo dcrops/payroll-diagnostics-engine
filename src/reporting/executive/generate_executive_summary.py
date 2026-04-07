@@ -58,7 +58,6 @@ def derive_signals(df: pd.DataFrame) -> dict:
 def interpret_signals(signals: dict) -> dict:
     total = signals["total_findings"]
     dom_class = signals["dominant_classification"]
-    dom_sev = signals["dominant_severity"]
     shares = signals["class_shares"]
     top_modules = signals["top_high_modules"]
     class_summary = signals.get("class_summary", {})
@@ -145,14 +144,27 @@ def interpret_signals(signals: dict) -> dict:
         )
 
     # Severity insight
-    if dom_sev == "HIGH":
-        lines.append(
-            "A substantial proportion of findings are high severity, indicating meaningful control exposure."
-        )
-    else:
-        lines.append(
-            f"The most common severity level is {dom_sev}."
-        )
+        # Severity insight
+    high_count = severity_summary.get("HIGH", 0)
+    medium_count = severity_summary.get("MEDIUM", 0)
+
+    if total > 0:
+        high_pct = round((high_count / total) * 100)
+        medium_pct = round((medium_count / total) * 100)
+
+        if high_count > 0 and medium_count > 0:
+            lines.append(
+                f"Findings are split between high ({high_pct}%) and medium ({medium_pct}%) severity, "
+                "indicating a mix of immediate control concerns and broader process weaknesses."
+            )
+        elif high_count > 0:
+            lines.append(
+                f"High-severity findings account for {high_pct}% of results, indicating meaningful control exposure."
+            )
+        elif medium_count > 0:
+            lines.append(
+                f"Medium-severity findings account for {medium_pct}% of results, indicating a broader pattern of control and process weaknesses requiring follow-up."
+            )
 
     # Recommended focus
     if len(friendly_modules) >= 2:

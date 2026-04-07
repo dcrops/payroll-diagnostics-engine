@@ -2,7 +2,7 @@
 
 **Organisation:** CLT Kaggle Test  
 **Review period:** 13 Jan 2022 to 06 May 2024  
-**Report prepared as at:** 06 Apr 2026  
+**Report prepared as at:** 07 Apr 2026  
 
 **Important note**
 
@@ -14,11 +14,11 @@ It does not constitute legal, accounting, or industrial relations advice.
 
 ## 1. Executive Summary
 
-- CRC identified 109 findings across the reviewed modules.
+- CRC identified 73 findings across the reviewed modules.
 - The overall profile is primarily driven by logical integrity failures rather than structural data limitations.
 - High-severity findings are concentrated in termination handling and record-keeping controls, indicating the strongest exposure sits in those areas.
 - Structural findings are present, but they are not the primary driver of risk in this review.
-- A substantial proportion of findings are high severity, indicating meaningful control exposure.
+- Findings are split between high (49%) and medium (51%) severity, indicating a mix of immediate control concerns and broader process weaknesses.
 
 ### What this means
 
@@ -34,7 +34,7 @@ The following points summarise the most important observations from the analysis
 
 - The strongest concentration of risk sits in **termination handling and record-keeping controls**.
 - The overall profile is dominated by **logical** findings rather than primarily structural data issues.
-- A meaningful share of findings are **high severity**, indicating that the results warrant targeted follow-up rather than simple monitoring.
+- Findings are split between **high (49%)** and **medium (51%) severity**, indicating a mix of immediate control concerns and broader process weaknesses.
 
 ---
 
@@ -48,14 +48,14 @@ This section summarises the overall risk profile across all included modules usi
     <tr><th>Metric</th><th>Value</th></tr>
   </thead>
   <tbody>
-    <tr><td>Total findings</td><td>109</td></tr>
+    <tr><td>Total findings</td><td>73</td></tr>
     <tr><td>Dominant classification</td><td>LOGICAL</td></tr>
-    <tr><td>Dominant severity</td><td>HIGH</td></tr>
-    <tr><td>Logical findings</td><td>63 (58%)</td></tr>
-    <tr><td>Structural findings</td><td>37 (34%)</td></tr>
-    <tr><td>Contextual findings</td><td>9 (8%)</td></tr>
-    <tr><td>High severity findings</td><td>63 (58%)</td></tr>
-    <tr><td>Medium severity findings</td><td>46 (42%)</td></tr>
+    <tr><td>Dominant severity</td><td>MEDIUM</td></tr>
+    <tr><td>Logical findings</td><td>45 (62%)</td></tr>
+    <tr><td>Structural findings</td><td>7 (10%)</td></tr>
+    <tr><td>Contextual findings</td><td>21 (29%)</td></tr>
+    <tr><td>High severity findings</td><td>36 (49%)</td></tr>
+    <tr><td>Medium severity findings</td><td>37 (51%)</td></tr>
     <tr><td>Low severity findings</td><td>0 (0%)</td></tr>
   </tbody>
 </table>
@@ -90,8 +90,6 @@ These outputs were produced by rule-based checks over payroll and HR CSV extract
 
 
 ## 5. Scope & Methodology
-
-Scope & Methodology
 
 **Modules included in this engagement:**
 
@@ -308,12 +306,12 @@ The automated checks identified the following potential issues in the leave and 
   <tbody>
     <tr>
       <td><span class="badge-high">High</span></td>
-      <td>12</td>
+      <td>6</td>
       <td>Absence or weakness of core evidence or entitlement configuration that would materially impair the organisation’s ability to evidence payroll decisions if reviewed by auditors or regulators.</td>
     </tr>
     <tr>
       <td><span class="badge-medium">Medium</span></td>
-      <td>0</td>
+      <td>6</td>
       <td>Evidence is incomplete, inconsistent or fragile. Decisions may still be defensible but require greater reliance on manual reconstruction, judgement, or explanation.</td>
     </tr>
     <tr>
@@ -326,7 +324,17 @@ The automated checks identified the following potential issues in the leave and 
 
 ---
 
-### 6.2 Termination Exposure – Severity Overview
+### 6.2 Long Service Leave (LSL) – Coverage Note
+
+No Long Service Leave (LSL) activity was identified in the dataset provided for this review.
+
+Accordingly, LSL-related diagnostics were not performed.
+
+This reflects a data coverage limitation rather than a confirmed absence of LSL risk. Assessment of LSL exposure typically requires service history, eligibility thresholds, and accrual data that may not be present in payroll-only extracts.
+
+---
+
+### 6.3 Termination Exposure – Severity Overview
 
 Where a Termination Exposure review was performed, the table below summarises the number of termination-related evidential issues identified by severity. Counts reflect **evidential risk only** and do not represent confirmed non-compliance or quantified financial exposure, or remediation priority.
 
@@ -341,12 +349,12 @@ Where a Termination Exposure review was performed, the table below summarises th
   <tbody>
     <tr>
       <td><span class="badge-high">High</span></td>
-      <td>21</td>
+      <td>12</td>
       <td>Absence or weakness of core termination or final pay evidence that would materially impair the organisation’s ability to evidence termination decisions if reviewed by auditors or regulators.</td>
     </tr>
     <tr>
       <td><span class="badge-medium">Medium</span></td>
-      <td>9</td>
+      <td>15</td>
       <td>Termination evidence exists but is incomplete, delayed or ambiguous and may require additional explanation or manual reconstruction.</td>
     </tr>
     <tr>
@@ -359,7 +367,7 @@ Where a Termination Exposure review was performed, the table below summarises th
 
 ---
 
-### 6.3 Record-Keeping & Evidence Gaps (RKEG) – Severity Overview
+### 6.4 Record-Keeping & Evidence Gaps (RKEG) – Severity Overview
 
 As part of this review, a Record-Keeping & Evidence Gaps (RKEG) assessment was performed to evaluate whether payroll-related records are sufficiently complete, consistent and traceable to support payroll decisions if subject to audit or regulatory review.
 
@@ -378,12 +386,12 @@ The table below summarises the number of record-keeping and evidence gaps identi
   <tbody>
     <tr>
       <td><span class="badge-high">High</span></td>
-      <td>18</td>
+      <td>12</td>
       <td>Absence or weakness of core evidence or entitlement configuration that would materially impair the organisation’s ability to evidence payroll decisions if reviewed by auditors or regulators.</td>
     </tr>
     <tr>
       <td><span class="badge-medium">Medium</span></td>
-      <td>31</td>
+      <td>4</td>
       <td>Evidence is incomplete, inconsistent or fragile. Decisions may still be defensible but require greater reliance on manual reconstruction, judgement, or explanation.</td>
     </tr>
     <tr>
@@ -396,7 +404,7 @@ The table below summarises the number of record-keeping and evidence gaps identi
 
 ---
 
-### 6.4 Cross-Module Integrity – Summary Overview
+### 6.5 Cross-Module Integrity – Summary Overview
 
 Where a Cross-Module Integrity review was performed, the table below summarises the number of cross-module inconsistencies identified by severity. Counts reflect **integrity risk indicators only** and do not represent confirmed non-compliance or quantified financial exposure.
 
@@ -411,12 +419,12 @@ Where a Cross-Module Integrity review was performed, the table below summarises 
   <tbody>
     <tr>
       <td><span class="badge-high">High</span></td>
-      <td>12</td>
+      <td>6</td>
       <td>Cross-dataset inconsistencies that may materially affect confidence in employee lifecycle, payroll sequencing, or linked record integrity.</td>
     </tr>
     <tr>
       <td><span class="badge-medium">Medium</span></td>
-      <td>6</td>
+      <td>12</td>
       <td>Cross-module mismatches or data linkage issues that warrant review but may be explainable through timing, process, or source-system differences.</td>
     </tr>
     <tr>
@@ -429,14 +437,14 @@ Where a Cross-Module Integrity review was performed, the table below summarises 
 
 ---
 
-### 6.5 How to interpret findings
+### 6.6 How to interpret findings
 
 **How to interpret findings across modules**
 
 - **Leave & LSL findings** highlight potential anomalies in leave balances, accruals and usage. These indicators relate to *payroll outcomes and configuration* and may require remediation if confirmed.
 - **Termination Exposure findings** relate to the completeness, sequencing and documentation of termination events and final pay. They indicate how readily the organisation could evidence termination processing if challenged.
-- **Cross-Module Integrity findings** highlight inconsistencies between related datasets, such as employee lifecycle status, leave activity, and payroll events. They indicate where linked records may not align cleanly across the broader payroll data environment.
 - **Record-Keeping & Evidence Gaps (RKEG) findings** assess the strength of the evidentiary trail supporting payroll decisions. They do **not** indicate incorrect pay outcomes; they highlight where records may be incomplete or difficult to substantiate.
+- **Cross-Module Integrity findings** highlight inconsistencies between related datasets, such as employee lifecycle status, leave activity, and payroll events. They indicate where linked records may not align cleanly across the broader payroll data environment.
 
 Findings are risk indicators requiring validation and do not, on their own, confirm non-compliance, legislative contravention, or underpayment.
 
@@ -457,7 +465,7 @@ This review is subject to the following limitations:
 
 1. Prioritise detailed review of termination handling and record-keeping controls first, as these areas show the strongest concentration of high-severity findings.
 2. Confirm whether the identified findings reflect configuration weaknesses, process breakdowns, incomplete records, or isolated data anomalies.
-3. Address structural data gaps that may weaken evidentiary confidence and make findings harder to validate.
+3. Address any structural data gaps identified, particularly where they reduce confidence in validation or audit defensibility.
 4. Validate substantive logical integrity findings before remediation decisions are made.
 5. Re-run the review after corrective action to confirm that risk indicators have reduced and no new integrity issues have emerged.
 

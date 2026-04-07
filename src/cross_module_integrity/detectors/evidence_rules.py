@@ -26,7 +26,9 @@ def detect_termination_without_evidence_and_payroll_continues(
         return []
 
     findings: list[Finding] = []
-    allowed_days_after_term = int(rule.get("config", {}).get("allowed_days_after_term", 7))
+    config = rule.get("config", {}) or {}
+    allowed_days_after_term = int(config.get("allowed_days_after_term", 14))
+    high_severity_cutoff_days = int(config.get("high_severity_cutoff_days", 30))
 
     term = terminations.copy()
     term["employee_id"] = term["employee_id"].astype(str).str.strip()
@@ -57,6 +59,21 @@ def detect_termination_without_evidence_and_payroll_continues(
     for _, row in bad.iterrows():
         days_after = int((row["pay_date"] - row["termination_date"]).days)
 
+        if days_after <= high_severity_cutoff_days:
+            calibrated_severity = "MEDIUM"
+            calibrated_classification = "CONTEXTUAL"
+            explanation = (
+                "Termination evidence reference is missing and payroll activity continues after termination "
+                "beyond the configured tolerance window. This may reflect delayed finalisation or incomplete record-keeping and should be reviewed."
+            )
+        else:
+            calibrated_severity = "HIGH"
+            calibrated_classification = "LOGICAL"
+            explanation = (
+                "Termination evidence reference is missing and payroll activity continues significantly after termination, "
+                "indicating a likely lifecycle control breakdown."
+            )
+
         evidence_str = json.dumps(
             {
                 "sources": ["terminations.csv", "pay_events.csv"],
@@ -72,21 +89,25 @@ def detect_termination_without_evidence_and_payroll_continues(
                 },
                 "thresholds": {
                     "allowed_days_after_term": allowed_days_after_term,
+                    "high_severity_cutoff_days": high_severity_cutoff_days,
                 },
-                "explanation": "Termination evidence reference is missing and payroll activity continues after termination beyond the allowed window.",
+                "explanation": explanation,
             },
             ensure_ascii=False,
         )
 
-        findings.append(
-            _build_finding(
-                rule=rule,
-                employee_id=str(row["employee_id"]),
-                leave_type=None,
-                as_of_date=str(row["pay_date"].date()),
-                evidence_str=evidence_str,
-            )
+        finding = _build_finding(
+            rule=rule,
+            employee_id=str(row["employee_id"]),
+            leave_type=None,
+            as_of_date=str(row["pay_date"].date()),
+            evidence_str=evidence_str,
         )
+        finding.severity = calibrated_severity
+        if hasattr(finding, "classification"):
+            finding.classification = calibrated_classification
+
+        findings.append(finding)
 
     return findings
 

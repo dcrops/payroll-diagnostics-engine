@@ -1,2 +1,3 @@
 classification,severity,finding_count
-LOGICAL,HIGH,12
+LOGICAL,HIGH,6
+LOGICAL,MEDIUM,6

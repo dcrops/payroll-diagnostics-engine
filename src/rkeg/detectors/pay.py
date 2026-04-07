@@ -436,6 +436,9 @@ def _pay_006_ordinary_earnings_without_base_rate(rule: dict, datasets: dict) -> 
     - Find employees with positive gross_amount in pay_events.
     - Join to employee_master.
     - Flag employees where base_rate is missing/blank.
+
+    Calibration:
+    - Skip the rule entirely if no usable base_rate data is available in the reference dataset.
     """
     print("[PAY-006] Running RKEG-PAY-006 detector")
 
@@ -452,7 +455,7 @@ def _pay_006_ordinary_earnings_without_base_rate(rule: dict, datasets: dict) -> 
     if "employee_id" not in employees.columns:
         return []
     if "base_rate" not in employees.columns:
-        # In v1 we just skip if the column isn't there at all
+        # Skip if the reference field doesn't exist at all
         return []
 
     pe = pay_events.copy()
@@ -464,7 +467,23 @@ def _pay_006_ordinary_earnings_without_base_rate(rule: dict, datasets: dict) -> 
 
     # Coerce numeric
     pe["gross_amount"] = pd.to_numeric(pe["gross_amount"], errors="coerce")
-    emps["base_rate"] = emps["base_rate"].astype(str)
+    emps["base_rate"] = emps["base_rate"].astype(str).str.strip()
+
+    # Check how many usable base_rate values we actually have
+    usable_base_rate_mask = ~emps["base_rate"].map(is_missing)
+    usable_count = int(usable_base_rate_mask.sum())
+
+    print(f"[PAY-006] usable base_rate values: {usable_count} / {len(emps)}")
+
+    if usable_count == 0:
+        print("[PAY-006] Skipping: base_rate column exists but contains no usable values")
+        return []
+
+    # Skip if the column exists but contains no usable rate data
+    usable_base_rate_mask = ~emps["base_rate"].map(is_missing)
+    if not usable_base_rate_mask.any():
+        print("[PAY-006] Skipping: base_rate column exists but contains no usable values")
+        return []
 
     # Employees who actually have earnings
     earners = (
@@ -500,7 +519,7 @@ def _pay_006_ordinary_earnings_without_base_rate(rule: dict, datasets: dict) -> 
         "remediation",
         "Ensure base rate fields are populated and aligned with earnings calculations.",
     )
-    severity = rule.get("severity", rule.get("severity", "MEDIUM"))
+    severity = rule.get("severity", "MEDIUM")
 
     findings: List[Finding] = []
 
@@ -899,6 +918,12 @@ def _pay_010_pay_events_outside_employment_period(
     """
     RKEG-PAY-010:
     Pay events recorded before employee commencement or after termination.
+
+    Calibration:
+    - Pre-start pay events remain strong signals.
+    - Post-termination pay events use a tolerance window.
+    - Small overruns are treated as softer contextual issues.
+    - Larger overruns remain high-severity logical issues.
     """
 
     pay_events = datasets.get("pay_events", pd.DataFrame())
@@ -928,6 +953,11 @@ def _pay_010_pay_events_outside_employment_period(
 
     if pay_date_col is None or start_date_col is None:
         return findings
+
+    # Calibration config
+    config = rule.get("config", {}) or {}
+    allowed_days_after_term = int(config.get("allowed_days_after_term", 14))
+    high_severity_cutoff_days = int(config.get("high_severity_cutoff_days", 30))
 
     pe = pay_events.copy()
     emps = employees.copy()
@@ -971,22 +1001,22 @@ def _pay_010_pay_events_outside_employment_period(
                 merged["_term_from_terminations"]
             )
 
-    findings_mask = (
-        (
-            merged["_pay_date"].notna()
-            & merged["_start_date"].notna()
-            & (merged["_pay_date"] < merged["_start_date"])
-        )
-        |
-        (
-            merged["_pay_date"].notna()
-            & merged["_termination_date"].notna()
-            & (merged["_pay_date"] > merged["_termination_date"])
-        )
+    # Pre-start pay events are always flagged
+    pre_start_mask = (
+        merged["_pay_date"].notna()
+        & merged["_start_date"].notna()
+        & (merged["_pay_date"] < merged["_start_date"])
     )
 
-    flagged = merged[findings_mask].copy()
+    # Post-termination pay events only flagged if beyond tolerance
+    post_term_days = (merged["_pay_date"] - merged["_termination_date"]).dt.days
+    post_term_mask = (
+        merged["_pay_date"].notna()
+        & merged["_termination_date"].notna()
+        & (post_term_days > allowed_days_after_term)
+    )
 
+    flagged = merged[pre_start_mask | post_term_mask].copy()
 
     if flagged.empty:
         return findings
@@ -997,8 +1027,26 @@ def _pay_010_pay_events_outside_employment_period(
     for _, row in flagged.iterrows():
         emp_id = str(row["employee_id"]).strip()
 
+        calibrated_severity = rule["severity"]
+        calibrated_classification = rule.get("classification", "UNCLASSIFIED")
+
         if pd.notna(row["_termination_date"]) and row["_pay_date"] > row["_termination_date"]:
-            explanation = "Pay event occurred after recorded termination date."
+            days_after_term = int((row["_pay_date"] - row["_termination_date"]).days)
+
+            if days_after_term <= high_severity_cutoff_days:
+                calibrated_severity = "MEDIUM"
+                calibrated_classification = "CONTEXTUAL"
+                explanation = (
+                    "Pay event occurred after the recorded termination date beyond the configured tolerance window. "
+                    "This may reflect delayed finalisation, timing differences, or processing practices and should be reviewed."
+                )
+            else:
+                calibrated_severity = "HIGH"
+                calibrated_classification = "LOGICAL"
+                explanation = (
+                    "Pay event occurred significantly after the recorded termination date, indicating a likely inconsistency "
+                    "between employment period and payroll activity."
+                )
         else:
             explanation = "Pay event occurred before recorded employment start date."
 
@@ -1013,6 +1061,16 @@ def _pay_010_pay_events_outside_employment_period(
                     if pd.notna(row["_termination_date"])
                     else ""
                 ),
+                "days_after_termination": (
+                    int((row["_pay_date"] - row["_termination_date"]).days)
+                    if pd.notna(row["_termination_date"]) and pd.notna(row["_pay_date"])
+                    and row["_pay_date"] > row["_termination_date"]
+                    else None
+                ),
+            },
+            "thresholds": {
+                "allowed_days_after_term": allowed_days_after_term,
+                "high_severity_cutoff_days": high_severity_cutoff_days,
             },
             "explanation": explanation,
         }
@@ -1024,8 +1082,8 @@ def _pay_010_pay_events_outside_employment_period(
                 leave_type=None,
                 as_of_date=row["_pay_date"].date().isoformat() if pd.notna(row["_pay_date"]) else None,
                 rule_code=rule["id"],
-                severity=rule["severity"],
-                classification=rule.get("classification", "UNCLASSIFIED"),
+                severity=calibrated_severity,
+                classification=calibrated_classification,
                 message=finding_msg,
                 diff_units=None,
                 evidence=evidence_str,

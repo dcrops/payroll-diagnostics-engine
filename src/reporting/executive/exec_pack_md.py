@@ -380,8 +380,11 @@ def build_highlight_insights(base_output_dir: Path) -> str:
 
     total_findings = summary.get("total_findings", 0)
     dominant_classification = summary.get("dominant_classification", "Unknown")
-    dominant_severity = summary.get("dominant_severity", "Unknown")
     top_high_modules = summary.get("top_high_modules", [])
+    severity_summary = summary.get("severity_summary", {})
+
+    high_count = severity_summary.get("HIGH", 0)
+    medium_count = severity_summary.get("MEDIUM", 0)
 
     narrative_labels = {
         "TERM": "termination handling",
@@ -400,6 +403,19 @@ def build_highlight_insights(base_output_dir: Path) -> str:
     else:
         module_text = "the highest-severity areas identified"
 
+    if total_findings > 0:
+        high_pct = round((high_count / total_findings) * 100)
+        medium_pct = round((medium_count / total_findings) * 100)
+
+        severity_line = (
+            f"- Findings are split between **high ({high_pct}%)** and **medium ({medium_pct}%) severity**, "
+            "indicating a mix of immediate control concerns and broader process weaknesses."
+        )
+    else:
+        severity_line = (
+            "- Severity distribution could not be determined from the available results."
+        )
+
     lines: List[str] = []
     lines.append("The following points summarise the most important observations from the analysis:")
     lines.append("")
@@ -407,9 +423,7 @@ def build_highlight_insights(base_output_dir: Path) -> str:
     lines.append(
         f"- The overall profile is dominated by **{dominant_classification.lower()}** findings rather than primarily structural data issues."
     )
-    lines.append(
-        f"- A meaningful share of findings are **{dominant_severity.lower()} severity**, indicating that the results warrant targeted follow-up rather than simple monitoring."
-    )
+    lines.append(severity_line)
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -706,17 +720,17 @@ def build_interpretation_block_exec(included_modules: set[str]) -> str:
             "events and final pay. They indicate how readily the organisation could evidence termination processing if challenged."
         )
 
-    if MODULE_CROSS in mods:
-        lines.append(
-            "- **Cross-Module Integrity findings** highlight inconsistencies between related datasets, such as employee lifecycle status, "
-            "leave activity, and payroll events. They indicate where linked records may not align cleanly across the broader payroll data environment."
-        )
-
     if MODULE_RKEG in mods:
         lines.append(
             "- **Record-Keeping & Evidence Gaps (RKEG) findings** assess the strength of the evidentiary trail supporting "
             "payroll decisions. They do **not** indicate incorrect pay outcomes; they highlight where records may be incomplete "
             "or difficult to substantiate."
+        )
+
+    if MODULE_CROSS in mods:
+        lines.append(
+            "- **Cross-Module Integrity findings** highlight inconsistencies between related datasets, such as employee lifecycle status, "
+            "leave activity, and payroll events. They indicate where linked records may not align cleanly across the broader payroll data environment."
         )
 
     lines.append("")
@@ -725,7 +739,7 @@ def build_interpretation_block_exec(included_modules: set[str]) -> str:
     )
     lines.append("")
     lines.append(
-        "*Traffic light indicators reflect evidential risk only and do not represent confirmed contraventions or quantified exposure.*"
+        "*Severity levels reflect evidential risk and control strength, and do not represent confirmed contraventions or quantified financial exposure.*"
     )
 
     return "\n".join(lines).strip()
@@ -1064,6 +1078,29 @@ def build_data_sources_section(included_modules: set[str] | list[str] | None, ba
     lines.append("")
     return "\n".join(lines)
 
+def build_leave_no_findings_message() -> str:
+    return "No material leave and entitlement findings were identified in the current dataset.\n\n---"
+
+def build_term_no_findings_message() -> str:
+    return "No material termination-related findings were identified in the current dataset.\n\n---"
+
+def build_rkeg_no_findings_message() -> str:
+    return "No material record-keeping or evidence gaps were identified in the current dataset.\n\n---"
+
+def build_cross_no_findings_message() -> str:
+    return "No material cross-module integrity findings were identified in the current dataset.\n\n---"
+
+def build_lsl_no_findings_message() -> str:
+    return "No material long service leave findings were identified in the current dataset.\n\n---"
+
+def build_lsl_coverage_note() -> str:
+    return """No Long Service Leave (LSL) activity was identified in the dataset provided for this review.
+
+Accordingly, LSL-related diagnostics were not performed.
+
+This reflects a data coverage limitation rather than a confirmed absence of LSL risk. Assessment of LSL exposure typically requires service history, eligibility thresholds, and accrual data that may not be present in payroll-only extracts.
+
+---""".strip()
 
 def build_rkeg_summary(rkeg_counts: Dict[str, int]) -> str:
     if not any(rkeg_counts.values()):
@@ -1616,35 +1653,65 @@ def generate_exec_pack(
             structure.add(
                 "Leave & Entitlement Leakage (LEAVE) – Summary Overview",
                 2,
-                lambda: build_key_findings_overview(sorted_findings),
+                lambda: (
+                    build_key_findings_overview(sorted_findings)
+                    if sorted_findings
+                    else build_leave_no_findings_message("leave and entitlement")
+                ),
             )
 
-        if MODULE_LSL in included and any(lsl_counts.values()):
-            structure.add(
-                "Long Service Leave (LSL) Exposure – Severity Overview",
-                2,
-                lambda: build_lsl_severity_summary(lsl_counts),
-            )
+        if MODULE_LSL in included:
+            lsl_findings_path = target_dir / "lsl_findings.csv"
+            lsl_has_data = lsl_findings_path.exists() and bool(load_csv(lsl_findings_path))
+
+            if any(lsl_counts.values()):
+                structure.add(
+                    "Long Service Leave (LSL) Exposure – Severity Overview",
+                    2,
+                    lambda: build_lsl_severity_summary(lsl_counts),
+                )
+            else:
+                structure.add(
+                    "Long Service Leave (LSL) – Coverage Note",
+                    2,
+                    lambda: (
+                        build_lsl_no_findings_message("long service leave")
+                        if lsl_has_data
+                        else build_lsl_coverage_note()
+                    ),
+                )
 
         if MODULE_TERM in included:
             structure.add(
                 "Termination Exposure – Severity Overview",
                 2,
-                lambda: build_term_severity_summary(term_counts),
+                lambda: (
+                    build_term_severity_summary(term_counts)
+                    if any(term_counts.values())
+                    else build_term_no_findings_message("termination-related")
+                ),
             )
 
         if MODULE_RKEG in included:
             structure.add(
                 "Record-Keeping & Evidence Gaps (RKEG) – Severity Overview",
                 2,
-                lambda: build_rkeg_summary(rkeg_counts),
+                lambda: (
+                    build_rkeg_summary(rkeg_counts)
+                    if any(rkeg_counts.values())
+                    else build_rkeg_no_findings_message("record-keeping and evidence gap")
+                ),
             )
 
         if MODULE_CROSS in included:
             structure.add(
                 "Cross-Module Integrity – Summary Overview",
                 2,
-                lambda: build_cross_module_summary(cross_counts),
+                lambda: (
+                    build_cross_module_summary(cross_counts)
+                    if any(cross_counts.values())
+                    else build_rkeg_no_findings_message("cross-module integrity")
+                ),
             )
 
         structure.add(

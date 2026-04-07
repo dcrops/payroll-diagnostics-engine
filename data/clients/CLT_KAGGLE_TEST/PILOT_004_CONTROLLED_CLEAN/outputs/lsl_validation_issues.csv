@@ -1,0 +1,4 @@
+module_name,level,dataset,column,issue_code,message
+LSL,WARNING,leave_snapshot,,OPTIONAL_DATASET_EMPTY,Optional dataset 'leave_snapshot' is missing or empty.
+LSL,WARNING,leave_ledger,event_type,ALL_VALUES_MISSING,Leave ledger column 'event_type' is fully null/blank; some LSL ledger checks may have reduced coverage.
+LSL,WARNING,leave_snapshot,leave_type,NO_LSL_SNAPSHOT_ROWS,LSL activity exists in leave_ledger but no LSL rows were identified in leave_snapshot; balance-style LSL rules may have reduced coverage.

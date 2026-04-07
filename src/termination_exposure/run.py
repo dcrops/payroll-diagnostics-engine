@@ -135,10 +135,16 @@ def main(client: str, pilot: str) -> int:
         dtype={"employee_id": "string"},
     )
 
-    leave_snapshot = pd.read_csv(
-        processed_dir / "balances_snapshot.csv",
-        dtype={"employee_id": "string", "leave_type": "string"},
-    )
+    leave_snapshot_path = processed_dir / "balances_snapshot.csv"
+
+    if leave_snapshot_path.exists() and leave_snapshot_path.stat().st_size > 0:
+        leave_snapshot = pd.read_csv(
+            leave_snapshot_path,
+            dtype={"employee_id": "string", "leave_type": "string"},
+        )
+    else:
+        print("INFO - balances_snapshot.csv not found or empty; continuing without snapshot data")
+        leave_snapshot = pd.DataFrame(columns=["employee_id", "leave_type", "as_of_date", "balance_units"])
 
     leave_ledger = pd.read_csv(
         processed_dir / "leave_ledger.csv",

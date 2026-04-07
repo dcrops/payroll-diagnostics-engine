@@ -215,7 +215,7 @@ rules:
   - id: LEAVE-013
     tier: 1
     domain: LEAVE
-    severity: HIGH
+    severity: MEDIUM
     title: Leave accrual recorded after termination
     datasets:
       primary: leave_ledger

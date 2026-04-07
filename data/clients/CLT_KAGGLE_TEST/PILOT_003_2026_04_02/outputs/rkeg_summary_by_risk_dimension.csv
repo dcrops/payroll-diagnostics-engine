@@ -1,7 +1,5 @@
 risk_dimension,finding_count
-evidence_traceability,31
-calculation_integrity,30
-structural_completeness,30
-governance_exposure,19
-timing_integrity,18
-cross_module_linkage_risk,15
+governance_exposure,16
+timing_integrity,15
+cross_module_linkage_risk,12
+evidence_traceability,1

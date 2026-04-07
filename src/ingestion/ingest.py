@@ -498,7 +498,11 @@ def create_leave_snapshot(
     mapping: dict,
     snapshot_date_fallback: str | None = None,
 ) -> pd.DataFrame:
-    snapshot_cfg = mapping["leave_snapshot"]
+    snapshot_cfg = mapping.get("leave_snapshot")
+    if not snapshot_cfg:
+        print("INFO - leave_snapshot mapping not provided; skipping leave snapshot creation")
+        return pd.DataFrame()
+
     df = _read_and_rename(raw_dir, "leave_snapshot", snapshot_cfg)
 
     df = _ensure_columns(
@@ -612,7 +616,10 @@ def main(client: str, pilot: str):
     pay_events.to_csv(processed_dir / "payroll_transactions.csv", index=False)
 
     leave_ledger.to_csv(processed_dir / "leave_ledger.csv", index=False)
-    leave_snapshot.to_csv(processed_dir / "balances_snapshot.csv", index=False)
+    if not leave_snapshot.empty:
+        leave_snapshot.to_csv(processed_dir / "balances_snapshot.csv", index=False)
+    else:
+        print("INFO - No leave snapshot data available; balances_snapshot.csv not written")
 
     print("✅ employees.csv created")
     print(employees.head())

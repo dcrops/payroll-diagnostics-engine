@@ -1,8 +1,8 @@
 risk_dimension,severity,finding_count
-calculation_integrity,MEDIUM,30
-cross_module_linkage_risk,HIGH,15
-evidence_traceability,MEDIUM,31
-governance_exposure,HIGH,18
-governance_exposure,MEDIUM,1
-structural_completeness,MEDIUM,30
-timing_integrity,HIGH,18
+cross_module_linkage_risk,HIGH,9
+cross_module_linkage_risk,MEDIUM,3
+evidence_traceability,MEDIUM,1
+governance_exposure,HIGH,12
+governance_exposure,MEDIUM,4
+timing_integrity,HIGH,12
+timing_integrity,MEDIUM,3

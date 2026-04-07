@@ -1,31 +1,31 @@
 {
-  "total_findings": 109,
+  "total_findings": 73,
   "class_summary": {
-    "CONTEXTUAL": 9,
-    "LOGICAL": 63,
-    "STRUCTURAL": 37
+    "CONTEXTUAL": 21,
+    "LOGICAL": 45,
+    "STRUCTURAL": 7
   },
   "severity_summary": {
-    "HIGH": 63,
-    "MEDIUM": 46
+    "HIGH": 36,
+    "MEDIUM": 37
   },
   "class_shares": {
-    "CONTEXTUAL": 0.08256880733944955,
-    "LOGICAL": 0.5779816513761468,
-    "STRUCTURAL": 0.3394495412844037
+    "CONTEXTUAL": 0.2876712328767123,
+    "LOGICAL": 0.6164383561643836,
+    "STRUCTURAL": 0.0958904109589041
   },
   "dominant_classification": "LOGICAL",
-  "dominant_severity": "HIGH",
+  "dominant_severity": "MEDIUM",
   "top_high_modules": [
     "TERM",
     "RKEG"
   ],
   "summary_lines": [
-    "CRC identified 109 findings across the reviewed modules.",
+    "CRC identified 73 findings across the reviewed modules.",
     "The overall profile is primarily driven by logical integrity failures rather than structural data limitations.",
     "High-severity findings are concentrated in termination handling and record-keeping controls, indicating the strongest exposure sits in those areas.",
     "Structural findings are present, but they are not the primary driver of risk in this review.",
-    "A substantial proportion of findings are high severity, indicating meaningful control exposure."
+    "Findings are split between high (49%) and medium (51%) severity, indicating a mix of immediate control concerns and broader process weaknesses."
   ],
   "what_this_means": "The results suggest the main concern is substantive payroll processing and control integrity rather than simple evidentiary or data quality limitations.",
   "recommended_focus": "Prioritise detailed review of termination handling and record-keeping controls first, then address structural data gaps that may weaken evidentiary confidence."

@@ -317,6 +317,9 @@ rules:
     references:
       - employee_master
       - terminations
+  config:
+    allowed_days_after_term: 14
+    high_severity_cutoff_days: 30
   text:
     finding: "Pay events were identified that fall outside the employee's recorded employment period."
     why_it_matters: "Payments before commencement or after termination may indicate configuration errors, delayed offboarding updates or manual payroll overrides."

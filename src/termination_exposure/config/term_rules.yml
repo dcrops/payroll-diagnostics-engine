@@ -84,15 +84,15 @@ rules:
   - id: TERM-005
     tier: 1
     domain: TERM
-    severity: HIGH
+    severity: MEDIUM
     title: Missing supporting termination evidence reference
     datasets:
       primary: terminations
       references: []
     text:
-      finding: "Termination records were identified without a supporting evidence reference."
-      why_it_matters: "Without a reference to supporting artefacts such as resignation notices or termination letters, it is harder to substantiate why and when employment ceased."
-      remediation: "Record and retain a supporting evidence reference for each termination, such as a resignation notice, termination letter or document identifier."
+      finding: "Termination records do not include a supporting evidence reference."
+      why_it_matters: "Without a reference to supporting artefacts such as resignation notices or termination letters, it may be harder to substantiate why and when employment ceased if reviewed."
+      remediation: "Where available, include a reference to supporting termination documentation, or confirm whether such evidence is maintained outside the payroll system."
     risk_dimension:
       - evidence_traceability
       - structural_completeness
@@ -197,7 +197,8 @@ rules:
       references:
         - pay_events
     config:
-      allowed_days_after_term: 7
+      allowed_days_after_term: 14
+      high_severity_cutoff_days: 30
     text:
       finding: "Payroll activity was recorded after the employee termination date beyond the allowed tolerance window."
       why_it_matters: "Payroll events after termination may indicate delayed off-boarding, system configuration issues, or incorrect termination timing."

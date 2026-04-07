@@ -30,7 +30,7 @@ rules:
   - id: CM-002
     tier: 1
     domain: CROSS_MODULE
-    severity: HIGH
+    severity: MEDIUM
     title: Post-termination leave movement recorded
     datasets:
       primary: terminations
@@ -49,7 +49,7 @@ rules:
       - timing_integrity
       - cross_module_linkage_risk
       - governance_monitoring_exposure
-    classification: LOGICAL
+    classification: CONTEXTUAL
 
   - id: CM-003
     tier: 1
@@ -61,7 +61,8 @@ rules:
       references:
         - pay_events
     config:
-      allowed_days_after_term: 7
+      allowed_days_after_term: 14
+      high_severity_cutoff_days: 30
     text:
       finding: "A termination record has no supporting evidence reference and payroll activity continues after the termination date."
       why_it_matters: "Where termination evidence is missing and payroll continues after termination, confidence in off-boarding control integrity is weakened."
@@ -138,7 +139,8 @@ rules:
         - ANNUAL
         - PERSONAL
         - LSL
-      allowed_days_after_term: 7
+      allowed_days_after_term: 14
+      high_severity_cutoff_days: 30
     text:
       finding: "Payroll activity and leave ledger movement both continue after the employee termination date."
       why_it_matters: "Where payroll and leave activity both continue after termination, off-boarding control integrity is significantly weakened."
@@ -471,6 +473,7 @@ rules:
     config:
       min_findings: 3
       min_high_severity: 2
+      medium_min_high_severity: 1
     text:
       finding: "An employee triggered multiple cross-module integrity failures."
       why_it_matters: "Multiple concurrent failures indicate systemic payroll lifecycle breakdown rather than isolated issues."

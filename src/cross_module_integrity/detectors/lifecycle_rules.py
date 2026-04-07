@@ -300,10 +300,12 @@ def detect_employee_has_both_post_termination_payroll_and_leave_activity(
         return []
 
     findings: list[Finding] = []
-    allowed_days_after_term = int(rule.get("config", {}).get("allowed_days_after_term", 7))
+    config = rule.get("config", {}) or {}
+    allowed_days_after_term = int(config.get("allowed_days_after_term", 14))
+    high_severity_cutoff_days = int(config.get("high_severity_cutoff_days", 30))
     leave_types = {
         str(x).strip().upper()
-        for x in rule.get("config", {}).get("leave_types", ["ANNUAL", "PERSONAL", "LSL"])
+        for x in config.get("leave_types", ["ANNUAL", "PERSONAL", "LSL"])
     }
 
     term = terminations.copy()
@@ -330,24 +332,45 @@ def detect_employee_has_both_post_termination_payroll_and_leave_activity(
         if not employee_id or pd.isna(termination_date):
             continue
 
-        has_post_term_pay = (
-            ((pay["employee_id"] == employee_id) & pay["pay_date"].notna()
-             & ((pay["pay_date"] - termination_date).dt.days > allowed_days_after_term))
-            .any()
-        )
+        emp_pay = pay[
+            (pay["employee_id"] == employee_id)
+            & pay["pay_date"].notna()
+        ].copy()
+        emp_pay["days_after_termination"] = (emp_pay["pay_date"] - termination_date).dt.days
+        post_term_pay = emp_pay[emp_pay["days_after_termination"] > allowed_days_after_term].copy()
 
-        emp_led = led[led["employee_id"] == employee_id]
-        has_post_term_leave = (
-            emp_led["event_date"].notna() & (emp_led["event_date"] > termination_date)
-        ).any() if not emp_led.empty else False
-
-        if not (has_post_term_pay and has_post_term_leave):
+        if post_term_pay.empty:
             continue
 
-        latest_leave_event = emp_led.loc[
-            emp_led["event_date"].notna() & (emp_led["event_date"] > termination_date),
-            "event_date"
-        ].max()
+        max_days_after_pay = int(post_term_pay["days_after_termination"].max())
+
+        emp_led = led[led["employee_id"] == employee_id].copy()
+        if emp_led.empty:
+            continue
+
+        post_term_leave = emp_led[
+            emp_led["event_date"].notna() & (emp_led["event_date"] > termination_date)
+        ].copy()
+
+        if post_term_leave.empty:
+            continue
+
+        latest_leave_event = post_term_leave["event_date"].max()
+
+        if max_days_after_pay <= high_severity_cutoff_days:
+            calibrated_severity = "MEDIUM"
+            calibrated_classification = "CONTEXTUAL"
+            explanation = (
+                "Payroll activity and leave ledger movement both continue after termination beyond the configured tolerance window. "
+                "This may reflect delayed finalisation, timing differences, or incomplete off-boarding and should be reviewed."
+            )
+        else:
+            calibrated_severity = "HIGH"
+            calibrated_classification = "LOGICAL"
+            explanation = (
+                "Payroll activity and leave ledger movement both continue significantly after termination, "
+                "indicating a likely breakdown in off-boarding control integrity."
+            )
 
         evidence_str = json.dumps(
             {
@@ -360,24 +383,29 @@ def detect_employee_has_both_post_termination_payroll_and_leave_activity(
                     "has_post_term_payroll_activity": True,
                     "has_post_term_leave_activity": True,
                     "latest_post_term_leave_date": str(latest_leave_event.date()) if pd.notna(latest_leave_event) else None,
+                    "max_days_after_termination_pay": max_days_after_pay,
                 },
                 "thresholds": {
                     "allowed_days_after_term": allowed_days_after_term,
+                    "high_severity_cutoff_days": high_severity_cutoff_days,
                 },
-                "explanation": "Payroll activity and leave ledger movement both continue after the employee termination date.",
+                "explanation": explanation,
             },
             ensure_ascii=False,
         )
 
-        findings.append(
-            _build_finding(
-                rule=rule,
-                employee_id=employee_id,
-                leave_type=None,
-                as_of_date=str(latest_leave_event.date()) if pd.notna(latest_leave_event) else str(termination_date.date()),
-                evidence_str=evidence_str,
-            )
+        finding = _build_finding(
+            rule=rule,
+            employee_id=employee_id,
+            leave_type=None,
+            as_of_date=str(latest_leave_event.date()) if pd.notna(latest_leave_event) else str(termination_date.date()),
+            evidence_str=evidence_str,
         )
+        finding.severity = calibrated_severity
+        if hasattr(finding, "classification"):
+            finding.classification = calibrated_classification
+
+        findings.append(finding)
 
     return findings
 
@@ -1625,27 +1653,56 @@ def detect_multi_failure_cluster(
     min_high = int(rule.get("config", {}).get("min_high_severity", 2))
 
     grouped = findings_df.groupby("employee_id").agg(
-        total=("rule_code","count"),
-        high=("severity", lambda x: (x=="HIGH").sum())
+        total=("rule_code", "count"),
+        high=("severity", lambda x: (x == "HIGH").sum())
     ).reset_index()
 
-    bad = grouped[
-        (grouped["total"] >= min_findings) |
-        (grouped["high"] >= min_high)
-    ]
+    for _, row in grouped.iterrows():
+        total_findings = int(row["total"])
+        high_findings = int(row["high"])
 
-    for _, row in bad.iterrows():
-        findings.append(
-            _build_finding(
-                rule=rule,
-                employee_id=row["employee_id"],
-                leave_type=None,
-                as_of_date=None,
-                evidence_str=json.dumps({
-                    "total_findings": int(row["total"]),
-                    "high_findings": int(row["high"])
-                }, ensure_ascii=False)
+        if total_findings >= min_findings and high_findings >= min_high:
+            calibrated_severity = "HIGH"
+            calibrated_classification = "CONTEXTUAL"
+            explanation = (
+                "The employee triggered multiple cross-module integrity failures, including multiple high-severity signals, "
+                "indicating a likely systemic lifecycle control breakdown."
             )
+        elif total_findings >= min_findings and high_findings >= 1:
+            calibrated_severity = "MEDIUM"
+            calibrated_classification = "CONTEXTUAL"
+            explanation = (
+                "The employee triggered multiple cross-module integrity failures, indicating a clustered lifecycle control issue "
+                "that should be reviewed in context."
+            )
+        else:
+            continue
+
+        evidence_str = json.dumps(
+            {
+                "total_findings": total_findings,
+                "high_findings": high_findings,
+                "thresholds": {
+                    "min_findings": min_findings,
+                    "min_high_severity": min_high,
+                },
+                "explanation": explanation,
+            },
+            ensure_ascii=False,
         )
+
+        finding = _build_finding(
+            rule=rule,
+            employee_id=row["employee_id"],
+            leave_type=None,
+            as_of_date=None,
+            evidence_str=evidence_str,
+        )
+
+        finding.severity = calibrated_severity
+        if hasattr(finding, "classification"):
+            finding.classification = calibrated_classification
+
+        findings.append(finding)
 
     return findings
