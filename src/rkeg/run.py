@@ -9,12 +9,15 @@ import yaml
 
 from src.common.paths import get_processed_dir, get_outputs_dir
 from src.common.data_window import write_data_window
+from src.common.rule_filter import should_run_rule
+from src.common.execution_metadata import write_execution_metadata
+from src.common.rule_metadata import load_rule_metadata_map
 
 from src.rkeg.models import Finding, write_findings_csv
 from src.rkeg.detectors.registry import run_rule
 from src.rkeg.datasets import load_all_datasets
 
-from common.validation import (
+from src.common.validation import (
     ValidationResult,
     add_issue,
     check_dataset_present,
@@ -132,7 +135,6 @@ def validate_rkeg_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
     rate_history = datasets.get("rate_history", pd.DataFrame())
     pay_overrides = datasets.get("pay_overrides", pd.DataFrame())
 
-    # Presence checks
     check_dataset_present(issues, module_name, "employee_master", employee_master, required=False)
     check_dataset_present(issues, module_name, "pay_events", pay_events, required=False)
     check_dataset_present(issues, module_name, "terminations", terminations, required=False)
@@ -162,7 +164,6 @@ def validate_rkeg_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
         )
         return make_result(module_name, issues)
 
-    # employee_master
     if not employee_master.empty:
         check_required_columns(
             issues, module_name, "employee_master", employee_master, ["employee_id"], level="WARNING"
@@ -183,7 +184,6 @@ def validate_rkeg_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
                     f"Employee master column '{col}' is missing; some employee/pay governance rules may have reduced coverage.",
                 )
 
-    # pay_events
     if not pay_events.empty:
         check_required_columns(
             issues, module_name, "pay_events", pay_events, ["employee_id", "pay_date"], level="WARNING"
@@ -204,7 +204,6 @@ def validate_rkeg_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
                     f"Pay events column '{col}' is missing; some pay governance rules may have reduced coverage.",
                 )
 
-    # terminations
     if not terminations.empty:
         check_required_columns(
             issues, module_name, "terminations", terminations, ["employee_id", "termination_date"], level="WARNING"
@@ -224,7 +223,6 @@ def validate_rkeg_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
                 "Termination evidence field not found; evidence-traceability rules may have reduced coverage.",
             )
 
-    # leave_snapshot
     if not leave_snapshot.empty:
         check_required_columns(
             issues,
@@ -264,7 +262,6 @@ def validate_rkeg_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
                 "Leave snapshot 'as_of_date' is fully null/blank; timing-based leave governance checks may have reduced confidence.",
             )
 
-    # leave_ledger
     if not leave_ledger.empty:
         check_required_columns(
             issues,
@@ -295,7 +292,6 @@ def validate_rkeg_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
                     f"Leave ledger column '{col}' is missing; some evidence and traceability rules may have reduced coverage.",
                 )
 
-    # Assessability warnings
     if pay_events.empty:
         add_issue(
             issues,
@@ -332,7 +328,12 @@ def validate_rkeg_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
     return make_result(module_name, issues)
 
 
-def main(client: str, pilot: str) -> int:
+def main(
+    client: str,
+    pilot: str,
+    mode: str = "full",
+    include_supporting: bool = False,
+) -> int:
     processed_dir = get_processed_dir(client, pilot)
     output_dir = get_outputs_dir(client, pilot)
 
@@ -341,6 +342,9 @@ def main(client: str, pilot: str) -> int:
     findings_path = output_dir / "rkeg_findings.csv"
     summary_path = output_dir / "rkeg_summary.csv"
     severity_summary_path = output_dir / "rkeg_summary_by_severity.csv"
+    classification_summary_path = output_dir / "rkeg_summary_by_classification.csv"
+    classification_x_severity_path = output_dir / "rkeg_summary_classification_x_severity.csv"
+    viability_summary_path = output_dir / "rkeg_summary_by_viability.csv"
 
     risk_dim_summary_path = output_dir / "rkeg_summary_by_risk_dimension.csv"
     risk_x_sev_path = output_dir / "rkeg_summary_risk_x_severity.csv"
@@ -392,7 +396,6 @@ def main(client: str, pilot: str) -> int:
     if not terminations.empty:
         _require_cols(terminations, REQUIRED_TERM, "terminations.csv")
 
-    # Module validation
     engine_datasets = dict(datasets)
     engine_datasets["employee_master"] = employees
     engine_datasets["pay_events"] = pay_events
@@ -412,7 +415,14 @@ def main(client: str, pilot: str) -> int:
         print("RKEG module blocked due to validation errors.")
         return 1
 
-    # Data window
+    metadata_path = write_execution_metadata(
+        output_dir=output_dir,
+        module_name="RKEG",
+        mode=mode,
+        include_supporting=include_supporting,
+    )
+    print(f"Wrote: {metadata_path}")
+
     rkeg_dates: list[date] = []
     rkeg_dates += _collect_dates_from_df(pay_events, ["pay_date", "period_start", "period_end"])
     rkeg_dates += _collect_dates_from_df(leave_ledger, ["as_of_date", "event_date"])
@@ -431,22 +441,48 @@ def main(client: str, pilot: str) -> int:
     else:
         print("[RKEG] No usable dates found for data window - rkeg_data_window.csv not written")
 
-    # Run RKEG engine
     all_rules = _load_rules(rules_yaml_path)
     rules = [r for r in all_rules if int(r.get("tier", 1)) in {1, 2}]
 
     context: dict = {}
 
     findings: list[Finding] = []
-    for rule in rules:
-        findings.extend(run_rule(rule, engine_datasets, context=context))
 
-    write_findings_csv(findings, findings_path)
+    print(f"RKEG execution mode: mode={mode}, include_supporting={include_supporting}")
+
+    for rule in rules:
+        if not should_run_rule(
+            rule,
+            mode=mode,
+            include_supporting=include_supporting,
+        ):
+            continue
+
+        findings.extend(run_rule(rule, engine_datasets, context=context))
 
     if findings:
         findings_df = pd.DataFrame([f.__dict__ for f in findings])
     else:
         findings_df = pd.DataFrame(columns=["rule_code", "severity", "classification"])
+
+    rule_meta = load_rule_metadata_map(rules_yaml_path)
+
+    if not findings_df.empty:
+        findings_df["payroll_only_viable"] = findings_df["rule_code"].map(
+            lambda x: rule_meta.get(x, {}).get("payroll_only_viable")
+        )
+        findings_df["viability_level"] = findings_df["rule_code"].map(
+            lambda x: rule_meta.get(x, {}).get("viability_level")
+        )
+        findings_df["payroll_signal_strength"] = findings_df["rule_code"].map(
+            lambda x: rule_meta.get(x, {}).get("payroll_signal_strength")
+        )
+    else:
+        findings_df["payroll_only_viable"] = pd.Series(dtype="object")
+        findings_df["viability_level"] = pd.Series(dtype="object")
+        findings_df["payroll_signal_strength"] = pd.Series(dtype="object")
+
+    findings_df.to_csv(findings_path, index=False)
 
     if len(findings_df) == 0:
         summary_df = pd.DataFrame(columns=["rule_code", "severity", "finding_count"])
@@ -466,9 +502,6 @@ def main(client: str, pilot: str) -> int:
             .sort_values("finding_count", ascending=False)
         )
 
-        # ----------------------------
-    # Classification summaries
-    # ----------------------------
     if "classification" not in findings_df.columns:
         findings_df["classification"] = "UNCLASSIFIED"
     else:
@@ -494,11 +527,20 @@ def main(client: str, pilot: str) -> int:
             .sort_values(["classification", "severity"])
         )
 
-    classification_summary_path = output_dir / "rkeg_summary_by_classification.csv"
-    classification_x_severity_path = output_dir / "rkeg_summary_classification_x_severity.csv"
-
     classification_summary_df.to_csv(classification_summary_path, index=False)
     classification_x_severity_df.to_csv(classification_x_severity_path, index=False)
+
+    if len(findings_df) == 0:
+        viability_summary_df = pd.DataFrame(columns=["viability_level", "finding_count"])
+    else:
+        viability_summary_df = (
+            findings_df.groupby("viability_level", as_index=False)
+            .size()
+            .rename(columns={"size": "finding_count"})
+            .sort_values("finding_count", ascending=False)
+        )
+
+    viability_summary_df.to_csv(viability_summary_path, index=False)
 
     risk_dim_summary_df = pd.DataFrame(columns=["risk_dimension", "finding_count"])
     risk_x_sev_df = pd.DataFrame(columns=["risk_dimension", "severity", "finding_count"])
@@ -578,7 +620,14 @@ def main(client: str, pilot: str) -> int:
     layer_df.to_csv(layer_summary_path, index=False)
 
     if len(findings_df) == 0:
-        exec_md = "# RKEG - Executive Risk Summary\n\nNo findings were generated.\n"
+        exec_md = f"""# RKEG – Executive Risk Summary
+
+## Execution Context
+- **Execution mode:** **{mode}**
+- **Include supporting rules:** **{include_supporting}**
+
+No findings were generated.
+"""
     else:
         total_findings = int(len(findings_df))
         risk_score, risk_rating = _risk_score_and_rating(findings_df)
@@ -646,6 +695,10 @@ def main(client: str, pilot: str) -> int:
 
         exec_md = f"""# RKEG – Executive Risk Summary
 
+## Execution Context
+- **Execution mode:** **{mode}**
+- **Include supporting rules:** **{include_supporting}**
+
 ## Overview
 RKEG produced **{total_findings} findings** across the payroll evidence spine.
 
@@ -685,6 +738,7 @@ The dominant exposure is **{top_dimension}**, indicating gaps in the organisatio
     print(f"Wrote: {severity_summary_path}")
     print(f"Wrote: {classification_summary_path}")
     print(f"Wrote: {classification_x_severity_path}")
+    print(f"Wrote: {viability_summary_path}")
     print(f"Wrote: {risk_dim_summary_path}")
     print(f"Wrote: {risk_x_sev_path}")
     print(f"Wrote: {heatmap_path}")

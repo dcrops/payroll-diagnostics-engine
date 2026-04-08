@@ -65,6 +65,7 @@ EXEC_PACK_MD_PATH = OUTPUTS_DIR / "crc_executive_pack.md"
 
 # ---------- Data models ----------
 
+
 @dataclass
 class Finding:
     rule_code: str
@@ -337,6 +338,7 @@ def print_exec_pack_preflight(base_output_dir: Path, included_modules: set[str])
             print(f" - RKEG findings: {(modules_dir / 'rkeg_findings.csv').exists()}")
             print(f" - RKEG severity summary: {(modules_dir / 'rkeg_summary_by_severity.csv').exists()}")
 
+
 def load_executive_summary_md(base_output_dir: Path) -> str:
     path = base_output_dir / "executive" / "executive_summary.md"
 
@@ -351,15 +353,29 @@ def load_executive_summary_md(base_output_dir: Path) -> str:
 
     lines = text.splitlines()
 
-    # 🔥 Remove top-level header if present (prevents duplicate headings)
     if lines and lines[0].strip().startswith("#"):
         lines = lines[1:]
 
-        # Also remove empty line after header if it exists
         if lines and not lines[0].strip():
             lines = lines[1:]
 
     return "\n".join(lines).strip()
+
+
+def load_optional_markdown(path: Path, drop_first_h1: bool = False) -> str:
+    if not path.exists():
+        return ""
+
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return ""
+
+    if drop_first_h1:
+        lines = text.splitlines()
+        if lines and lines[0].startswith("# "):
+            text = "\n".join(lines[1:]).lstrip()
+
+    return text.strip()
 
 
 def load_executive_summary_json(base_output_dir: Path) -> Dict:
@@ -372,6 +388,7 @@ def load_executive_summary_json(base_output_dir: Path) -> Dict:
 
 def build_executive_summary(base_output_dir: Path) -> str:
     return load_executive_summary_md(base_output_dir)
+
 
 def build_highlight_insights(base_output_dir: Path) -> str:
     summary = load_executive_summary_json(base_output_dir)
@@ -430,11 +447,13 @@ def build_highlight_insights(base_output_dir: Path) -> str:
 
     return "\n".join(lines)
 
+
 def _fmt_count_pct(count: int, total: int) -> str:
     if not total:
         return str(count)
     pct = round((count / total) * 100)
     return f"{count} ({pct}%)"
+
 
 def build_risk_profile_overview(base_output_dir: Path) -> str:
     summary = load_executive_summary_json(base_output_dir)
@@ -497,6 +516,27 @@ def build_risk_profile_overview(base_output_dir: Path) -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+def build_coverage_data_dependency_insight(base_output_dir: Path) -> str:
+    path = base_output_dir / "crc_coverage_insight.md"
+    text = load_optional_markdown(path, drop_first_h1=True)
+
+    if not text:
+        return "_Coverage and data dependency insight not available for this run._"
+
+    intro = """
+### What this section shows
+
+This section compares results from two levels of analysis:
+
+- **Payroll-only analysis** - based on core payroll datasets such as pay events, leave balances, and termination records. This provides a high-confidence baseline view of payroll integrity using readily available data.
+- **Full analysis** - incorporates additional datasets (such as configuration, supporting records, or extended attributes where available), enabling broader rule coverage and deeper validation of payroll processes.
+
+The difference between these two views reflects **coverage, not prediction**. Additional findings identified in the full analysis represent areas that are not fully assessable using payroll-only data and require broader system context to evaluate.
+""".strip()
+
+    return f"{intro}\n\n{text}"
 
 
 # ---------- Severity loaders ----------
@@ -611,6 +651,7 @@ def load_term_severity_counts(base_output_dir: Path) -> Dict[str, int]:
             counts[sev] += 1
 
     return counts
+
 
 def load_cross_module_severity_counts(base_output_dir: Path) -> Dict[str, int]:
     counts: Dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
@@ -1069,6 +1110,10 @@ def build_data_sources_section(included_modules: set[str] | list[str] | None, ba
     if exec_summary_json.exists():
         lines.append(f"- `{exec_summary_json.relative_to(base_output_dir)}`  ")
 
+    coverage_insight_md = base_output_dir / "crc_coverage_insight.md"
+    if coverage_insight_md.exists():
+        lines.append(f"- `{coverage_insight_md.relative_to(base_output_dir)}`  ")
+
     lines.append("")
     lines.append(
         "These outputs were produced by rule-based checks over payroll and HR CSV extracts supplied by the organisation for the review period."
@@ -1078,20 +1123,26 @@ def build_data_sources_section(included_modules: set[str] | list[str] | None, ba
     lines.append("")
     return "\n".join(lines)
 
-def build_leave_no_findings_message() -> str:
-    return "No material leave and entitlement findings were identified in the current dataset.\n\n---"
 
-def build_term_no_findings_message() -> str:
-    return "No material termination-related findings were identified in the current dataset.\n\n---"
+def build_leave_no_findings_message(label: str = "leave and entitlement") -> str:
+    return f"No material {label} findings were identified in the current dataset.\n\n---"
 
-def build_rkeg_no_findings_message() -> str:
-    return "No material record-keeping or evidence gaps were identified in the current dataset.\n\n---"
 
-def build_cross_no_findings_message() -> str:
-    return "No material cross-module integrity findings were identified in the current dataset.\n\n---"
+def build_term_no_findings_message(label: str = "termination-related") -> str:
+    return f"No material {label} findings were identified in the current dataset.\n\n---"
 
-def build_lsl_no_findings_message() -> str:
-    return "No material long service leave findings were identified in the current dataset.\n\n---"
+
+def build_rkeg_no_findings_message(label: str = "record-keeping or evidence gap") -> str:
+    return f"No material {label} findings were identified in the current dataset.\n\n---"
+
+
+def build_cross_no_findings_message(label: str = "cross-module integrity") -> str:
+    return f"No material {label} findings were identified in the current dataset.\n\n---"
+
+
+def build_lsl_no_findings_message(label: str = "long service leave") -> str:
+    return f"No material {label} findings were identified in the current dataset.\n\n---"
+
 
 def build_lsl_coverage_note() -> str:
     return """No Long Service Leave (LSL) activity was identified in the dataset provided for this review.
@@ -1101,6 +1152,7 @@ Accordingly, LSL-related diagnostics were not performed.
 This reflects a data coverage limitation rather than a confirmed absence of LSL risk. Assessment of LSL exposure typically requires service history, eligibility thresholds, and accrual data that may not be present in payroll-only extracts.
 
 ---""".strip()
+
 
 def build_rkeg_summary(rkeg_counts: Dict[str, int]) -> str:
     if not any(rkeg_counts.values()):
@@ -1585,6 +1637,10 @@ def build_appendices(included_modules: set[str], base_output_dir: Path) -> str:
     if exec_summary_json.exists():
         lines.append(f"- `{exec_summary_json.relative_to(base_output_dir)}`")
 
+    coverage_insight_md = base_output_dir / "crc_coverage_insight.md"
+    if coverage_insight_md.exists():
+        lines.append(f"- `{coverage_insight_md.relative_to(base_output_dir)}`")
+
     lines.append("")
     lines.append(
         "These files provide row-level detail suitable for operational review, sampling, remediation planning, or incorporation into a broader audit work program."
@@ -1622,6 +1678,7 @@ def generate_exec_pack(
         print(" -", m, "=>", _module_ran(m, target_dir))
     print_exec_pack_preflight(target_dir, included)
 
+    leave_findings: List[Finding] = []
     if MODULE_LEAVE in included:
         leave_findings_path = target_dir / "leave_leakage_findings.csv"
         leave_findings = [Finding.from_row(r) for r in load_csv(leave_findings_path)]
@@ -1642,6 +1699,11 @@ def generate_exec_pack(
     structure.add("Executive Summary", 1, lambda: build_executive_summary(target_dir))
     structure.add("Highlight Insights", 1, lambda: build_highlight_insights(target_dir))
     structure.add("Risk Profile Overview", 1, lambda: build_risk_profile_overview(target_dir))
+    structure.add(
+        "Coverage & Data Dependency Insight",
+        1,
+        lambda: build_coverage_data_dependency_insight(target_dir),
+    )
     structure.add("Data Sources", 1, lambda: build_data_sources_section(included, target_dir))
     structure.add("Scope & Methodology", 1, lambda: build_scope_and_methodology(included))
 
@@ -1699,7 +1761,7 @@ def generate_exec_pack(
                 lambda: (
                     build_rkeg_summary(rkeg_counts)
                     if any(rkeg_counts.values())
-                    else build_rkeg_no_findings_message("record-keeping and evidence gap")
+                    else build_rkeg_no_findings_message("record-keeping and evidence gaps")
                 ),
             )
 
@@ -1710,7 +1772,7 @@ def generate_exec_pack(
                 lambda: (
                     build_cross_module_summary(cross_counts)
                     if any(cross_counts.values())
-                    else build_rkeg_no_findings_message("cross-module integrity")
+                    else build_cross_no_findings_message("cross-module integrity")
                 ),
             )
 

@@ -20,6 +20,16 @@ rules:
       - evidence_traceability
       - calculation_integrity
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LEAVE-002
     tier: 2
@@ -38,6 +48,16 @@ rules:
       - structural_completeness
       - evidence_traceability
     classification: CONTEXTUAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LEAVE-003
     tier: 1
@@ -57,6 +77,16 @@ rules:
       - cross_module_linkage_risk
       - evidence_traceability
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: true
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LEAVE-004
     tier: 1
@@ -76,6 +106,16 @@ rules:
       - cross_module_linkage_risk
       - governance_exposure
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: true
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LEAVE-005
     tier: 2
@@ -97,6 +137,16 @@ rules:
       - evidence_traceability
       - data_anomaly_sanity
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LEAVE-006
     tier: 1
@@ -115,6 +165,16 @@ rules:
       - structural_completeness
       - evidence_traceability
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LEAVE-007
     tier: 1
@@ -133,6 +193,16 @@ rules:
       - timing_integrity
       - cross_module_linkage_risk
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LEAVE-008
     tier: 2
@@ -149,6 +219,16 @@ rules:
       - data_anomaly_sanity
       - calculation_integrity
     classification: CONTEXTUAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LEAVE-009
     tier: 2
@@ -164,6 +244,16 @@ rules:
     risk_dimension:
       - data_anomaly_sanity
     classification: CONTEXTUAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LEAVE-010
     tier: 1
@@ -180,6 +270,16 @@ rules:
       - structural_completeness
       - evidence_traceability
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LEAVE-011
     tier: 1
@@ -195,6 +295,16 @@ rules:
     risk_dimension:
       - evidence_traceability
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LEAVE-012
     tier: 2
@@ -211,6 +321,16 @@ rules:
       - governance_exposure
       - exception_handling
     classification: CONTEXTUAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LEAVE-013
     tier: 1
@@ -229,6 +349,16 @@ rules:
       - timing_integrity
       - cross_module_linkage_risk
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LEAVE-014
     tier: 2
@@ -247,6 +377,16 @@ rules:
       - calculation_integrity
       - governance_exposure
     classification: CONTEXTUAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LEAVE-015
     tier: 2
@@ -263,6 +403,16 @@ rules:
       - data_anomaly_sanity
       - evidence_traceability
     classification: CONTEXTUAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: LEAVE-016
     tier: 1
@@ -281,6 +431,16 @@ rules:
       - structural_completeness
       - evidence_traceability
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LEAVE-017
     tier: 1
@@ -299,6 +459,16 @@ rules:
       - structural_completeness
       - cross_module_linkage_risk
     classification: STRUCTURAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: true
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LEAVE-018
     tier: 1
@@ -317,6 +487,16 @@ rules:
       - structural_completeness
       - cross_module_linkage_risk
     classification: STRUCTURAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: true
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LEAVE-019
     tier: 2
@@ -333,6 +513,16 @@ rules:
       - data_anomaly_sanity
       - evidence_traceability
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LEAVE-020
     tier: 1
@@ -352,6 +542,16 @@ rules:
       - evidence_traceability
       - structural_completeness
     classification: STRUCTURAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: LEAVE-021
     tier: 2
@@ -371,6 +571,16 @@ rules:
       - governance_exposure
       - evidence_traceability
     classification: CONTEXTUAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: LEAVE-022
     tier: 2
@@ -390,6 +600,16 @@ rules:
       - cross_module_linkage_risk
       - governance_exposure
     classification: CONTEXTUAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: LEAVE-023
     tier: 2
@@ -411,3 +631,13 @@ rules:
       - calculation_integrity
       - governance_exposure
     classification: CONTEXTUAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: weak

@@ -26,7 +26,17 @@ rules:
     remediation: 'Ensure all individuals referenced in payroll and leave systems have
       a corresponding employee master record and enforce validation before processing.'
   classification: STRUCTURAL
-
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: true
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: weak
+ 
 - id: RKEG-EMP-002
   tier: 1
   domain: EMP
@@ -47,6 +57,16 @@ rules:
     - timing_integrity
     - evidence_traceability
   classification: STRUCTURAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: true
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-EMP-003
   tier: 1
@@ -66,6 +86,16 @@ rules:
     - data_anomaly_sanity
     - evidence_traceability
   classification: STRUCTURAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: true
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-EMP-004
   tier: 1
@@ -90,6 +120,16 @@ rules:
     - cross_module_linkage_risk
     - data_anomaly_sanity
   classification: LOGICAL
+  viability:
+    payroll_only: partial
+    level: supporting
+  data_dependencies:
+    hr_data: true
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: moderate
 
 - id: RKEG-EMP-005
   tier: 2
@@ -114,6 +154,16 @@ rules:
     - evidence_traceability
     - calculation_integrity
   classification: STRUCTURAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: true
+    config_data: true
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-PAY-001
   tier: 1
@@ -134,6 +184,16 @@ rules:
     - timing_integrity
     - structural_completeness
   classification: STRUCTURAL
+  viability:
+    payroll_only: true
+    level: core
+  data_dependencies:
+    hr_data: false
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: strong
 
 - id: RKEG-PAY-002
   tier: 1
@@ -155,6 +215,16 @@ rules:
     - data_anomaly_sanity
     - structural_completeness
   classification: STRUCTURAL
+  viability:
+    payroll_only: true
+    level: core
+  data_dependencies:
+    hr_data: false
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: strong
 
 - id: RKEG-PAY-003
   tier: 1
@@ -175,6 +245,16 @@ rules:
     - evidence_traceability
     - structural_completeness
   classification: STRUCTURAL
+  viability:
+    payroll_only: true
+    level: supporting
+  data_dependencies:
+    hr_data: false
+    config_data: true
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: moderate
 
 - id: RKEG-PAY-004
   tier: 1
@@ -198,6 +278,16 @@ rules:
     - data_anomaly_sanity
     - cross_module_linkage_risk
   classification: STRUCTURAL
+  viability:
+    payroll_only: partial
+    level: supporting
+  data_dependencies:
+    hr_data: true
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: moderate
 
 - id: RKEG-PAY-005
   tier: 1
@@ -216,6 +306,16 @@ rules:
     - governance_exposure
     - cross_module_linkage_risk
   classification: LOGICAL
+  viability:
+    payroll_only: partial
+    level: supporting
+  data_dependencies:
+    hr_data: true
+    config_data: true
+    evidence_data: false
+    financial_data: true
+  data_strength:
+    payroll_signal: moderate
 
 - id: RKEG-PAY-006
   tier: 1
@@ -238,6 +338,16 @@ rules:
     - calculation_integrity
     - evidence_traceability
   classification: STRUCTURAL
+  viability:
+    payroll_only: partial
+    level: supporting
+  data_dependencies:
+    hr_data: true
+    config_data: true
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: moderate
 
 - id: RKEG-PAY-007
   tier: 2
@@ -260,6 +370,16 @@ rules:
     - exception_handling
     - evidence_traceability
   classification: CONTEXTUAL
+  viability:
+    payroll_only: true
+    level: supporting
+  data_dependencies:
+    hr_data: false
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: moderate
 
 - id: RKEG-PAY-008
   tier: 2
@@ -284,6 +404,16 @@ rules:
     - data_anomaly_sanity
     - calculation_integrity
   classification: LOGICAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: true
+    config_data: true
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-PAY-009
   tier: 2
@@ -306,6 +436,16 @@ rules:
     - data_anomaly_sanity
     - timing_integrity
   classification: CONTEXTUAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: true
+    config_data: true
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-PAY-010
   tier: 2
@@ -329,6 +469,16 @@ rules:
     - cross_module_linkage_risk
     - governance_exposure
   classification: LOGICAL
+  viability:
+    payroll_only: partial
+    level: supporting
+  data_dependencies:
+    hr_data: true
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: moderate
 
 - id: RKEG-PAY-011
   tier: 2
@@ -347,6 +497,16 @@ rules:
     - structural_completeness
     - evidence_traceability
   classification: STRUCTURAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: true
+    config_data: true
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-TERM-001
   tier: 1
@@ -371,6 +531,16 @@ rules:
     - timing_integrity
     - governance_exposure
   classification: LOGICAL
+  viability:
+    payroll_only: partial
+    level: supporting
+  data_dependencies:
+    hr_data: true
+    config_data: true
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: moderate
 
 - id: RKEG-SUP-001
   tier: 1
@@ -396,6 +566,16 @@ rules:
     - governance_exposure
     - evidence_traceability
   classification: LOGICAL
+  viability:
+    payroll_only: partial
+    level: supporting
+  data_dependencies:
+    hr_data: false
+    config_data: true
+    evidence_data: false
+    financial_data: true
+  data_strength:
+    payroll_signal: moderate
 
 - id: RKEG-SUP-002
   tier: 2
@@ -420,6 +600,16 @@ rules:
     - evidence_traceability
     - governance_exposure
   classification: LOGICAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: false
+    config_data: false
+    evidence_data: false
+    financial_data: true
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-SUP-003
   tier: 2
@@ -447,6 +637,16 @@ rules:
     - timing_integrity
     - governance_exposure
   classification: LOGICAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: false
+    config_data: true
+    evidence_data: false
+    financial_data: true
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-SUP-004
   tier: 2
@@ -471,6 +671,16 @@ rules:
     - structural_completeness
     - governance_exposure
   classification: STRUCTURAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: true
+    config_data: false
+    evidence_data: false
+    financial_data: true
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-SUP-005
   tier: 2
@@ -488,6 +698,16 @@ rules:
     - structural_completeness
     - evidence_traceability
   classification: STRUCTURAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: false
+    config_data: false
+    evidence_data: false
+    financial_data: true
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-SUP-006
   tier: 2
@@ -506,6 +726,16 @@ rules:
     - data_anomaly_sanity
     - governance_exposure
   classification: CONTEXTUAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: true
+    config_data: false
+    evidence_data: false
+    financial_data: true
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-LEAVE-001
   tier: 1
@@ -528,6 +758,16 @@ rules:
     - evidence_traceability
     - cross_module_linkage_risk
   classification: LOGICAL
+  viability:
+    payroll_only: true
+    level: core
+  data_dependencies:
+    hr_data: false
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: strong
 
 - id: RKEG-LEAVE-002
   tier: 2
@@ -552,7 +792,17 @@ rules:
     remediation: 'Reconcile leave snapshots to the transactional leave ledger, investigate
       discrepancies above the tolerance threshold and address configuration or processing
       gaps that prevent balances from being reconstructed from system movements.'
-    classification: LOGICAL
+  classification: LOGICAL
+  viability:
+    payroll_only: true
+    level: core
+  data_dependencies:
+    hr_data: false
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: strong
 
 - id: RKEG-LEAVE-003
   tier: 2
@@ -579,6 +829,16 @@ rules:
     - evidence_traceability
     - data_anomaly_sanity
   classification: STRUCTURAL
+  viability:
+    payroll_only: true
+    level: supporting
+  data_dependencies:
+    hr_data: false
+    config_data: false
+    evidence_data: true
+    financial_data: false
+  data_strength:
+    payroll_signal: moderate
 
 - id: RKEG-LEAVE-004
   tier: 2
@@ -598,6 +858,16 @@ rules:
     - timing_integrity
     - evidence_traceability
   classification: STRUCTURAL
+  viability:
+    payroll_only: true
+    level: core
+  data_dependencies:
+    hr_data: false
+    config_data: false
+    evidence_data: false
+    financial_data: false
+  data_strength:
+    payroll_signal: strong
 
 - id: RKEG-GOV-001
   tier: 1
@@ -621,6 +891,16 @@ rules:
     - evidence_traceability
     - governance_exposure
   classification: STRUCTURAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: false
+    config_data: true
+    evidence_data: true
+    financial_data: false
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-GOV-002
   tier: 2
@@ -642,6 +922,16 @@ rules:
     - governance_exposure
     - evidence_traceability
   classification: STRUCTURAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: true
+    config_data: true
+    evidence_data: true
+    financial_data: false
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-GOV-003
   tier: 2
@@ -666,6 +956,16 @@ rules:
     - governance_exposure
     - exception_handling
   classification: CONTEXTUAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: false
+    config_data: true
+    evidence_data: true
+    financial_data: false
+  data_strength:
+    payroll_signal: weak
 
 - id: RKEG-GOV-004
   tier: 2
@@ -683,3 +983,13 @@ rules:
     - evidence_traceability
     - governance_exposure
   classification: STRUCTURAL
+  viability:
+    payroll_only: false
+    level: extended
+  data_dependencies:
+    hr_data: false
+    config_data: true
+    evidence_data: true
+    financial_data: false
+  data_strength:
+    payroll_signal: weak

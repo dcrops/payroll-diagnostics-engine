@@ -21,6 +21,16 @@ rules:
       - timing_integrity
       - cross_module_linkage_risk
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: TERM-002
     tier: 1
@@ -40,6 +50,16 @@ rules:
       - evidence_traceability
       - data_anomaly_sanity
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: TERM-003
     tier: 2
@@ -61,6 +81,16 @@ rules:
       - governance_exposure
       - evidence_traceability
     classification: CONTEXTUAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: TERM-004
     tier: 1
@@ -80,6 +110,16 @@ rules:
       - evidence_traceability
       - data_anomaly_sanity
     classification: STRUCTURAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: true
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: TERM-005
     tier: 1
@@ -97,6 +137,16 @@ rules:
       - evidence_traceability
       - structural_completeness
     classification: STRUCTURAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: TERM-006
     tier: 2
@@ -119,6 +169,16 @@ rules:
       - governance_exposure
       - exception_handling
     classification: CONTEXTUAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: TERM-007
     tier: 1
@@ -140,6 +200,16 @@ rules:
       - cross_module_linkage_risk
       - exception_handling
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: TERM-008
     tier: 1
@@ -159,6 +229,16 @@ rules:
       - cross_module_linkage_risk
       - governance_monitoring_exposure
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: TERM-009
     tier: 2
@@ -186,6 +266,16 @@ rules:
       - cross_module_linkage_risk
       - exception_handling
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: TERM-010
     tier: 2
@@ -207,6 +297,16 @@ rules:
       - timing_integrity
       - governance_exposure
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: TERM-011
     tier: 2
@@ -223,6 +323,16 @@ rules:
       - structural_completeness
       - data_anomaly_sanity
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: TERM-012
     tier: 1
@@ -241,6 +351,16 @@ rules:
       - structural_completeness
       - cross_module_linkage_risk
     classification: STRUCTURAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: true
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: TERM-013
     tier: 2
@@ -259,6 +379,16 @@ rules:
       - calculation_integrity
       - governance_exposure
     classification: LOGICAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: true
+    data_strength:
+      payroll_signal: weak
 
   - id: TERM-014
     tier: 2
@@ -275,6 +405,16 @@ rules:
       - governance_monitoring
       - evidence_traceability
     classification: STRUCTURAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: true
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: TERM-015
     tier: 2
@@ -293,6 +433,16 @@ rules:
       - timing_integrity
       - governance_exposure
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: TERM-016
     tier: 2
@@ -311,6 +461,16 @@ rules:
       - exception_handling
       - governance_monitoring
     classification: CONTEXTUAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: TERM-017
     tier: 2
@@ -329,3 +489,13 @@ rules:
       - timing_integrity
       - data_anomaly_sanity
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong

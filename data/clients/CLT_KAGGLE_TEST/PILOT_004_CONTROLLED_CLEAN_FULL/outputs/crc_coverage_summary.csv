@@ -1,0 +1,16 @@
+module,viability_level,finding_count
+TERM,extended,6
+TERM,core,4
+TERM,supporting,0
+LEAVE,core,2
+LEAVE,extended,0
+LEAVE,supporting,0
+LSL,core,0
+LSL,supporting,0
+LSL,extended,0
+RKEG,supporting,3
+RKEG,extended,1
+RKEG,core,0
+CROSS_MODULE,supporting,11
+CROSS_MODULE,core,1
+CROSS_MODULE,extended,0

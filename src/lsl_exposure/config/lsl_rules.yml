@@ -23,6 +23,16 @@ rules:
       - evidence_traceability
       - calculation_integrity
     classification: STRUCTURAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: true
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LSL-002
     tier: 1
@@ -42,6 +52,16 @@ rules:
       - evidence_traceability
       - calculation_integrity
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LSL-003
     tier: 1
@@ -63,6 +83,16 @@ rules:
       - evidence_traceability
       - data_anomaly_sanity
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: true
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LSL-004
     tier: 2
@@ -85,6 +115,16 @@ rules:
       - calculation_integrity
       - evidence_traceability
     classification: CONTEXTUAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: true
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LSL-005
     tier: 1
@@ -105,6 +145,16 @@ rules:
       - calculation_integrity
       - cross_module_linkage_risk
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LSL-006
     tier: 1
@@ -125,6 +175,16 @@ rules:
       - structural_completeness
       - evidence_traceability
     classification: STRUCTURAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: true
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: LSL-007
     tier: 1
@@ -145,6 +205,16 @@ rules:
       - data_anomaly_sanity
       - calculation_integrity
     classification: CONTEXTUAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LSL-008
     tier: 1
@@ -162,6 +232,16 @@ rules:
       - structural_completeness
       - governance_exposure
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LSL-009
     tier: 2
@@ -179,6 +259,16 @@ rules:
       - data_anomaly_sanity
       - evidence_traceability
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LSL-010
     tier: 2
@@ -200,6 +290,16 @@ rules:
       - governance_monitoring_exposure
       - data_anomaly_sanity
     classification: CONTEXTUAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: true
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: LSL-011
     tier: 2
@@ -222,6 +322,16 @@ rules:
       - calculation_integrity
       - cross_module_linkage_risk
     classification: CONTEXTUAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: true
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LSL-012
     tier: 1
@@ -240,6 +350,16 @@ rules:
       - structural_completeness
       - evidence_traceability
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LSL-013
     tier: 1
@@ -261,6 +381,16 @@ rules:
       - calculation_integrity
       - cross_module_linkage_risk
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: true
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LSL-014
     tier: 1
@@ -281,6 +411,16 @@ rules:
       - calculation_integrity
       - evidence_traceability
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LSL-015
     tier: 1
@@ -299,6 +439,16 @@ rules:
       - timing_integrity
       - cross_module_linkage_risk
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: LSL-016
     tier: 1
@@ -316,6 +466,16 @@ rules:
       - structural_completeness
       - evidence_traceability
     classification: STRUCTURAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: true
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: LSL-017
     tier: 2
@@ -337,6 +497,16 @@ rules:
       - structural_completeness
       - evidence_traceability
     classification: STRUCTURAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: true
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: LSL-018
     tier: 2
@@ -358,6 +528,16 @@ rules:
       - evidence_traceability
       - structural_completeness
     classification: STRUCTURAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: LSL-019
     tier: 2
@@ -378,6 +558,16 @@ rules:
       - timing_integrity
       - evidence_traceability
     classification: CONTEXTUAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LSL-020
     tier: 2
@@ -400,6 +590,16 @@ rules:
       - calculation_integrity
       - data_anomaly_sanity
     classification: CONTEXTUAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: true
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LSL-021
     tier: 2
@@ -425,6 +625,16 @@ rules:
       - evidence_traceability
       - governance_monitoring_exposure
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LSL-022
     tier: 2
@@ -449,6 +659,16 @@ rules:
       - calculation_integrity
       - evidence_traceability
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LSL-023
     tier: 2
@@ -469,6 +689,16 @@ rules:
       - timing_integrity
       - data_anomaly_sanity
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: LSL-024
     tier: 2
@@ -502,3 +732,13 @@ rules:
       - cross_module_linkage_risk
       - exception_handling
     classification: CONTEXTUAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: true
+      config_data: true
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate

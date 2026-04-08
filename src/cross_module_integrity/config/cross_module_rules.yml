@@ -26,6 +26,16 @@ rules:
       - cross_module_linkage_risk
       - exception_handling
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: CM-002
     tier: 1
@@ -50,6 +60,16 @@ rules:
       - cross_module_linkage_risk
       - governance_monitoring_exposure
     classification: CONTEXTUAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-003
     tier: 1
@@ -72,6 +92,16 @@ rules:
       - timing_integrity
       - cross_module_linkage_risk
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-004
     tier: 2
@@ -98,6 +128,16 @@ rules:
       - evidence_traceability
       - exception_handling
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-005
     tier: 1
@@ -123,6 +163,16 @@ rules:
       - cross_module_linkage_risk
       - exception_handling
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-006
     tier: 1
@@ -150,6 +200,16 @@ rules:
       - cross_module_linkage_risk
       - governance_monitoring_exposure
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: CM-007
     tier: 2
@@ -176,6 +236,16 @@ rules:
       - cross_module_linkage_risk
       - data_anomaly_sanity
     classification: STRUCTURAL
+    viability:
+      payroll_only: false
+      level: extended
+    data_dependencies:
+      hr_data: true
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: weak
 
   - id: CM-008
     tier: 2
@@ -207,6 +277,16 @@ rules:
       - cross_module_linkage_risk
       - exception_handling
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-009
     tier: 2
@@ -228,6 +308,16 @@ rules:
       - lifecycle_integrity
       - governance_exposure
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-010
     tier: 2
@@ -251,6 +341,16 @@ rules:
       - lifecycle_integrity
       - calculation_integrity
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-011
     tier: 2
@@ -267,6 +367,16 @@ rules:
       - data_anomaly_sanity
       - governance_exposure
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: CM-012
     tier: 2
@@ -289,6 +399,16 @@ rules:
       - lifecycle_integrity
       - timing_integrity
     classification: CONTEXTUAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-013
     tier: 2
@@ -315,6 +435,16 @@ rules:
       - cross_module_linkage_risk
       - exception_handling
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-014
     tier: 2
@@ -339,6 +469,16 @@ rules:
       - evidence_traceability
       - cross_module_linkage_risk
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-015
     tier: 2
@@ -366,6 +506,16 @@ rules:
       - governance_monitoring_exposure
       - cross_module_linkage_risk
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-016
     tier: 2
@@ -388,6 +538,16 @@ rules:
       - structural_completeness
       - cross_module_linkage_risk
     classification: STRUCTURAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-017
     tier: 2
@@ -406,6 +566,16 @@ rules:
       - evidence_traceability
       - cross_module_linkage_risk
     classification: LOGICAL
+    viability:
+      payroll_only: partial
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: true
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate
 
   - id: CM-018
     tier: 2
@@ -431,6 +601,16 @@ rules:
       - exception_handling
       - governance_monitoring_exposure
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: CM-019
     tier: 2
@@ -460,6 +640,16 @@ rules:
       - exception_handling
       - cross_module_linkage_risk
     classification: LOGICAL
+    viability:
+      payroll_only: true
+      level: core
+    data_dependencies:
+      hr_data: false
+      config_data: true
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: strong
 
   - id: CM-020
     tier: 2
@@ -482,3 +672,13 @@ rules:
       - governance_monitoring_exposure
       - cross_module_linkage_risk
     classification: CONTEXTUAL
+    viability:
+      payroll_only: true
+      level: supporting
+    data_dependencies:
+      hr_data: false
+      config_data: false
+      evidence_data: false
+      financial_data: false
+    data_strength:
+      payroll_signal: moderate

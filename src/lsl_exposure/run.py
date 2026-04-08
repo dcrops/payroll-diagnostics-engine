@@ -7,12 +7,15 @@ import yaml
 
 from src.common.paths import get_processed_dir, get_outputs_dir
 from src.common.data_window import write_data_window
+from src.common.rule_filter import should_run_rule
+from src.common.execution_metadata import write_execution_metadata
+from src.common.rule_metadata import load_rule_metadata_map
 
 from src.lsl_exposure.models import Finding
 from src.lsl_exposure.detectors.registry import run_rule
 from src.lsl_exposure.rules import prepare_lsl_state, compute_exposure_band
 
-from common.validation import (
+from src.common.validation import (
     ValidationResult,
     add_issue,
     check_dataset_present,
@@ -234,7 +237,12 @@ def validate_lsl_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
     return make_result(module_name, issues)
 
 
-def main(client: str, pilot: str) -> int:
+def main(
+    client: str,
+    pilot: str,
+    mode: str = "full",
+    include_supporting: bool = False,
+) -> int:
     processed_dir = get_processed_dir(client, pilot)
     output_dir = get_outputs_dir(client, pilot)
 
@@ -305,6 +313,14 @@ def main(client: str, pilot: str) -> int:
         print("LSL module blocked due to validation errors.")
         return 1
 
+    metadata_path = write_execution_metadata(
+        output_dir=output_dir,
+        module_name="LSL",
+        mode=mode,
+        include_supporting=include_supporting,
+    )
+    print(f"Wrote: {metadata_path}")
+
     window_dates: list[date] = []
 
     emp_dates = employees["start_date"].dropna()
@@ -342,7 +358,16 @@ def main(client: str, pilot: str) -> int:
 
     context = {"state": state}
 
+    print(f"LSL execution mode: mode={mode}, include_supporting={include_supporting}")
+
     for rule in rules:
+        if not should_run_rule(
+            rule,
+            mode=mode,
+            include_supporting=include_supporting,
+        ):
+            continue
+
         findings.extend(run_rule(rule, datasets, context=context))
 
     eligibility_years = 7.0
@@ -374,6 +399,23 @@ def main(client: str, pilot: str) -> int:
                 "next_action",
             ]
         )
+
+    rule_meta = load_rule_metadata_map(rules_path)
+
+    if not findings_df.empty:
+        findings_df["payroll_only_viable"] = findings_df["rule_code"].map(
+            lambda x: rule_meta.get(x, {}).get("payroll_only_viable")
+        )
+        findings_df["viability_level"] = findings_df["rule_code"].map(
+            lambda x: rule_meta.get(x, {}).get("viability_level")
+        )
+        findings_df["payroll_signal_strength"] = findings_df["rule_code"].map(
+            lambda x: rule_meta.get(x, {}).get("payroll_signal_strength")
+        )
+    else:
+        findings_df["payroll_only_viable"] = pd.Series(dtype="object")
+        findings_df["viability_level"] = pd.Series(dtype="object")
+        findings_df["payroll_signal_strength"] = pd.Series(dtype="object")
 
     findings_path = output_dir / "lsl_findings.csv"
     findings_df.to_csv(findings_path, index=False)
@@ -435,6 +477,19 @@ def main(client: str, pilot: str) -> int:
     classification_summary_df.to_csv(classification_summary_path, index=False)
     classification_x_severity_df.to_csv(classification_x_severity_path, index=False)
 
+    if len(findings_df) == 0:
+        viability_summary_df = pd.DataFrame(columns=["viability_level", "finding_count"])
+    else:
+        viability_summary_df = (
+            findings_df.groupby("viability_level", as_index=False)
+            .size()
+            .rename(columns={"size": "finding_count"})
+            .sort_values("finding_count", ascending=False)
+        )
+
+    viability_summary_path = output_dir / "lsl_summary_by_viability.csv"
+    viability_summary_df.to_csv(viability_summary_path, index=False)
+
     exposure_path = output_dir / "lsl_exposure_summary.csv"
     pd.DataFrame(
         [
@@ -453,6 +508,7 @@ def main(client: str, pilot: str) -> int:
     print(f"Wrote: {severity_summary_path}")
     print(f"Wrote: {classification_summary_path}")
     print(f"Wrote: {classification_x_severity_path}")
+    print(f"Wrote: {viability_summary_path}")
     print(f"Wrote: {exposure_path}")
 
     return 0

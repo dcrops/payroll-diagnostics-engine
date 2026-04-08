@@ -1,0 +1,6 @@
+module,payroll_core,payroll_supporting,payroll_extended,payroll_total,full_core,full_supporting,full_extended,full_total,delta_core,delta_supporting,delta_extended,delta_total
+LEAVE,2,0,0,2,2,0,0,2,0,0,0,0
+TERM,4,0,0,4,4,0,6,10,0,0,6,6
+LSL,0,0,0,0,0,0,0,0,0,0,0,0
+RKEG,0,3,0,3,0,3,1,4,0,0,1,1
+CROSS_MODULE,1,11,0,12,1,11,0,12,0,0,0,0
