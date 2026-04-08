@@ -69,6 +69,15 @@ Classification is used to distinguish between substantive integrity issues, stru
 
 ## 4. Coverage & Data Dependency Insight
 
+### What this section shows
+
+This section compares results from two levels of analysis:
+
+- **Payroll-only analysis** - based on core payroll datasets such as pay events, leave balances, and termination records. This provides a high-confidence baseline view of payroll integrity using readily available data.
+- **Full analysis** - incorporates additional datasets (such as configuration, supporting records, or extended attributes where available), enabling broader rule coverage and deeper validation of payroll processes.
+
+The difference between these two views reflects **coverage, not prediction**. Additional findings identified in the full analysis represent areas that are not fully assessable using payroll-only data and require broader system context to evaluate.
+
 ## Overview
 
 - Payroll-only findings: **21**
@@ -159,7 +168,8 @@ These outputs were produced by rule-based checks over payroll and HR CSV extract
 
 ---
 
-### 5.1 **Leave & Entitlement Leakage – Scope & Methodology**
+
+### 6.1 Leave & Entitlement Leakage – Scope & Methodology
 
 **Scope**
 
@@ -196,7 +206,8 @@ Where exposure estimates are included, they are indicative only and must be vali
 
 ---
 
-### 5.2 **Long Service Leave (LSL) Exposure – Scope & Methodology**
+
+### 6.2 Long Service Leave (LSL) Exposure – Scope & Methodology
 
 **Scope**
 
@@ -230,7 +241,8 @@ Where any exposure estimates or balance concerns are inferred, they are indicati
 
 ---
 
-### 5.3 **Termination Exposure – Scope & Methodology**
+
+### 6.3 Termination Exposure – Scope & Methodology
 
 **Scope**
 
@@ -271,7 +283,8 @@ Severity does not represent:
 
 ---
 
-### 5.4 **Record-Keeping & Evidence Gaps (RKEG) – Scope & Methodology**
+
+### 6.4 Record-Keeping & Evidence Gaps (RKEG) – Scope & Methodology
 
 **Scope**
 
@@ -307,7 +320,8 @@ RKEG findings should be interpreted as evidential risk indicators. Addressing th
 
 ---
 
-### 5.5 **Cross-Module Integrity – Scope & Methodology**
+
+### 6.5 Cross-Module Integrity – Scope & Methodology
 
 **Scope**
 

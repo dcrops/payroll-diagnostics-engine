@@ -227,6 +227,8 @@ def _derive_exec_review_period(included_modules: set[str], base_output_dir: Path
         candidate_paths.append(modules_dir / "term_findings.csv")
     if MODULE_RKEG in included_modules:
         candidate_paths.append(modules_dir / "rkeg_findings.csv")
+    if MODULE_CROSS in included_modules:
+        candidate_paths.append(modules_dir / "cross_module_findings.csv")
 
     all_dates: list[date] = []
 
@@ -804,7 +806,7 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
     lines.append("")
 
     if MODULE_LEAVE in mods:
-        lines.append(f"### 5.{subsection_no} **Leave & Entitlement Leakage – Scope & Methodology**")
+        lines.append(f"### **Leave & Entitlement Leakage – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
@@ -852,7 +854,7 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         subsection_no += 1
 
     if MODULE_LSL in mods:
-        lines.append(f"### 5.{subsection_no} **Long Service Leave (LSL) Exposure – Scope & Methodology**")
+        lines.append(f"### **Long Service Leave (LSL) Exposure – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
@@ -895,7 +897,7 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         subsection_no += 1
 
     if MODULE_TERM in mods:
-        lines.append(f"### 5.{subsection_no} **Termination Exposure – Scope & Methodology**")
+        lines.append(f"### **Termination Exposure – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
@@ -947,7 +949,7 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         subsection_no += 1
 
     if MODULE_RKEG in mods:
-        lines.append(f"### 5.{subsection_no} **Record-Keeping & Evidence Gaps (RKEG) – Scope & Methodology**")
+        lines.append(f"### **Record-Keeping & Evidence Gaps (RKEG) – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
@@ -994,7 +996,7 @@ def build_scope_and_methodology(included_modules: set[str] | list[str] | None) -
         subsection_no += 1
 
     if MODULE_CROSS in mods:
-        lines.append(f"### 5.{subsection_no} **Cross-Module Integrity – Scope & Methodology**")
+        lines.append(f"### **Cross-Module Integrity – Scope & Methodology**")
         lines.append("")
         lines.append("**Scope**")
         lines.append("")
@@ -1651,6 +1653,281 @@ def build_appendices(included_modules: set[str], base_output_dir: Path) -> str:
 
     return "\n".join(lines)
 
+def build_scope_intro(included_modules: set[str] | list[str] | None) -> str:
+    mods = normalise_modules(included_modules)
+    ordered = included_modules_in_order(mods)
+
+    lines: List[str] = []
+    lines.append("**Modules included in this engagement:**")
+    lines.append("")
+
+    for m in ordered:
+        lines.append(f"- {MODULE_LABELS[m]}")
+    if not ordered:
+        lines.append("- None specified")
+
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def build_scope_leave() -> str:
+    return "Leave scope content goes here."
+
+
+def build_scope_lsl() -> str:
+    return "LSL scope content goes here."
+
+
+def build_scope_term() -> str:
+    return "TERM scope content goes here."
+
+
+def build_scope_rkeg() -> str:
+    return "RKEG scope content goes here."
+
+
+def build_scope_cross_module() -> str:
+    return "Cross-module scope content goes here."
+
+def build_scope_leave() -> str:
+    lines: List[str] = []
+    lines.append("**Scope**")
+    lines.append("")
+    lines.append(
+        "The Leave & Entitlement Leakage review identifies potential anomalies and risk indicators in leave balances, accruals and leave usage based on the data provided."
+    )
+    lines.append("")
+    lines.append(
+        "The purpose of this review is to highlight records that may warrant follow-up, such as negative balances, unexpected accrual patterns, mismatches between leave activity and employee status, or inconsistencies between leave movement data and balance snapshots."
+    )
+    lines.append("")
+    lines.append(
+        "This review is designed to support payroll and HR teams in prioritising validation and remediation effort. Findings are risk signals only and do not, on their own, confirm non-compliance, underpayment, or an entitlement error."
+    )
+    lines.append("")
+    lines.append("**Data reviewed**")
+    lines.append("")
+    lines.append("- leave balances snapshot data (where supplied)")
+    lines.append("- leave ledger / leave movement records (where supplied)")
+    lines.append("- employee master data (where supplied)")
+    lines.append("- other supporting payroll extracts included in the engagement pack")
+    lines.append("")
+    lines.append("**Checks performed**")
+    lines.append("")
+    lines.append("- rule-based detection of unusual leave balance and movement patterns")
+    lines.append("- identification of negative balances and unexpected accrual behaviour")
+    lines.append("- consistency checks between employee status and leave activity (for example, terminated employees with ongoing leave movements)")
+    lines.append("- cross-checks between leave movement data and balance snapshot fields where available")
+    lines.append("")
+    lines.append("**Out of scope**")
+    lines.append("")
+    lines.append("This review does not:")
+    lines.append("")
+    lines.append("- interpret awards, enterprise agreements, or employment contracts")
+    lines.append("- calculate legal entitlement outcomes or confirm the correctness of leave accrual rules")
+    lines.append("- provide legal, accounting, or industrial relations advice")
+    lines.append("- assert contraventions of legislation or confirm non-compliance.")
+    lines.append("")
+    lines.append(
+        "Where exposure estimates are included, they are indicative only and must be validated before remediation or accounting decisions are made."
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_scope_lsl() -> str:
+    lines: List[str] = []
+    lines.append("**Scope**")
+    lines.append("")
+    lines.append(
+        "The Long Service Leave (LSL) Exposure review identifies risk indicators in LSL balance and service-related data that may warrant further validation. The purpose of this review is to highlight records that appear inconsistent, incomplete, or difficult to substantiate based on the data provided."
+    )
+    lines.append("")
+    lines.append(
+        "This review is designed to support payroll, HR and finance teams in prioritising follow-up effort. Findings are risk signals only and do not, on their own, confirm an entitlement error, underpayment, or non-compliance."
+    )
+    lines.append("")
+    lines.append("**Data reviewed**")
+    lines.append("")
+    lines.append("- employee master data relevant to LSL service (where supplied)")
+    lines.append("- LSL balance snapshot data (where supplied)")
+    lines.append("- LSL accrual or movement records (where supplied)")
+    lines.append("- other supporting payroll extracts included in the engagement pack")
+    lines.append("")
+    lines.append("**Checks performed**")
+    lines.append("")
+    lines.append("- consistency checks between LSL balances, accrual patterns, and available service-related fields")
+    lines.append("- identification of missing or incomplete service date records required to support LSL calculations")
+    lines.append("- detection of unusual balance or movement patterns that may indicate configuration or data issues")
+    lines.append("")
+    lines.append("**Out of scope**")
+    lines.append("")
+    lines.append("This review does not:")
+    lines.append("")
+    lines.append("- interpret awards, enterprise agreements, or employment contracts")
+    lines.append("- calculate legal LSL entitlement outcomes or confirm the correctness of LSL accrual rules")
+    lines.append("- provide legal, accounting, or industrial relations advice")
+    lines.append("- assert contraventions of legislation or confirm non-compliance.")
+    lines.append("")
+    lines.append(
+        "Where any exposure estimates or balance concerns are inferred, they are indicative only and must be validated before remediation or accounting decisions are made."
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_scope_term() -> str:
+    lines: List[str] = []
+    lines.append("**Scope**")
+    lines.append("")
+    lines.append(
+        "The Termination Exposure review assesses whether termination events recorded in payroll and related employment data are sufficiently complete, timely, and traceable to support the organisation’s ability to evidence termination-related payroll decisions if reviewed by auditors or regulators."
+    )
+    lines.append("")
+    lines.append(
+        "This review focuses on process and evidential integrity, not on the correctness of termination payments."
+    )
+    lines.append("")
+    lines.append("Specifically, the review considers whether:")
+    lines.append("")
+    lines.append("- termination events are recorded consistently across available data sources")
+    lines.append("- final pay processing occurs in a reasonable and defensible sequence relative to termination dates")
+    lines.append("- core termination attributes (such as termination date and termination type/reason) are present and internally consistent")
+    lines.append("- termination-related decisions are supported by basic evidentiary artefacts or references")
+    lines.append("")
+    lines.append("**Out of scope**")
+    lines.append("")
+    lines.append("This review does not:")
+    lines.append("")
+    lines.append("- calculate final pay entitlements or assess payment correctness")
+    lines.append("- interpret awards, enterprise agreements, or employment contracts")
+    lines.append("- determine notice, redundancy, or severance obligations")
+    lines.append("- assert contraventions of legislation or confirm non-compliance.")
+    lines.append("- provide legal advice or assurance of compliance.")
+    lines.append("")
+    lines.append("Any potential exposure identified reflects defensibility risk, not confirmed error or liability.")
+    lines.append("")
+    lines.append("**Methodology**")
+    lines.append("")
+    lines.append(
+        "The review applies a series of rule-based checks to payroll and related employment data to identify termination events that exhibit characteristics commonly associated with audit, regulatory, or dispute risk."
+    )
+    lines.append("")
+    lines.append(
+        "Each finding is assigned a severity based on evidential impact, reflecting how materially the issue could impair the organisation’s ability to explain and support termination-related payroll decisions if reviewed."
+    )
+    lines.append("")
+    lines.append("Severity does not represent:")
+    lines.append("")
+    lines.append("- likelihood of underpayment")
+    lines.append("- magnitude of financial exposure")
+    lines.append("- remediation priority")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_scope_rkeg() -> str:
+    lines: List[str] = []
+    lines.append("**Scope**")
+    lines.append("")
+    lines.append(
+        "The Record-Keeping & Evidence Gaps (RKEG) review assesses whether payroll-related records are sufficiently complete, consistent and traceable to support the organisation’s ability to evidence payroll decisions if reviewed by auditors or regulators."
+    )
+    lines.append("")
+    lines.append(
+        "RKEG focuses on evidential strength, not on determining whether payroll outcomes are correct or incorrect. Findings highlight where records may be incomplete, inconsistent, or difficult to substantiate if challenged."
+    )
+    lines.append("")
+    lines.append(
+        "This review is intended to support risk-aware payroll operations by identifying evidence weaknesses that can increase audit effort, increase dispute risk, or reduce the organisation’s ability to confidently explain pay decisions."
+    )
+    lines.append("")
+    lines.append("**Data reviewed**")
+    lines.append("")
+    lines.append("- employee master data (where supplied)")
+    lines.append("- pay event / payroll transaction extracts (where supplied)")
+    lines.append("- termination and employment status fields where included in the engagement data pack")
+    lines.append("")
+    lines.append("**Checks performed**")
+    lines.append("")
+    lines.append("- completeness checks for key employee master fields required for traceability and defensibility")
+    lines.append("- identification of orphan or untraceable pay events (for example, pay events with missing or inconsistent identifiers)")
+    lines.append("- consistency checks across employee status and payroll activity where possible")
+    lines.append("- identification of gaps that may require manual reconstruction to support an audit trail")
+    lines.append("")
+    lines.append("**Out of scope**")
+    lines.append("")
+    lines.append("This review does not:")
+    lines.append("")
+    lines.append("- calculate entitlements, underpayments or overpayments")
+    lines.append("- interpret awards, enterprise agreements, or employment contracts")
+    lines.append("- provide legal, accounting, or industrial relations advice")
+    lines.append("- assert contraventions of legislation or confirm non-compliance.")
+    lines.append("")
+    lines.append(
+        "RKEG findings should be interpreted as evidential risk indicators. Addressing them improves defensibility and reduces audit effort, but does not necessarily imply a payroll outcome is incorrect."
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_scope_cross_module() -> str:
+    lines: List[str] = []
+    lines.append("**Scope**")
+    lines.append("")
+    lines.append(
+        "The Cross-Module Integrity review assesses whether related payroll datasets align consistently across employee lifecycle, leave, payroll event, and termination records."
+    )
+    lines.append("")
+    lines.append(
+        "The purpose of this review is to identify inconsistencies between linked datasets that may indicate sequencing issues, lifecycle mismatches, incomplete integrations, or broader payroll data integrity weaknesses."
+    )
+    lines.append("")
+    lines.append(
+        "This review is designed to support payroll, HR, finance, and governance teams in identifying where records may not align cleanly across the broader payroll data environment. Findings are integrity signals only and do not, on their own, confirm non-compliance, underpayment, or payroll error."
+    )
+    lines.append("")
+    lines.append("**Data reviewed**")
+    lines.append("")
+    lines.append("- employee master data (where supplied)")
+    lines.append("- leave balances and leave movement data (where supplied)")
+    lines.append("- payroll event / payroll transaction extracts (where supplied)")
+    lines.append("- termination and lifecycle-related records where included in the engagement data pack")
+    lines.append("")
+    lines.append("**Checks performed**")
+    lines.append("")
+    lines.append("- consistency checks between employee lifecycle status and payroll activity")
+    lines.append("- identification of mismatches between leave activity and termination or employment status")
+    lines.append("- cross-dataset linkage checks for related employee and payroll records")
+    lines.append("- detection of sequencing anomalies between linked events across modules")
+    lines.append("")
+    lines.append("**Out of scope**")
+    lines.append("")
+    lines.append("This review does not:")
+    lines.append("")
+    lines.append("- calculate entitlements, underpayments or overpayments")
+    lines.append("- interpret awards, enterprise agreements, or employment contracts")
+    lines.append("- provide legal, accounting, or industrial relations advice")
+    lines.append("- assert contraventions of legislation or confirm non-compliance.")
+    lines.append("")
+    lines.append(
+        "Cross-module findings should be interpreted as data integrity and linkage risk indicators. They highlight where records may not align cleanly across datasets and may require investigation before conclusions are drawn."
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)
 
 # ---------- Orchestrator ----------
 
@@ -1705,7 +1982,42 @@ def generate_exec_pack(
         lambda: build_coverage_data_dependency_insight(target_dir),
     )
     structure.add("Data Sources", 1, lambda: build_data_sources_section(included, target_dir))
-    structure.add("Scope & Methodology", 1, lambda: build_scope_and_methodology(included))
+    structure.add("Scope & Methodology", 1, lambda: build_scope_intro(included))
+
+    if MODULE_LEAVE in included:
+        structure.add(
+            "Leave & Entitlement Leakage – Scope & Methodology",
+            2,
+            lambda: build_scope_leave(),
+        )
+
+    if MODULE_LSL in included:
+        structure.add(
+            "Long Service Leave (LSL) Exposure – Scope & Methodology",
+            2,
+            lambda: build_scope_lsl(),
+        )
+
+    if MODULE_TERM in included:
+        structure.add(
+            "Termination Exposure – Scope & Methodology",
+            2,
+            lambda: build_scope_term(),
+        )
+
+    if MODULE_RKEG in included:
+        structure.add(
+            "Record-Keeping & Evidence Gaps (RKEG) – Scope & Methodology",
+            2,
+            lambda: build_scope_rkeg(),
+        )
+
+    if MODULE_CROSS in included:
+        structure.add(
+            "Cross-Module Integrity – Scope & Methodology",
+            2,
+            lambda: build_scope_cross_module(),
+        )
 
     summary_modules = {MODULE_LEAVE, MODULE_LSL, MODULE_TERM, MODULE_RKEG, MODULE_CROSS}
     if any(m in included for m in summary_modules):

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from shutil import copyfile
 from markdown import markdown
+import argparse
 
 from reporting.core.paths import get_repo_root, get_default_outputs_dir
 
@@ -16,18 +17,10 @@ except Exception as e:  # WeasyPrint can raise non-ImportError exceptions
     WEASYPRINT_IMPORT_ERROR = str(e)
 
 
-# ---------- Paths (defaults for the leave leakage report) ----------
-
 REPO_ROOT = get_repo_root()
 CSS_SOURCE = REPO_ROOT / "docs" / "crc_report.css"
 OUTPUTS_DIR = get_default_outputs_dir()
 
-EXEC_PACK_MD_PATH = OUTPUTS_DIR / "crc_executive_pack.md"
-EXEC_PACK_HTML_PATH = OUTPUTS_DIR / "crc_executive_pack.html"
-EXEC_PACK_PDF_PATH = OUTPUTS_DIR / "crc_executive_pack.pdf"
-
-
-# ---------- Fallback CSS (used if crc_report.css cannot be loaded) ----------
 
 DEFAULT_EMBEDDED_CSS = """
 body {
@@ -132,8 +125,6 @@ ul, ol {
 """
 
 
-# ---------- HTML template ----------
-
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -152,13 +143,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
-# ---------- Builders ----------
-
 def _load_css_text() -> str:
-    """
-    Try to load crc_report.css from docs/. If it fails or is empty, fall
-    back to DEFAULT_EMBEDDED_CSS so reports are never unstyled.
-    """
     css_text = ""
 
     if CSS_SOURCE.exists():
@@ -167,8 +152,7 @@ def _load_css_text() -> str:
             if css_text.strip():
                 print(f"Using CSS from {CSS_SOURCE}")
                 return css_text
-            else:
-                print(f"Warning: {CSS_SOURCE} was empty; using embedded fallback CSS.")
+            print(f"Warning: {CSS_SOURCE} was empty; using embedded fallback CSS.")
         except OSError as e:
             print(f"Warning: could not read {CSS_SOURCE} ({e}); using embedded fallback CSS.")
     else:
@@ -182,9 +166,6 @@ def build_html_from_markdown(
     html_path: Path,
     page_title: str,
 ) -> Path:
-    """
-    Convert the given Markdown file into a styled HTML file.
-    """
     if not md_path.exists():
         raise FileNotFoundError(f"Markdown report not found: {md_path}")
 
@@ -199,19 +180,18 @@ def build_html_from_markdown(
         css=css_text,
     )
 
-    # Ensure output folder exists
     html_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Optional: still copy crc_report.css alongside the HTML (not required for styling)
     if CSS_SOURCE.exists():
         css_target = html_path.parent / CSS_SOURCE.name
         try:
-            if css_target != CSS_SOURCE:
+            if css_target.resolve() != CSS_SOURCE.resolve():
                 copyfile(CSS_SOURCE, css_target)
         except OSError:
             pass
 
     html_path.write_text(full_html, encoding="utf-8")
+    print(f"Wrote HTML: {html_path}")
     return html_path
 
 
@@ -219,9 +199,6 @@ def html_to_pdf(
     html_path: Path,
     pdf_path: Path,
 ) -> Path | None:
-    """
-    Render the HTML report to PDF using WeasyPrint, if available.
-    """
     if not html_path.exists():
         raise FileNotFoundError(f"HTML report not found: {html_path}")
 
@@ -234,6 +211,7 @@ def html_to_pdf(
         return None
 
     HTML(filename=str(html_path)).write_pdf(str(pdf_path))
+    print(f"Wrote PDF: {pdf_path}")
     return pdf_path
 
 
@@ -243,9 +221,6 @@ def build_html_and_pdf(
     pdf_path: Path | None = None,
     page_title: str = "Payroll Compliance Report",
 ) -> tuple[Path, Path | None]:
-    """
-    High-level helper: build HTML from Markdown, then render PDF if possible.
-    """
     html_built = build_html_from_markdown(
         md_path=md_path,
         html_path=html_path,
@@ -259,14 +234,28 @@ def build_html_and_pdf(
     return html_built, pdf_built
 
 
-def build_default_html_and_pdf() -> tuple[Path, Path | None]:
+def build_default_html_and_pdf(output_dir: Path | None = None) -> tuple[Path, Path | None]:
+    target_dir = output_dir or OUTPUTS_DIR
+
+    md_path = target_dir / "crc_executive_pack.md"
+    html_path = target_dir / "crc_executive_pack.html"
+    pdf_path = target_dir / "crc_executive_pack.pdf"
+
     return build_html_and_pdf(
-        md_path=EXEC_PACK_MD_PATH,
-        html_path=EXEC_PACK_HTML_PATH,
-        pdf_path=EXEC_PACK_PDF_PATH,
-        page_title="Leave & Entitlement Leakage Review",
+        md_path=md_path,
+        html_path=html_path,
+        pdf_path=pdf_path,
+        page_title="Payroll Risk & Evidence Review",
     )
 
 
 if __name__ == "__main__":
-    build_default_html_and_pdf()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--output-dir",
+        help="Directory containing crc_executive_pack.md and where HTML/PDF should be written.",
+    )
+    args = parser.parse_args()
+
+    output_dir = Path(args.output_dir) if args.output_dir else None
+    build_default_html_and_pdf(output_dir=output_dir)

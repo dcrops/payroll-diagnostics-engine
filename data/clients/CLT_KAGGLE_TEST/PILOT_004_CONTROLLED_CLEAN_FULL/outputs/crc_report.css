@@ -1,0 +1,241 @@
+/* =========================
+   Page setup (for PDF)
+   ========================= */
+   @page {
+    size: A4;
+    margin: 24mm;
+    background: #ffffff;  /* ensure full page is white in PDF */
+  }
+  
+  
+  
+  /* =========================
+     Colour tokens
+     ========================= */
+  :root {
+    /* Base */
+    --bg-page: #ffffff;
+    --text-main: #0f172a;
+    --card-bg: #ffffff;
+  
+    /* Burgundy heading palette */
+    --heading-primary: #5b1b26;   /* H1 banner */
+    --heading-secondary: #7a2431; /* H2 */
+    --heading-tertiary: #a63446;  /* H3/H4 */
+  
+    /* Accents */
+    --accent-border: #e5e7eb;
+  
+    /* Blockquotes */
+    --blockquote-bg: #fdf2f4;
+    --blockquote-border: #7a2431;
+    --blockquote-text: #1e293b;
+  
+    /* Tables */
+    --table-header-bg: #111827;
+    --table-header-text: #f9fafb;
+    --table-row-stripe: #f3f4f6;
+  
+    /* Severity palette (traffic light, but muted) */
+    --sev-high: #b3261e;   /* red */
+    --sev-med:  #d97706;   /* amber */
+    --sev-low:  #2e7d32;   /* green */
+    --sev-info: #475569;   /* slate */
+  }
+  
+  /* =========================
+     Base layout & typography
+     ========================= */
+  html, body {
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: var(--text-main);
+  background: #ffffff;          /* hard-coded white */
+  margin: 0;
+  padding: 0;
+  }
+    
+  /* White card for the report content so it feels like a page on a light background */
+  .report-container {
+    max-width: 960px;
+    margin: 0 auto;
+    background: var(--card-bg);
+    padding: 12px 16px 24px 16px;
+  }
+  
+  /* =========================
+     Headings
+     ========================= */
+  h1 {
+    font-size: 22pt;
+    margin: 0 0 0.8em 0;
+    padding: 10px 12px;
+    color: #ffffff;
+    background: var(--heading-primary); /* burgundy banner */
+    border-radius: 4px;
+  }
+  
+  h2 {
+    font-size: 16pt;
+    margin-top: 1.8em;
+    margin-bottom: 0.4em;
+    padding-bottom: 4px;
+    border-bottom: 3px solid var(--heading-secondary);
+    color: var(--heading-secondary);
+  }
+  
+  h3 {
+    font-size: 13pt;
+    margin-top: 1.2em;
+    margin-bottom: 0.2em;
+    color: var(--heading-tertiary);
+  }
+  
+  /* Avoid headings alone at bottom/top of pages in PDF */
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+  
+  /* =========================
+     Body text & quotes
+     ========================= */
+  p {
+    margin: 0.4em 0 0.8em 0;
+  }
+  
+  blockquote {
+    margin: 1em 0;
+    padding: 10px 14px;
+    background: var(--blockquote-bg);
+    border-left: 5px solid var(--blockquote-border);
+    color: var(--blockquote-text);
+  }
+  
+  /* =========================
+     Lists
+     ========================= */
+  ul, ol {
+    margin: 0.4em 0 0.8em 1.4em;
+  }
+  
+  li {
+    margin: 0.2em 0;
+  }
+  
+  /* =========================
+     Tables
+     ========================= */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+    font-size: 10.5pt;
+  }
+  
+  th {
+    background: var(--table-header-bg);   /* dark header */
+    color: var(--table-header-text);      /* light text */
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 2px solid #0f172a;
+  }
+  
+  td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--accent-border);
+    white-space: pre-wrap;  /* keep long text readable */
+  }
+  
+  /* striped rows so tables read easily and clearly show colour */
+  tr:nth-child(even) td {
+    background: var(--table-row-stripe);
+  }
+  
+  /* Keep tables & blockquotes together where possible in PDFs */
+  table, blockquote {
+    page-break-inside: avoid;
+  }
+  
+  /* =========================
+     Severity styling (traffic light)
+     ========================= */
+  
+  /* Text labels (e.g. for inline "Severity: HIGH") */
+  .severity-high,
+  .badge-high {
+    color: var(--sev-high);
+    font-weight: 600;
+  }
+  
+  .severity-medium,
+  .badge-medium {
+    color: var(--sev-med);
+    font-weight: 600;
+  }
+  
+  .severity-low,
+  .badge-low {
+    color: var(--sev-low);
+    font-weight: 600;
+  }
+  
+  .severity-info,
+  .badge-info {
+    color: var(--sev-info);
+  }
+  
+  /* Optional pill-style badges, if you ever wrap severity in spans */
+  .badge-high,
+  .badge-medium,
+  .badge-low,
+  .badge-info {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 10pt;
+  }
+  
+  /* Backgrounds for badges (very subtle) */
+  .badge-high {
+    background-color: #fdecea;
+  }
+  
+  .badge-medium {
+    background-color: #fff4e5;
+  }
+  
+  .badge-low {
+    background-color: #e8f5e9;
+  }
+  
+  .badge-info {
+    background-color: #e5e7eb;
+  }
+  
+  /* Row-level highlighting (if you add classes like tr.sev-high on tables) */
+  tr.sev-high td {
+    background-color: #fdecea;  /* light red */
+  }
+  
+  tr.sev-medium td {
+    background-color: #fff4e5;  /* light amber */
+  }
+  
+  tr.sev-low td {
+    background-color: #e8f5e9;  /* light green */
+  }
+  
+  tr.sev-info td {
+    background-color: #e5e7eb;  /* light grey */
+  }
+  
+  /* =========================
+     Horizontal rules & spacing
+     ========================= */
+  hr {
+    border: none;
+    border-top: 1px solid var(--accent-border);
+    margin: 2em 0;
+  }
+  

@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Payroll Risk & Evidence Review</title>
+  <style>
+/* =========================
+   Page setup (for PDF)
+   ========================= */
+   @page {
+    size: A4;
+    margin: 24mm;
+    background: #ffffff;  /* ensure full page is white in PDF */
+  }
+  
+  
+  
+  /* =========================
+     Colour tokens
+     ========================= */
+  :root {
+    /* Base */
+    --bg-page: #ffffff;
+    --text-main: #0f172a;
+    --card-bg: #ffffff;
+  
+    /* Burgundy heading palette */
+    --heading-primary: #5b1b26;   /* H1 banner */
+    --heading-secondary: #7a2431; /* H2 */
+    --heading-tertiary: #a63446;  /* H3/H4 */
+  
+    /* Accents */
+    --accent-border: #e5e7eb;
+  
+    /* Blockquotes */
+    --blockquote-bg: #fdf2f4;
+    --blockquote-border: #7a2431;
+    --blockquote-text: #1e293b;
+  
+    /* Tables */
+    --table-header-bg: #111827;
+    --table-header-text: #f9fafb;
+    --table-row-stripe: #f3f4f6;
+  
+    /* Severity palette (traffic light, but muted) */
+    --sev-high: #b3261e;   /* red */
+    --sev-med:  #d97706;   /* amber */
+    --sev-low:  #2e7d32;   /* green */
+    --sev-info: #475569;   /* slate */
+  }
+  
+  /* =========================
+     Base layout & typography
+     ========================= */
+  html, body {
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: var(--text-main);
+  background: #ffffff;          /* hard-coded white */
+  margin: 0;
+  padding: 0;
+  }
+    
+  /* White card for the report content so it feels like a page on a light background */
+  .report-container {
+    max-width: 960px;
+    margin: 0 auto;
+    background: var(--card-bg);
+    padding: 12px 16px 24px 16px;
+  }
+  
+  /* =========================
+     Headings
+     ========================= */
+  h1 {
+    font-size: 22pt;
+    margin: 0 0 0.8em 0;
+    padding: 10px 12px;
+    color: #ffffff;
+    background: var(--heading-primary); /* burgundy banner */
+    border-radius: 4px;
+  }
+  
+  h2 {
+    font-size: 16pt;
+    margin-top: 1.8em;
+    margin-bottom: 0.4em;
+    padding-bottom: 4px;
+    border-bottom: 3px solid var(--heading-secondary);
+    color: var(--heading-secondary);
+  }
+  
+  h3 {
+    font-size: 13pt;
+    margin-top: 1.2em;
+    margin-bottom: 0.2em;
+    color: var(--heading-tertiary);
+  }
+  
+  /* Avoid headings alone at bottom/top of pages in PDF */
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+  
+  /* =========================
+     Body text & quotes
+     ========================= */
+  p {
+    margin: 0.4em 0 0.8em 0;
+  }
+  
+  blockquote {
+    margin: 1em 0;
+    padding: 10px 14px;
+    background: var(--blockquote-bg);
+    border-left: 5px solid var(--blockquote-border);
+    color: var(--blockquote-text);
+  }
+  
+  /* =========================
+     Lists
+     ========================= */
+  ul, ol {
+    margin: 0.4em 0 0.8em 1.4em;
+  }
+  
+  li {
+    margin: 0.2em 0;
+  }
+  
+  /* =========================
+     Tables
+     ========================= */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+    font-size: 10.5pt;
+  }
+  
+  th {
+    background: var(--table-header-bg);   /* dark header */
+    color: var(--table-header-text);      /* light text */
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 2px solid #0f172a;
+  }
+  
+  td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--accent-border);
+    white-space: pre-wrap;  /* keep long text readable */
+  }
+  
+  /* striped rows so tables read easily and clearly show colour */
+  tr:nth-child(even) td {
+    background: var(--table-row-stripe);
+  }
+  
+  /* Keep tables & blockquotes together where possible in PDFs */
+  table, blockquote {
+    page-break-inside: avoid;
+  }
+  
+  /* =========================
+     Severity styling (traffic light)
+     ========================= */
+  
+  /* Text labels (e.g. for inline "Severity: HIGH") */
+  .severity-high,
+  .badge-high {
+    color: var(--sev-high);
+    font-weight: 600;
+  }
+  
+  .severity-medium,
+  .badge-medium {
+    color: var(--sev-med);
+    font-weight: 600;
+  }
+  
+  .severity-low,
+  .badge-low {
+    color: var(--sev-low);
+    font-weight: 600;
+  }
+  
+  .severity-info,
+  .badge-info {
+    color: var(--sev-info);
+  }
+  
+  /* Optional pill-style badges, if you ever wrap severity in spans */
+  .badge-high,
+  .badge-medium,
+  .badge-low,
+  .badge-info {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 10pt;
+  }
+  
+  /* Backgrounds for badges (very subtle) */
+  .badge-high {
+    background-color: #fdecea;
+  }
+  
+  .badge-medium {
+    background-color: #fff4e5;
+  }
+  
+  .badge-low {
+    background-color: #e8f5e9;
+  }
+  
+  .badge-info {
+    background-color: #e5e7eb;
+  }
+  
+  /* Row-level highlighting (if you add classes like tr.sev-high on tables) */
+  tr.sev-high td {
+    background-color: #fdecea;  /* light red */
+  }
+  
+  tr.sev-medium td {
+    background-color: #fff4e5;  /* light amber */
+  }
+  
+  tr.sev-low td {
+    background-color: #e8f5e9;  /* light green */
+  }
+  
+  tr.sev-info td {
+    background-color: #e5e7eb;  /* light grey */
+  }
+  
+  /* =========================
+     Horizontal rules & spacing
+     ========================= */
+  hr {
+    border: none;
+    border-top: 1px solid var(--accent-border);
+    margin: 2em 0;
+  }
+  
+  </style>
+</head>
+<body>
+  <div class="report-container">
+    <h1>Payroll Risk &amp; Evidence Review</h1>
+<p><strong>Organisation:</strong> CLT Kaggle Test<br />
+<strong>Review period:</strong> 15 Feb 2010 to 20 Apr 2024<br />
+<strong>Report prepared as at:</strong> 08 Apr 2026  </p>
+<p><strong>Important note</strong></p>
+<p>This report highlights potential risk signals and process issues based on the data provided. 
+It does not constitute legal, accounting, or industrial relations advice.</p>
+<hr />
+<h2>1. Executive Summary</h2>
+<ul>
+<li>CRC identified 28 findings across the reviewed modules.</li>
+<li>The overall profile is primarily driven by logical integrity failures rather than structural data limitations.</li>
+<li>High-severity findings are concentrated in cross-module lifecycle consistency and record-keeping controls, indicating the strongest exposure sits in those areas.</li>
+<li>Structural findings are present, but they are not the primary driver of risk in this review.</li>
+<li>Findings are split between high (43%) and medium (57%) severity, indicating a mix of immediate control concerns and broader process weaknesses.</li>
+</ul>
+<h3>What this means</h3>
+<p>The results suggest the main concern is substantive payroll processing and control integrity rather than simple evidentiary or data quality limitations.</p>
+<h3>Recommended focus</h3>
+<p>Prioritise detailed review of cross-module lifecycle consistency and record-keeping controls first, then address structural data gaps that may weaken evidentiary confidence.</p>
+<h2>2. Highlight Insights</h2>
+<p>The following points summarise the most important observations from the analysis:</p>
+<ul>
+<li>The strongest concentration of risk sits in <strong>cross-module lifecycle consistency and record-keeping controls</strong>.</li>
+<li>The overall profile is dominated by <strong>logical</strong> findings rather than primarily structural data issues.</li>
+<li>Findings are split between <strong>high (43%)</strong> and <strong>medium (57%) severity</strong>, indicating a mix of immediate control concerns and broader process weaknesses.</li>
+</ul>
+<hr />
+<h2>3. Risk Profile Overview</h2>
+<p>This section summarises the overall risk profile across all included modules using the consolidated CRC summary outputs.</p>
+<table class="summary-table">
+  <thead>
+    <tr><th>Metric</th><th>Value</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Total findings</td><td>28</td></tr>
+    <tr><td>Dominant classification</td><td>LOGICAL</td></tr>
+    <tr><td>Dominant severity</td><td>MEDIUM</td></tr>
+    <tr><td>Logical findings</td><td>15 (54%)</td></tr>
+    <tr><td>Structural findings</td><td>7 (25%)</td></tr>
+    <tr><td>Contextual findings</td><td>6 (21%)</td></tr>
+    <tr><td>High severity findings</td><td>12 (43%)</td></tr>
+    <tr><td>Medium severity findings</td><td>16 (57%)</td></tr>
+    <tr><td>Low severity findings</td><td>0 (0%)</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Highest concentration of high-severity findings:</strong> Cross-Module Integrity, Record-Keeping &amp; Evidence Gaps</p>
+<p>Classification is used to distinguish between substantive integrity issues, structural data limitations, and contextual items requiring human judgement.</p>
+<hr />
+<h2>4. Coverage &amp; Data Dependency Insight</h2>
+<h3>What this section shows</h3>
+<p>This section compares results from two levels of analysis:</p>
+<ul>
+<li><strong>Payroll-only analysis</strong> - based on core payroll datasets such as pay events, leave balances, and termination records. This provides a high-confidence baseline view of payroll integrity using readily available data.</li>
+<li><strong>Full analysis</strong> - incorporates additional datasets (such as configuration, supporting records, or extended attributes where available), enabling broader rule coverage and deeper validation of payroll processes.</li>
+</ul>
+<p>The difference between these two views reflects <strong>coverage, not prediction</strong>. Additional findings identified in the full analysis represent areas that are not fully assessable using payroll-only data and require broader system context to evaluate.</p>
+<h2>Overview</h2>
+<ul>
+<li>Payroll-only findings: <strong>21</strong></li>
+<li>Full analysis findings: <strong>28</strong></li>
+<li>Additional findings unlocked: <strong>7 (33%)</strong></li>
+</ul>
+<p><strong>TERM</strong> shows the largest uplift, with <strong>6 additional findings</strong> (150% increase).</p>
+<h2>Module Breakdown</h2>
+<h3>LEAVE</h3>
+<ul>
+<li>Payroll-only: 2 findings (core=2, supporting=0, extended=0)</li>
+<li>Full: 2 findings (core=2, supporting=0, extended=0)</li>
+<li>No additional findings were identified with full data. This module is largely assessable using payroll-only data.</li>
+</ul>
+<h3>TERM</h3>
+<ul>
+<li>Payroll-only: 4 findings (core=4, supporting=0, extended=0)</li>
+<li>Full: 10 findings (core=4, supporting=0, extended=6)</li>
+<li>Additional findings: 6 (150% increase)</li>
+</ul>
+<p>Termination-related risks show the strongest dependency on additional datasets. These issues are often not fully visible in payroll-only analysis and represent the primary source of hidden exposure.</p>
+<h3>LSL</h3>
+<ul>
+<li>Payroll-only: 0 findings (core=0, supporting=0, extended=0)</li>
+<li>Full: 0 findings (core=0, supporting=0, extended=0)</li>
+<li>No additional findings were identified with full data. This module is largely assessable using payroll-only data.</li>
+</ul>
+<h3>RKEG</h3>
+<ul>
+<li>Payroll-only: 3 findings (core=0, supporting=3, extended=0)</li>
+<li>Full: 4 findings (core=0, supporting=3, extended=1)</li>
+<li>Additional findings: 1 (33% increase)</li>
+</ul>
+<p>Governance and evidence-related risks are partially visible in payroll data, but additional datasets improve coverage and confidence.</p>
+<h3>CROSS_MODULE</h3>
+<ul>
+<li>Payroll-only: 12 findings (core=1, supporting=11, extended=0)</li>
+<li>Full: 12 findings (core=1, supporting=11, extended=0)</li>
+<li>No additional findings were identified with full data. This module is fully assessable using payroll-only data and provides strong visibility into cross-dataset inconsistencies.</li>
+</ul>
+<h2>Interpretation</h2>
+<p>Payroll-only analysis provides strong visibility into balance integrity, lifecycle sequencing, and cross-dataset consistency.</p>
+<p>However, certain risk categories—particularly termination handling and governance controls—are not fully observable without broader system context. These areas represent the primary source of hidden exposure.</p>
+<p>This supports a tiered diagnostic approach:</p>
+<ul>
+<li>Payroll-only → fast, low-friction, high-confidence baseline</li>
+<li>Full analysis → deeper risk discovery, particularly for termination and governance-related risks</li>
+</ul>
+<h2>5. Data Sources</h2>
+<p>This review was generated from the following analysis outputs within the project <code>outputs/</code> directory:</p>
+<ul>
+<li><code>leave_leakage_findings.csv</code>  </li>
+<li><code>leakage_report.csv</code>  </li>
+<li><code>lsl_summary_by_severity.csv</code>  </li>
+<li><code>lsl_findings.csv</code>  </li>
+<li><code>term_summary_by_severity.csv</code>  </li>
+<li><code>term_findings.csv</code>  </li>
+<li><code>rkeg_summary_by_severity.csv</code>  </li>
+<li><code>rkeg_findings.csv</code>  </li>
+<li><code>cross_module_summary_by_severity.csv</code>  </li>
+<li><code>cross_module_findings.csv</code>  </li>
+<li><code>executive\executive_summary.md</code>  </li>
+<li><code>executive\executive_summary.json</code>  </li>
+<li><code>crc_coverage_insight.md</code>  </li>
+</ul>
+<p>These outputs were produced by rule-based checks over payroll and HR CSV extracts supplied by the organisation for the review period.</p>
+<hr />
+<h2>6. Scope &amp; Methodology</h2>
+<p><strong>Modules included in this engagement:</strong></p>
+<ul>
+<li>Leave &amp; Entitlement Leakage (LEAVE)</li>
+<li>Long Service Leave Exposure (LSL)</li>
+<li>Termination Exposure (TERM)</li>
+<li>Record-Keeping &amp; Evidence Gaps (RKEG)</li>
+<li>Cross-Module Integrity (CROSS_MODULE)</li>
+</ul>
+<hr />
+<h3>6.1 Leave &amp; Entitlement Leakage – Scope &amp; Methodology</h3>
+<p><strong>Scope</strong></p>
+<p>The Leave &amp; Entitlement Leakage review identifies potential anomalies and risk indicators in leave balances, accruals and leave usage based on the data provided.</p>
+<p>The purpose of this review is to highlight records that may warrant follow-up, such as negative balances, unexpected accrual patterns, mismatches between leave activity and employee status, or inconsistencies between leave movement data and balance snapshots.</p>
+<p>This review is designed to support payroll and HR teams in prioritising validation and remediation effort. Findings are risk signals only and do not, on their own, confirm non-compliance, underpayment, or an entitlement error.</p>
+<p><strong>Data reviewed</strong></p>
+<ul>
+<li>leave balances snapshot data (where supplied)</li>
+<li>leave ledger / leave movement records (where supplied)</li>
+<li>employee master data (where supplied)</li>
+<li>other supporting payroll extracts included in the engagement pack</li>
+</ul>
+<p><strong>Checks performed</strong></p>
+<ul>
+<li>rule-based detection of unusual leave balance and movement patterns</li>
+<li>identification of negative balances and unexpected accrual behaviour</li>
+<li>consistency checks between employee status and leave activity (for example, terminated employees with ongoing leave movements)</li>
+<li>cross-checks between leave movement data and balance snapshot fields where available</li>
+</ul>
+<p><strong>Out of scope</strong></p>
+<p>This review does not:</p>
+<ul>
+<li>interpret awards, enterprise agreements, or employment contracts</li>
+<li>calculate legal entitlement outcomes or confirm the correctness of leave accrual rules</li>
+<li>provide legal, accounting, or industrial relations advice</li>
+<li>assert contraventions of legislation or confirm non-compliance.</li>
+</ul>
+<p>Where exposure estimates are included, they are indicative only and must be validated before remediation or accounting decisions are made.</p>
+<hr />
+<h3>6.2 Long Service Leave (LSL) Exposure – Scope &amp; Methodology</h3>
+<p><strong>Scope</strong></p>
+<p>The Long Service Leave (LSL) Exposure review identifies risk indicators in LSL balance and service-related data that may warrant further validation. The purpose of this review is to highlight records that appear inconsistent, incomplete, or difficult to substantiate based on the data provided.</p>
+<p>This review is designed to support payroll, HR and finance teams in prioritising follow-up effort. Findings are risk signals only and do not, on their own, confirm an entitlement error, underpayment, or non-compliance.</p>
+<p><strong>Data reviewed</strong></p>
+<ul>
+<li>employee master data relevant to LSL service (where supplied)</li>
+<li>LSL balance snapshot data (where supplied)</li>
+<li>LSL accrual or movement records (where supplied)</li>
+<li>other supporting payroll extracts included in the engagement pack</li>
+</ul>
+<p><strong>Checks performed</strong></p>
+<ul>
+<li>consistency checks between LSL balances, accrual patterns, and available service-related fields</li>
+<li>identification of missing or incomplete service date records required to support LSL calculations</li>
+<li>detection of unusual balance or movement patterns that may indicate configuration or data issues</li>
+</ul>
+<p><strong>Out of scope</strong></p>
+<p>This review does not:</p>
+<ul>
+<li>interpret awards, enterprise agreements, or employment contracts</li>
+<li>calculate legal LSL entitlement outcomes or confirm the correctness of LSL accrual rules</li>
+<li>provide legal, accounting, or industrial relations advice</li>
+<li>assert contraventions of legislation or confirm non-compliance.</li>
+</ul>
+<p>Where any exposure estimates or balance concerns are inferred, they are indicative only and must be validated before remediation or accounting decisions are made.</p>
+<hr />
+<h3>6.3 Termination Exposure – Scope &amp; Methodology</h3>
+<p><strong>Scope</strong></p>
+<p>The Termination Exposure review assesses whether termination events recorded in payroll and related employment data are sufficiently complete, timely, and traceable to support the organisation’s ability to evidence termination-related payroll decisions if reviewed by auditors or regulators.</p>
+<p>This review focuses on process and evidential integrity, not on the correctness of termination payments.</p>
+<p>Specifically, the review considers whether:</p>
+<ul>
+<li>termination events are recorded consistently across available data sources</li>
+<li>final pay processing occurs in a reasonable and defensible sequence relative to termination dates</li>
+<li>core termination attributes (such as termination date and termination type/reason) are present and internally consistent</li>
+<li>termination-related decisions are supported by basic evidentiary artefacts or references</li>
+</ul>
+<p><strong>Out of scope</strong></p>
+<p>This review does not:</p>
+<ul>
+<li>calculate final pay entitlements or assess payment correctness</li>
+<li>interpret awards, enterprise agreements, or employment contracts</li>
+<li>determine notice, redundancy, or severance obligations</li>
+<li>assert contraventions of legislation or confirm non-compliance.</li>
+<li>provide legal advice or assurance of compliance.</li>
+</ul>
+<p>Any potential exposure identified reflects defensibility risk, not confirmed error or liability.</p>
+<p><strong>Methodology</strong></p>
+<p>The review applies a series of rule-based checks to payroll and related employment data to identify termination events that exhibit characteristics commonly associated with audit, regulatory, or dispute risk.</p>
+<p>Each finding is assigned a severity based on evidential impact, reflecting how materially the issue could impair the organisation’s ability to explain and support termination-related payroll decisions if reviewed.</p>
+<p>Severity does not represent:</p>
+<ul>
+<li>likelihood of underpayment</li>
+<li>magnitude of financial exposure</li>
+<li>remediation priority</li>
+</ul>
+<hr />
+<h3>6.4 Record-Keeping &amp; Evidence Gaps (RKEG) – Scope &amp; Methodology</h3>
+<p><strong>Scope</strong></p>
+<p>The Record-Keeping &amp; Evidence Gaps (RKEG) review assesses whether payroll-related records are sufficiently complete, consistent and traceable to support the organisation’s ability to evidence payroll decisions if reviewed by auditors or regulators.</p>
+<p>RKEG focuses on evidential strength, not on determining whether payroll outcomes are correct or incorrect. Findings highlight where records may be incomplete, inconsistent, or difficult to substantiate if challenged.</p>
+<p>This review is intended to support risk-aware payroll operations by identifying evidence weaknesses that can increase audit effort, increase dispute risk, or reduce the organisation’s ability to confidently explain pay decisions.</p>
+<p><strong>Data reviewed</strong></p>
+<ul>
+<li>employee master data (where supplied)</li>
+<li>pay event / payroll transaction extracts (where supplied)</li>
+<li>termination and employment status fields where included in the engagement data pack</li>
+</ul>
+<p><strong>Checks performed</strong></p>
+<ul>
+<li>completeness checks for key employee master fields required for traceability and defensibility</li>
+<li>identification of orphan or untraceable pay events (for example, pay events with missing or inconsistent identifiers)</li>
+<li>consistency checks across employee status and payroll activity where possible</li>
+<li>identification of gaps that may require manual reconstruction to support an audit trail</li>
+</ul>
+<p><strong>Out of scope</strong></p>
+<p>This review does not:</p>
+<ul>
+<li>calculate entitlements, underpayments or overpayments</li>
+<li>interpret awards, enterprise agreements, or employment contracts</li>
+<li>provide legal, accounting, or industrial relations advice</li>
+<li>assert contraventions of legislation or confirm non-compliance.</li>
+</ul>
+<p>RKEG findings should be interpreted as evidential risk indicators. Addressing them improves defensibility and reduces audit effort, but does not necessarily imply a payroll outcome is incorrect.</p>
+<hr />
+<h3>6.5 Cross-Module Integrity – Scope &amp; Methodology</h3>
+<p><strong>Scope</strong></p>
+<p>The Cross-Module Integrity review assesses whether related payroll datasets align consistently across employee lifecycle, leave, payroll event, and termination records.</p>
+<p>The purpose of this review is to identify inconsistencies between linked datasets that may indicate sequencing issues, lifecycle mismatches, incomplete integrations, or broader payroll data integrity weaknesses.</p>
+<p>This review is designed to support payroll, HR, finance, and governance teams in identifying where records may not align cleanly across the broader payroll data environment. Findings are integrity signals only and do not, on their own, confirm non-compliance, underpayment, or payroll error.</p>
+<p><strong>Data reviewed</strong></p>
+<ul>
+<li>employee master data (where supplied)</li>
+<li>leave balances and leave movement data (where supplied)</li>
+<li>payroll event / payroll transaction extracts (where supplied)</li>
+<li>termination and lifecycle-related records where included in the engagement data pack</li>
+</ul>
+<p><strong>Checks performed</strong></p>
+<ul>
+<li>consistency checks between employee lifecycle status and payroll activity</li>
+<li>identification of mismatches between leave activity and termination or employment status</li>
+<li>cross-dataset linkage checks for related employee and payroll records</li>
+<li>detection of sequencing anomalies between linked events across modules</li>
+</ul>
+<p><strong>Out of scope</strong></p>
+<p>This review does not:</p>
+<ul>
+<li>calculate entitlements, underpayments or overpayments</li>
+<li>interpret awards, enterprise agreements, or employment contracts</li>
+<li>provide legal, accounting, or industrial relations advice</li>
+<li>assert contraventions of legislation or confirm non-compliance.</li>
+</ul>
+<p>Cross-module findings should be interpreted as data integrity and linkage risk indicators. They highlight where records may not align cleanly across datasets and may require investigation before conclusions are drawn.</p>
+<hr />
+<h2>7. Module Summary Overview</h2>
+<h3>7.1 Leave &amp; Entitlement Leakage (LEAVE) – Summary Overview</h3>
+<p>The automated checks identified the following potential issues in the leave and entitlement data reviewed. Severity reflects the relative level of risk to payroll accuracy and audit defensibility, not a confirmed breach.</p>
+<table class="summary-table">
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Count</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge-high">High</span></td>
+      <td>2</td>
+      <td>Absence or weakness of core evidence or entitlement configuration that would materially impair the organisation’s ability to evidence payroll decisions if reviewed by auditors or regulators.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-medium">Medium</span></td>
+      <td>0</td>
+      <td>Evidence is incomplete, inconsistent or fragile. Decisions may still be defensible but require greater reliance on manual reconstruction, judgement, or explanation.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-low">Low</span></td>
+      <td>0</td>
+      <td>Record-keeping or data quality weaknesses that are unlikely to be challenged in isolation but should be improved over time to support efficient and reliable payroll operations.</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+<h3>7.2 Long Service Leave (LSL) – Coverage Note</h3>
+<p>No Long Service Leave (LSL) activity was identified in the dataset provided for this review.</p>
+<p>Accordingly, LSL-related diagnostics were not performed.</p>
+<p>This reflects a data coverage limitation rather than a confirmed absence of LSL risk. Assessment of LSL exposure typically requires service history, eligibility thresholds, and accrual data that may not be present in payroll-only extracts.</p>
+<hr />
+<h3>7.3 Termination Exposure – Severity Overview</h3>
+<p>Where a Termination Exposure review was performed, the table below summarises the number of termination-related evidential issues identified by severity. Counts reflect <strong>evidential risk only</strong> and do not represent confirmed non-compliance or quantified financial exposure, or remediation priority.</p>
+<table class="summary-table">
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Count</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge-high">High</span></td>
+      <td>2</td>
+      <td>Absence or weakness of core termination or final pay evidence that would materially impair the organisation’s ability to evidence termination decisions if reviewed by auditors or regulators.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-medium">Medium</span></td>
+      <td>8</td>
+      <td>Termination evidence exists but is incomplete, delayed or ambiguous and may require additional explanation or manual reconstruction.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-low">Low</span></td>
+      <td>0</td>
+      <td>Minor record-keeping or data quality weaknesses in termination records that should be improved over time to support efficient and reliable payroll operations.</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+<h3>7.4 Record-Keeping &amp; Evidence Gaps (RKEG) – Severity Overview</h3>
+<p>As part of this review, a Record-Keeping &amp; Evidence Gaps (RKEG) assessment was performed to evaluate whether payroll-related records are sufficiently complete, consistent and traceable to support payroll decisions if subject to audit or regulatory review.</p>
+<p>The RKEG assessment focuses on evidential strength only. It does not determine whether payroll outcomes are correct or incorrect, and does not interpret awards, enterprise agreements or employment contracts.</p>
+<p>The table below summarises the number of record-keeping and evidence gaps identified by severity. Counts reflect <strong>evidential risk</strong> only and do not represent confirmed non-compliance or quantified financial exposure.</p>
+<table class="summary-table">
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Count</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge-high">High</span></td>
+      <td>3</td>
+      <td>Absence or weakness of core evidence or entitlement configuration that would materially impair the organisation’s ability to evidence payroll decisions if reviewed by auditors or regulators.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-medium">Medium</span></td>
+      <td>1</td>
+      <td>Evidence is incomplete, inconsistent or fragile. Decisions may still be defensible but require greater reliance on manual reconstruction, judgement, or explanation.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-low">Low</span></td>
+      <td>0</td>
+      <td>Record-keeping or data quality weaknesses that are unlikely to be challenged in isolation but should be improved over time to support efficient and reliable payroll operations.</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+<h3>7.5 Cross-Module Integrity – Summary Overview</h3>
+<p>Where a Cross-Module Integrity review was performed, the table below summarises the number of cross-module inconsistencies identified by severity. Counts reflect <strong>integrity risk indicators only</strong> and do not represent confirmed non-compliance or quantified financial exposure.</p>
+<table class="summary-table">
+  <thead>
+    <tr>
+      <th>Severity</th>
+      <th>Count</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge-high">High</span></td>
+      <td>5</td>
+      <td>Cross-dataset inconsistencies that may materially affect confidence in employee lifecycle, payroll sequencing, or linked record integrity.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-medium">Medium</span></td>
+      <td>7</td>
+      <td>Cross-module mismatches or data linkage issues that warrant review but may be explainable through timing, process, or source-system differences.</td>
+    </tr>
+    <tr>
+      <td><span class="badge-low">Low</span></td>
+      <td>0</td>
+      <td>Lower-impact cross-module inconsistencies that should be monitored and improved over time.</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+<h3>7.6 How to interpret findings</h3>
+<p><strong>How to interpret findings across modules</strong></p>
+<ul>
+<li><strong>Leave &amp; LSL findings</strong> highlight potential anomalies in leave balances, accruals and usage. These indicators relate to <em>payroll outcomes and configuration</em> and may require remediation if confirmed.</li>
+<li><strong>Termination Exposure findings</strong> relate to the completeness, sequencing and documentation of termination events and final pay. They indicate how readily the organisation could evidence termination processing if challenged.</li>
+<li><strong>Record-Keeping &amp; Evidence Gaps (RKEG) findings</strong> assess the strength of the evidentiary trail supporting payroll decisions. They do <strong>not</strong> indicate incorrect pay outcomes; they highlight where records may be incomplete or difficult to substantiate.</li>
+<li><strong>Cross-Module Integrity findings</strong> highlight inconsistencies between related datasets, such as employee lifecycle status, leave activity, and payroll events. They indicate where linked records may not align cleanly across the broader payroll data environment.</li>
+</ul>
+<p>Findings are risk indicators requiring validation and do not, on their own, confirm non-compliance, legislative contravention, or underpayment.</p>
+<p><em>Severity levels reflect evidential risk and control strength, and do not represent confirmed contraventions or quantified financial exposure.</em></p>
+<h2>8. Limitations &amp; Assumptions</h2>
+<p>This review is subject to the following limitations:</p>
+<ul>
+<li>Calculations assume the underlying pay rates, loadings and multipliers are correct in the source systems.</li>
+<li>Award and enterprise agreement interpretation is not performed by this tool.</li>
+<li>Holiday calendars, leave rules and accrual settings are assumed to reflect the organisation’s intended configuration.</li>
+<li>Data quality issues (missing records, duplicates, inconsistent identifiers) may affect the completeness and accuracy of the results.</li>
+</ul>
+<hr />
+<h2>9. Recommended Next Steps</h2>
+<ol>
+<li>Prioritise detailed review of cross-module lifecycle consistency and record-keeping controls first, as these areas show the strongest concentration of high-severity findings.</li>
+<li>Confirm whether the identified findings reflect configuration weaknesses, process breakdowns, incomplete records, or isolated data anomalies.</li>
+<li>Address any structural data gaps identified, particularly where they reduce confidence in validation or audit defensibility.</li>
+<li>Validate substantive logical integrity findings before remediation decisions are made.</li>
+<li>Re-run the review after corrective action to confirm that risk indicators have reduced and no new integrity issues have emerged.</li>
+</ol>
+<hr />
+<h2>10. Appendices</h2>
+<h3>Appendix A – Rule Definitions</h3>
+<p>This review used a set of automated rules to flag evidential and process risk indicators.</p>
+<h4>Leave &amp; Entitlement Leakage</h4>
+<ul>
+<li>Negative balance checks</li>
+<li>Casual employees accruing leave</li>
+<li>Inactive or terminated employees with leave movements</li>
+<li>Unusual accrual or usage patterns</li>
+</ul>
+<h4>Long Service Leave (LSL) Exposure</h4>
+<ul>
+<li>Inconsistent LSL accrual patterns</li>
+<li>LSL balances inconsistent with service duration</li>
+<li>Missing or incomplete service date records</li>
+</ul>
+<h4>Termination Exposure (TERM)</h4>
+<ul>
+<li>Final pay sequencing checks vs termination date</li>
+<li>Missing / inconsistent termination dates</li>
+<li>Missing / inconsistent termination type / reason</li>
+<li>Missing evidence references / artefact identifiers</li>
+<li>Ambiguous identification of final pay events within a window</li>
+<li>Termination events inconsistent with ordinary pay activity patterns</li>
+</ul>
+<h4>Record-Keeping &amp; Evidence Gaps (RKEG)</h4>
+<ul>
+<li>Missing employee master data fields</li>
+<li>Orphan pay events and traceability gaps</li>
+<li>Inconsistent employment status records</li>
+<li>Missing or inconsistent termination attributes</li>
+</ul>
+<h4>Cross-Module Integrity (CROSS_MODULE)</h4>
+<ul>
+<li>Employee lifecycle mismatches across datasets</li>
+<li>Leave activity inconsistent with employment or termination status</li>
+<li>Payroll events inconsistent with linked employee or termination records</li>
+<li>Cross-dataset linkage or sequencing anomalies</li>
+</ul>
+<hr />
+<h3>Appendix B – Data Fields Used</h3>
+<p>Key data fields referenced in this engagement include:</p>
+<p><strong>Leave &amp; Entitlement Leakage</strong></p>
+<ul>
+<li><code>employee_id</code></li>
+<li><code>leave_type</code></li>
+<li><code>as_of_date</code></li>
+<li><code>rule_code</code></li>
+<li><code>severity</code></li>
+<li><code>classification</code></li>
+<li><code>message</code></li>
+<li><code>diff_units</code></li>
+<li><code>finding_id</code></li>
+<li><code>next_action</code></li>
+</ul>
+<p><strong>LSL Exposure</strong></p>
+<ul>
+<li><code>employee_id</code></li>
+<li><code>leave_type</code></li>
+<li><code>as_of_date</code></li>
+<li><code>rule_code</code></li>
+<li><code>severity</code></li>
+<li><code>classification</code></li>
+<li><code>message</code></li>
+<li><code>diff_units</code></li>
+<li><code>finding_id</code></li>
+<li><code>next_action</code></li>
+</ul>
+<p><strong>Termination Exposure (TERM)</strong></p>
+<ul>
+<li><code>employee_id</code></li>
+<li><code>termination_date</code></li>
+<li><code>final_pay_date</code></li>
+<li><code>rule_code</code></li>
+<li><code>severity</code></li>
+<li><code>classification</code></li>
+<li><code>message</code></li>
+<li><code>days_gap</code></li>
+<li><code>evidence</code></li>
+<li><code>finding_id</code></li>
+<li><code>next_action</code></li>
+</ul>
+<p><strong>Record-Keeping &amp; Evidence Gaps (RKEG)</strong></p>
+<ul>
+<li><code>employee_id</code></li>
+<li><code>leave_type</code></li>
+<li><code>as_of_date</code></li>
+<li><code>rule_code</code></li>
+<li><code>severity</code></li>
+<li><code>classification</code></li>
+<li><code>message</code></li>
+<li><code>diff_units</code></li>
+<li><code>evidence</code></li>
+<li><code>finding_id</code></li>
+<li><code>next_action</code></li>
+</ul>
+<p><strong>Cross Module Integrity (CROSS_MODULE)</strong></p>
+<ul>
+<li><code>employee_id</code></li>
+<li><code>leave_type</code></li>
+<li><code>as_of_date</code></li>
+<li><code>rule_code</code></li>
+<li><code>severity</code></li>
+<li><code>classification</code></li>
+<li><code>message</code></li>
+<li><code>diff_units</code></li>
+<li><code>evidence</code></li>
+<li><code>finding_id</code></li>
+<li><code>next_action</code></li>
+</ul>
+<hr />
+<h3>Appendix C – Machine-readable outputs</h3>
+<p>Complete machine-readable outputs are available in the following files:</p>
+<ul>
+<li><code>leave_leakage_findings.csv</code></li>
+<li><code>leakage_report.csv</code></li>
+<li><code>lsl_findings.csv</code></li>
+<li><code>lsl_summary_by_severity.csv</code></li>
+<li><code>term_findings.csv</code></li>
+<li><code>term_summary_by_severity.csv</code></li>
+<li><code>term_summary.csv</code></li>
+<li><code>rkeg_findings.csv</code></li>
+<li><code>rkeg_summary_by_severity.csv</code></li>
+<li><code>cross_module_findings.csv</code></li>
+<li><code>cross_module_summary_by_severity.csv</code></li>
+<li><code>executive\executive_summary.md</code></li>
+<li><code>executive\executive_summary.json</code></li>
+<li><code>crc_coverage_insight.md</code></li>
+</ul>
+<p>These files provide row-level detail suitable for operational review, sampling, remediation planning, or incorporation into a broader audit work program.</p>
+<hr />
+  </div>
+</body>
+</html>
