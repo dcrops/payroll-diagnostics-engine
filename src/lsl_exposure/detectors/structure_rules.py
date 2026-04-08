@@ -35,9 +35,13 @@ def detect_missing_lsl_balance_record(
     if "employment_type" in emp.columns:
         emp = emp[emp["employment_type"].astype(str).str.upper() != "CASUAL"]
 
+    eligibility_years = float((rule.get("config", {}) or {}).get("eligibility_years", 7.0))
+
     if state is not None and not state.empty:
         eligible_ids = set(
-            state[state["service_years"] >= 1]["employee_id"].astype(str).str.strip()
+            state[state["service_years"] >= eligibility_years]["employee_id"]
+            .astype(str)
+            .str.strip()
         )
         bad = emp[
             (~emp["employee_id"].isin(lsl_ids))
@@ -504,6 +508,12 @@ def detect_lsl_ledger_history_without_snapshot_balance(
     if ledger.empty:
         return []
 
+    # If no snapshot data is available, do not raise row-level findings.
+    # This scenario should be handled as a coverage/data availability note in reporting.
+    if snapshot.empty:
+        print("[LSL-018] Skipping: no leave_snapshot data available")
+        return []
+
     findings: list[Finding] = []
     min_event_count = int(rule.get("config", {}).get("min_event_count", 1))
 
@@ -525,15 +535,12 @@ def detect_lsl_ledger_history_without_snapshot_balance(
         )
     )
 
-    if snapshot.empty:
-        snapshot_ids = set()
-    else:
-        snap = snapshot.copy()
-        snap["employee_id"] = snap["employee_id"].astype(str).str.strip()
-        snap["leave_type"] = snap["leave_type"].astype(str).str.strip()
+    snap = snapshot.copy()
+    snap["employee_id"] = snap["employee_id"].astype(str).str.strip()
+    snap["leave_type"] = snap["leave_type"].astype(str).str.strip()
 
-        snap_lsl = snap[snap["leave_type"].str.upper().str.contains("LSL", na=False)].copy()
-        snapshot_ids = set(snap_lsl["employee_id"].astype(str).str.strip())
+    snap_lsl = snap[snap["leave_type"].str.upper().str.contains("LSL", na=False)].copy()
+    snapshot_ids = set(snap_lsl["employee_id"].astype(str).str.strip())
 
     bad = ledger_summary[
         (ledger_summary["ledger_event_count"] >= min_event_count)

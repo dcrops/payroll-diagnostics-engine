@@ -1,0 +1,6 @@
+risk_dimension,HIGH,MEDIUM,LOW,TOTAL
+evidence_traceability,556,1,0,557
+cross_module_linkage_risk,537,0,0,537
+calculation_integrity,256,0,0,256
+governance_exposure,237,1,0,238
+timing_integrity,237,0,0,237

@@ -139,6 +139,7 @@ def _term_001_final_pay_outside_threshold(
                 as_of_date=str(term_date.date()) if pd.notna(term_date) else None,
                 rule_code=rule["id"],
                 severity=severity,
+                classification=rule.get("classification", "UNCLASSIFIED"),
                 message=base_msg,
                 diff_units=float(days_diff),
                 evidence=json.dumps(evidence_obj, ensure_ascii=False),

@@ -320,6 +320,24 @@ def detect_payroll_activity_recorded_after_termination(
     for _, row in bad.iterrows():
         days_after = int((row["pay_date"] - row["termination_date"]).days)
 
+        # Dynamic calibration:
+        # - small overruns beyond the tolerance window are often timing/process issues
+        # - larger overruns are stronger integrity signals
+        if days_after <= 30:
+            calibrated_severity = "MEDIUM"
+            calibrated_classification = "CONTEXTUAL"
+            explanation = (
+                "Payroll activity was recorded after termination beyond the configured tolerance window. "
+                "This may reflect delayed finalisation, timing differences, or processing practices and should be reviewed."
+            )
+        else:
+            calibrated_severity = "HIGH"
+            calibrated_classification = "LOGICAL"
+            explanation = (
+                "Payroll activity continued significantly after termination, indicating a likely inconsistency "
+                "between lifecycle status and payroll activity."
+            )
+
         evidence_str = json.dumps(
             {
                 "sources": ["terminations.csv", "pay_events.csv"],
@@ -329,27 +347,41 @@ def detect_payroll_activity_recorded_after_termination(
                     "pay_date": str(row["pay_date"].date()),
                 },
                 "values": {
-                    "gross_amount": float(row["gross_amount"]) if "gross_amount" in row and pd.notna(row["gross_amount"]) else None,
-                    "is_final_pay": str(row["is_final_pay"]) if "is_final_pay" in row and pd.notna(row["is_final_pay"]) else None,
+                    "gross_amount": (
+                        float(row["gross_amount"])
+                        if "gross_amount" in row and pd.notna(row["gross_amount"])
+                        else None
+                    ),
+                    "is_final_pay": (
+                        str(row["is_final_pay"])
+                        if "is_final_pay" in row and pd.notna(row["is_final_pay"])
+                        else None
+                    ),
                     "days_after_termination": days_after,
                 },
                 "thresholds": {
                     "allowed_days_after_term": allowed_days_after_term,
+                    "high_severity_cutoff_days": 30,
                 },
-                "explanation": "Payroll activity was recorded after termination beyond the configured tolerance window.",
+                "explanation": explanation,
             },
             ensure_ascii=False,
         )
 
-        findings.append(
-            _build_finding(
-                rule=rule,
-                employee_id=str(row["employee_id"]),
-                leave_type=None,
-                as_of_date=str(row["pay_date"].date()),
-                evidence_str=evidence_str,
-            )
+        finding = _build_finding(
+            rule=rule,
+            employee_id=str(row["employee_id"]),
+            leave_type=None,
+            as_of_date=str(row["pay_date"].date()),
+            evidence_str=evidence_str,
         )
+
+        # Override rule defaults with calibrated severity/classification
+        finding.severity = calibrated_severity
+        if hasattr(finding, "classification"):
+            finding.classification = calibrated_classification
+
+        findings.append(finding)
 
     return findings
 

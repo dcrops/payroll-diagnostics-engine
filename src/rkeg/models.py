@@ -18,6 +18,7 @@ class Finding:
 
     rule_code: str
     severity: str
+    classification: str
     message: str
 
     diff_units: float | None
@@ -49,6 +50,7 @@ def write_findings_csv(findings: Iterable[Finding], out_path: Path) -> None:
                 "as_of_date",
                 "rule_code",
                 "severity",
+                "classification",
                 "message",
                 "diff_units",
                 "evidence",

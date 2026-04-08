@@ -1,0 +1,5 @@
+module_name,level,dataset,column,issue_code,message
+RKEG,WARNING,employee_super,,OPTIONAL_DATASET_EMPTY,Optional dataset 'employee_super' is missing or empty.
+RKEG,WARNING,super_payments,,OPTIONAL_DATASET_EMPTY,Optional dataset 'super_payments' is missing or empty.
+RKEG,WARNING,rate_history,,OPTIONAL_DATASET_EMPTY,Optional dataset 'rate_history' is missing or empty.
+RKEG,WARNING,pay_overrides,,OPTIONAL_DATASET_EMPTY,Optional dataset 'pay_overrides' is missing or empty.

@@ -17,6 +17,7 @@ from reporting.executive.exec_pack_md import (
 class Finding:
     rule_code: str
     severity: str
+    classification: str
     employee_id: str
     leave_type: str
     as_of_date: str

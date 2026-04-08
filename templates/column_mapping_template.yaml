@@ -1,0 +1,74 @@
+# ==========================================
+# CRC Column Mapping Template
+# ==========================================
+# Copy this file into:
+# data/clients/<CLIENT>/<PILOT>/config/column_mapping.yaml
+#
+# Then update the right-hand side values to match your dataset.
+
+# If a field is not available in the source data, leave it unmapped.
+# CRC will handle optional fields gracefully where possible.
+
+# Each section maps a raw dataset to CRC's expected schema.
+# Left = CRC canonical field
+# Right = column name in client file
+
+# ------------------------------------------
+# EMPLOYEES
+# ------------------------------------------
+employees:
+  source: employees.csv
+  columns:
+    employee_id: employee_id
+    start_date: start_date
+    termination_date: termination_date   # optional
+    employment_status: employment_status # optional
+    employment_type: employment_type     # optional
+    annual_salary: annual_salary         # optional
+    base_rate: base_rate                 # optional
+
+# ------------------------------------------
+# TERMINATIONS
+# ------------------------------------------
+terminations:
+  source: terminations.csv
+  columns:
+    employee_id: employee_id
+    termination_date: termination_date
+    termination_reason: termination_reason   # optional
+    evidence_reference: evidence_ref         # optional
+
+# ------------------------------------------
+# PAY EVENTS
+# ------------------------------------------
+pay_events:
+  source: pay_events.csv
+  columns:
+    employee_id: employee_id
+    pay_date: pay_date
+    pay_run_id: pay_run_id           # optional
+    gross_amount: gross_amount
+    is_final_pay: is_final_pay       # optional
+
+# ------------------------------------------
+# LEAVE LEDGER
+# ------------------------------------------
+leave_ledger:
+  source: leave_ledger.csv
+  columns:
+    employee_id: employee_id
+    event_date: event_date
+    leave_type: leave_type
+    units: units
+    event_type: event_type           # optional (ACCRUAL / TAKEN / etc)
+
+# ------------------------------------------
+# LEAVE SNAPSHOT (OPTIONAL)
+# ------------------------------------------
+leave_snapshot:
+  source: balances_snapshot.csv
+  columns:
+    employee_id: employee_id
+    leave_type: leave_type
+    as_of_date: as_of_date           # optional (can be derived)
+    balance: balance

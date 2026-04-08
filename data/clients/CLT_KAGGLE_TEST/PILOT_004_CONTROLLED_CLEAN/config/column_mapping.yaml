@@ -1,0 +1,32 @@
+employees:
+  source_file: employees.csv
+  rename:
+    WorkerID: employee_id
+    JoinDt: start_date
+    EmpType: employment_type
+
+pay_events:
+  source_file: pay_events.csv
+  rename:
+    WorkerID: employee_id
+    PayDt: pay_date
+    PayRunID: pay_run_id
+    GrossPay: gross_amount
+    FinalFlag: is_final_pay
+
+leave_ledger:
+  source_file: leave_ledger.csv
+  rename:
+    WorkerID: employee_id
+    LeaveDt: event_date
+    LeaveType: leave_type
+    Units: units
+    EventType: transaction_type
+
+terminations:
+  source_file: terminations.csv
+  rename:
+    WorkerID: employee_id
+    TermDt: termination_date
+    TermReason: termination_reason
+    EvidenceRef: evidence_reference

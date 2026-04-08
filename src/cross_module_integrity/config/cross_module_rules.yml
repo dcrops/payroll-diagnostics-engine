@@ -25,11 +25,12 @@ rules:
     risk_dimension:
       - cross_module_linkage_risk
       - exception_handling
+    classification: LOGICAL
 
   - id: CM-002
     tier: 1
     domain: CROSS_MODULE
-    severity: HIGH
+    severity: MEDIUM
     title: Post-termination leave movement recorded
     datasets:
       primary: terminations
@@ -48,6 +49,7 @@ rules:
       - timing_integrity
       - cross_module_linkage_risk
       - governance_monitoring_exposure
+    classification: CONTEXTUAL
 
   - id: CM-003
     tier: 1
@@ -59,7 +61,8 @@ rules:
       references:
         - pay_events
     config:
-      allowed_days_after_term: 7
+      allowed_days_after_term: 14
+      high_severity_cutoff_days: 30
     text:
       finding: "A termination record has no supporting evidence reference and payroll activity continues after the termination date."
       why_it_matters: "Where termination evidence is missing and payroll continues after termination, confidence in off-boarding control integrity is weakened."
@@ -68,6 +71,7 @@ rules:
       - evidence_traceability
       - timing_integrity
       - cross_module_linkage_risk
+    classification: LOGICAL
 
   - id: CM-004
     tier: 2
@@ -93,6 +97,7 @@ rules:
       - cross_module_linkage_risk
       - evidence_traceability
       - exception_handling
+    classification: LOGICAL
 
   - id: CM-005
     tier: 1
@@ -117,6 +122,7 @@ rules:
       - evidence_traceability
       - cross_module_linkage_risk
       - exception_handling
+    classification: LOGICAL
 
   - id: CM-006
     tier: 1
@@ -133,7 +139,8 @@ rules:
         - ANNUAL
         - PERSONAL
         - LSL
-      allowed_days_after_term: 7
+      allowed_days_after_term: 14
+      high_severity_cutoff_days: 30
     text:
       finding: "Payroll activity and leave ledger movement both continue after the employee termination date."
       why_it_matters: "Where payroll and leave activity both continue after termination, off-boarding control integrity is significantly weakened."
@@ -142,6 +149,7 @@ rules:
       - timing_integrity
       - cross_module_linkage_risk
       - governance_monitoring_exposure
+    classification: LOGICAL
 
   - id: CM-007
     tier: 2
@@ -167,6 +175,7 @@ rules:
       - structural_completeness
       - cross_module_linkage_risk
       - data_anomaly_sanity
+    classification: STRUCTURAL
 
   - id: CM-008
     tier: 2
@@ -197,6 +206,7 @@ rules:
       - evidence_traceability
       - cross_module_linkage_risk
       - exception_handling
+    classification: LOGICAL
 
   - id: CM-009
     tier: 2
@@ -217,6 +227,7 @@ rules:
     risk_dimension:
       - lifecycle_integrity
       - governance_exposure
+    classification: LOGICAL
 
   - id: CM-010
     tier: 2
@@ -239,6 +250,7 @@ rules:
     risk_dimension:
       - lifecycle_integrity
       - calculation_integrity
+    classification: LOGICAL
 
   - id: CM-011
     tier: 2
@@ -254,6 +266,7 @@ rules:
     risk_dimension:
       - data_anomaly_sanity
       - governance_exposure
+    classification: STRUCTURAL
 
   - id: CM-012
     tier: 2
@@ -275,6 +288,7 @@ rules:
     risk_dimension:
       - lifecycle_integrity
       - timing_integrity
+    classification: CONTEXTUAL
 
   - id: CM-013
     tier: 2
@@ -300,6 +314,7 @@ rules:
       - calculation_integrity
       - cross_module_linkage_risk
       - exception_handling
+    classification: LOGICAL
 
   - id: CM-014
     tier: 2
@@ -323,6 +338,7 @@ rules:
       - calculation_integrity
       - evidence_traceability
       - cross_module_linkage_risk
+    classification: LOGICAL
 
   - id: CM-015
     tier: 2
@@ -349,6 +365,7 @@ rules:
       - timing_integrity
       - governance_monitoring_exposure
       - cross_module_linkage_risk
+    classification: LOGICAL
 
   - id: CM-016
     tier: 2
@@ -370,6 +387,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - cross_module_linkage_risk
+    classification: STRUCTURAL
 
   - id: CM-017
     tier: 2
@@ -387,6 +405,7 @@ rules:
     risk_dimension:
       - evidence_traceability
       - cross_module_linkage_risk
+    classification: LOGICAL
 
   - id: CM-018
     tier: 2
@@ -411,6 +430,7 @@ rules:
       - cross_module_linkage_risk
       - exception_handling
       - governance_monitoring_exposure
+    classification: LOGICAL
 
   - id: CM-019
     tier: 2
@@ -439,6 +459,7 @@ rules:
       - evidence_traceability
       - exception_handling
       - cross_module_linkage_risk
+    classification: LOGICAL
 
   - id: CM-020
     tier: 2
@@ -452,6 +473,7 @@ rules:
     config:
       min_findings: 3
       min_high_severity: 2
+      medium_min_high_severity: 1
     text:
       finding: "An employee triggered multiple cross-module integrity failures."
       why_it_matters: "Multiple concurrent failures indicate systemic payroll lifecycle breakdown rather than isolated issues."
@@ -459,3 +481,4 @@ rules:
     risk_dimension:
       - governance_monitoring_exposure
       - cross_module_linkage_risk
+    classification: CONTEXTUAL

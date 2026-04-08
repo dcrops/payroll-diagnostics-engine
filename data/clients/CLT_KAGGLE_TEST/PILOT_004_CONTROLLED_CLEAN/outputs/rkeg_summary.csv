@@ -1,0 +1,4 @@
+rule_code,severity,finding_count
+RKEG-TERM-001,HIGH,2
+RKEG-PAY-010,HIGH,1
+RKEG-GOV-001,MEDIUM,1

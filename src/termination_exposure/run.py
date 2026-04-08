@@ -5,18 +5,29 @@ from datetime import date
 import pandas as pd
 import yaml
 
-from termination_exposure.models import Finding
-from termination_exposure.detectors.registry import run_rule
-from termination_exposure.rules import prepare_term_state
+from src.common.paths import get_processed_dir, get_outputs_dir
+from src.common.data_window import write_data_window
 
-from common.data_window import write_data_window
+from src.termination_exposure.models import Finding
+from src.termination_exposure.detectors.registry import run_rule
+from src.termination_exposure.rules import prepare_term_state
 
+from common.validation import (
+    ValidationResult,
+    add_issue,
+    check_dataset_present,
+    check_required_columns,
+    check_critical_columns_not_all_missing,
+    make_result,
+    print_validation_result,
+    write_validation_outputs,
+)
 
 REQUIRED_TERM = {"employee_id", "termination_date"}
 REQUIRED_PAY = {"employee_id", "pay_date"}
 REQUIRED_EMP = {"employee_id"}
 REQUIRED_SNAPSHOT = {"employee_id", "leave_type", "as_of_date", "balance_units"}
-REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units", "event_type"}
+REQUIRED_LEDGER = {"employee_id", "leave_type", "event_date", "units"}
 
 
 def _require_cols(df: pd.DataFrame, required: set[str], name: str) -> None:
@@ -31,90 +42,129 @@ def _load_rules(rules_path: Path) -> list[dict]:
     return payload.get("rules", [])
 
 
-def main() -> int:
-    repo_root = Path(__file__).resolve().parents[2]
-    out_dir = repo_root / "outputs"
-    modules_dir = out_dir / "modules"
+def validate_term_inputs(datasets: dict[str, pd.DataFrame]) -> ValidationResult:
+    module_name = "TERM"
+    issues = []
+
+    terminations = datasets.get("terminations", pd.DataFrame())
+    pay_events = datasets.get("pay_events", pd.DataFrame())
+    employee_master = datasets.get("employee_master", pd.DataFrame())
+
+    check_dataset_present(issues, module_name, "terminations", terminations, required=True)
+    check_dataset_present(issues, module_name, "pay_events", pay_events, required=True)
+    check_dataset_present(issues, module_name, "employee_master", employee_master, required=False)
+
+    check_required_columns(
+        issues,
+        module_name,
+        "terminations",
+        terminations,
+        ["employee_id", "termination_date"],
+    )
+    check_required_columns(
+        issues,
+        module_name,
+        "pay_events",
+        pay_events,
+        ["employee_id", "pay_date"],
+    )
+
+    check_critical_columns_not_all_missing(
+        issues,
+        module_name,
+        "terminations",
+        terminations,
+        ["employee_id", "termination_date"],
+    )
+    check_critical_columns_not_all_missing(
+        issues,
+        module_name,
+        "pay_events",
+        pay_events,
+        ["employee_id", "pay_date"],
+    )
+
+    if not terminations.empty:
+        if "evidence_reference" not in terminations.columns and "evidence_ref" not in terminations.columns:
+            add_issue(
+                issues,
+                module_name,
+                "WARNING",
+                "terminations",
+                "evidence_reference",
+                "MISSING_EVIDENCE_FIELD",
+                "Termination evidence field not found; evidence-based TERM rules may have reduced coverage.",
+            )
+
+    if not employee_master.empty:
+        for col in ["start_date", "employment_type"]:
+            if col not in employee_master.columns:
+                add_issue(
+                    issues,
+                    module_name,
+                    "WARNING",
+                    "employee_master",
+                    col,
+                    "MISSING_OPTIONAL_COLUMN",
+                    f"Optional employee master column '{col}' is missing; some TERM context may be reduced.",
+                )
+
+    return make_result(module_name, issues)
+
+
+def main(client: str, pilot: str) -> int:
+    processed_dir = get_processed_dir(client, pilot)
+    output_dir = get_outputs_dir(client, pilot)
+
     rules_path = Path(__file__).resolve().parent / "config" / "term_rules.yml"
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    modules_dir.mkdir(parents=True, exist_ok=True)
-
     terminations = pd.read_csv(
-        repo_root / "data" / "sample" / "terminations.csv",
+        processed_dir / "terminations.csv",
         dtype={"employee_id": "string"},
     )
 
     pay_events = pd.read_csv(
-        repo_root / "data" / "sample" / "pay_events.csv",
+        processed_dir / "pay_events.csv",
         dtype={"employee_id": "string"},
     )
 
     employees = pd.read_csv(
-        repo_root / "data" / "sample" / "employees.csv",
+        processed_dir / "employees.csv",
         dtype={"employee_id": "string"},
     )
 
-    leave_snapshot = pd.read_csv(
-        repo_root / "data" / "sample" / "balances_snapshot.csv",
-        dtype={"employee_id": "string", "leave_type": "string"},
-    )
+    leave_snapshot_path = processed_dir / "balances_snapshot.csv"
+    if leave_snapshot_path.exists() and leave_snapshot_path.stat().st_size > 0:
+        leave_snapshot = pd.read_csv(
+            leave_snapshot_path,
+            dtype={"employee_id": "string", "leave_type": "string"},
+        )
+    else:
+        print("INFO - balances_snapshot.csv not found or empty; continuing without snapshot data")
+        leave_snapshot = pd.DataFrame(columns=["employee_id", "leave_type", "as_of_date", "balance_units"])
 
     leave_ledger = pd.read_csv(
-        repo_root / "data" / "sample" / "leave_ledger.csv",
+        processed_dir / "leave_ledger.csv",
         dtype={"employee_id": "string", "leave_type": "string", "event_type": "string"},
     )
 
     for df in (terminations, pay_events, employees, leave_snapshot, leave_ledger):
-        df["employee_id"] = df["employee_id"].astype(str).str.strip()
+        if not df.empty and "employee_id" in df.columns:
+            df["employee_id"] = df["employee_id"].astype(str).str.strip()
 
     _require_cols(terminations, REQUIRED_TERM, "terminations.csv")
     _require_cols(pay_events, REQUIRED_PAY, "pay_events.csv")
     _require_cols(employees, REQUIRED_EMP, "employees.csv")
-    _require_cols(leave_snapshot, REQUIRED_SNAPSHOT, "balances_snapshot.csv")
+    if not leave_snapshot.empty:
+        _require_cols(leave_snapshot, REQUIRED_SNAPSHOT, "balances_snapshot.csv")
     _require_cols(leave_ledger, REQUIRED_LEDGER, "leave_ledger.csv")
 
     terminations["termination_date"] = pd.to_datetime(terminations["termination_date"], errors="coerce")
     pay_events["pay_date"] = pd.to_datetime(pay_events["pay_date"], errors="coerce")
-    leave_snapshot["as_of_date"] = pd.to_datetime(leave_snapshot["as_of_date"], errors="coerce")
+    if not leave_snapshot.empty:
+        leave_snapshot["as_of_date"] = pd.to_datetime(leave_snapshot["as_of_date"], errors="coerce")
     leave_ledger["event_date"] = pd.to_datetime(leave_ledger["event_date"], errors="coerce")
 
-    bad_term_dates = terminations["termination_date"].isna().sum()
-    bad_pay_dates = pay_events["pay_date"].isna().sum()
-    bad_snapshot_dates = leave_snapshot["as_of_date"].isna().sum()
-    bad_ledger_dates = leave_ledger["event_date"].isna().sum()
-
-    print(f"[input] Unparseable termination_date rows: {bad_term_dates}")
-    print(f"[input] Unparseable pay_date rows: {bad_pay_dates}")
-    print(f"[input] Unparseable snapshot as_of_date rows: {bad_snapshot_dates}")
-    print(f"[input] Unparseable ledger event_date rows: {bad_ledger_dates}")
-
-    window_dates: list[date] = []
-
-    term_dates = terminations["termination_date"].dropna()
-    pay_dates = pay_events["pay_date"].dropna()
-    snapshot_dates = leave_snapshot["as_of_date"].dropna()
-    ledger_dates = leave_ledger["event_date"].dropna()
-
-    if not term_dates.empty:
-        window_dates.extend(term_dates.dt.date.tolist())
-    if not pay_dates.empty:
-        window_dates.extend(pay_dates.dt.date.tolist())
-    if not snapshot_dates.empty:
-        window_dates.extend(snapshot_dates.dt.date.tolist())
-    if not ledger_dates.empty:
-        window_dates.extend(ledger_dates.dt.date.tolist())
-
-    write_data_window(modules_dir / "term_data_window.csv", window_dates)
-
-    state = prepare_term_state(
-        terminations=terminations,
-        pay_events=pay_events,
-    )
-
-    rules = _load_rules(rules_path)
-
-    findings: list[Finding] = []
     datasets = {
         "terminations": terminations,
         "pay_events": pay_events,
@@ -122,6 +172,35 @@ def main() -> int:
         "leave_snapshot": leave_snapshot,
         "leave_ledger": leave_ledger,
     }
+
+    validation = validate_term_inputs(datasets)
+    print_validation_result(validation)
+    write_validation_outputs(validation, output_dir, "term")
+
+    if not validation.can_run:
+        print("TERM module blocked due to validation errors.")
+        return 1
+
+    window_dates: list[date] = []
+    for series in [
+        terminations["termination_date"],
+        pay_events["pay_date"],
+        leave_snapshot["as_of_date"] if not leave_snapshot.empty else pd.Series(dtype="datetime64[ns]"),
+        leave_ledger["event_date"],
+    ]:
+        valid = series.dropna()
+        if not valid.empty:
+            window_dates.extend(valid.dt.date.tolist())
+
+    write_data_window(output_dir / "term_data_window.csv", window_dates)
+
+    state = prepare_term_state(
+        terminations=terminations,
+        pay_events=pay_events,
+    )
+
+    rules = _load_rules(rules_path)
+    findings: list[Finding] = []
     context = {"state": state}
 
     for rule in rules:
@@ -137,6 +216,7 @@ def main() -> int:
                 "as_of_date",
                 "rule_code",
                 "severity",
+                "classification",
                 "message",
                 "diff_units",
                 "evidence",
@@ -145,7 +225,7 @@ def main() -> int:
             ]
         )
 
-    findings_path = modules_dir / "term_findings.csv"
+    findings_path = output_dir / "term_findings.csv"
     findings_df.to_csv(findings_path, index=False)
 
     if len(findings_df) == 0:
@@ -158,7 +238,7 @@ def main() -> int:
             .sort_values(["severity", "finding_count"], ascending=[True, False])
         )
 
-    summary_path = modules_dir / "term_summary.csv"
+    summary_path = output_dir / "term_summary.csv"
     summary_df.to_csv(summary_path, index=False)
 
     if len(findings_df) == 0:
@@ -171,15 +251,44 @@ def main() -> int:
             .sort_values("finding_count", ascending=False)
         )
 
-    severity_summary_path = modules_dir / "term_summary_by_severity.csv"
+    severity_summary_path = output_dir / "term_summary_by_severity.csv"
     severity_summary_df.to_csv(severity_summary_path, index=False)
+
+    if "classification" not in findings_df.columns:
+        findings_df["classification"] = "UNCLASSIFIED"
+    else:
+        findings_df["classification"] = findings_df["classification"].fillna("UNCLASSIFIED")
+
+    if len(findings_df) == 0:
+        classification_summary_df = pd.DataFrame(columns=["classification", "finding_count"])
+        classification_x_severity_df = pd.DataFrame(
+            columns=["classification", "severity", "finding_count"]
+        )
+    else:
+        classification_summary_df = (
+            findings_df.groupby("classification", as_index=False)
+            .size()
+            .rename(columns={"size": "finding_count"})
+            .sort_values("finding_count", ascending=False)
+        )
+
+        classification_x_severity_df = (
+            findings_df.groupby(["classification", "severity"], as_index=False)
+            .size()
+            .rename(columns={"size": "finding_count"})
+            .sort_values(["classification", "severity"])
+        )
+
+    classification_summary_path = output_dir / "term_summary_by_classification.csv"
+    classification_x_severity_path = output_dir / "term_summary_classification_x_severity.csv"
+
+    classification_summary_df.to_csv(classification_summary_path, index=False)
+    classification_x_severity_df.to_csv(classification_x_severity_path, index=False)
 
     print(f"Wrote: {findings_path}")
     print(f"Wrote: {summary_path}")
     print(f"Wrote: {severity_summary_path}")
+    print(f"Wrote: {classification_summary_path}")
+    print(f"Wrote: {classification_x_severity_path}")
 
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

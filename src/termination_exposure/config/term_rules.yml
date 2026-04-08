@@ -20,6 +20,7 @@ rules:
       - evidence_traceability
       - timing_integrity
       - cross_module_linkage_risk
+    classification: LOGICAL
 
   - id: TERM-002
     tier: 1
@@ -38,6 +39,7 @@ rules:
       - timing_integrity
       - evidence_traceability
       - data_anomaly_sanity
+    classification: LOGICAL
 
   - id: TERM-003
     tier: 2
@@ -58,6 +60,7 @@ rules:
       - timing_integrity
       - governance_exposure
       - evidence_traceability
+    classification: CONTEXTUAL
 
   - id: TERM-004
     tier: 1
@@ -76,22 +79,24 @@ rules:
       - structural_completeness
       - evidence_traceability
       - data_anomaly_sanity
+    classification: STRUCTURAL
 
   - id: TERM-005
     tier: 1
     domain: TERM
-    severity: HIGH
+    severity: MEDIUM
     title: Missing supporting termination evidence reference
     datasets:
       primary: terminations
       references: []
     text:
-      finding: "Termination records were identified without a supporting evidence reference."
-      why_it_matters: "Without a reference to supporting artefacts such as resignation notices or termination letters, it is harder to substantiate why and when employment ceased."
-      remediation: "Record and retain a supporting evidence reference for each termination, such as a resignation notice, termination letter or document identifier."
+      finding: "Termination records do not include a supporting evidence reference."
+      why_it_matters: "Without a reference to supporting artefacts such as resignation notices or termination letters, it may be harder to substantiate why and when employment ceased if reviewed."
+      remediation: "Where available, include a reference to supporting termination documentation, or confirm whether such evidence is maintained outside the payroll system."
     risk_dimension:
       - evidence_traceability
       - structural_completeness
+    classification: STRUCTURAL
 
   - id: TERM-006
     tier: 2
@@ -113,6 +118,7 @@ rules:
       - evidence_traceability
       - governance_exposure
       - exception_handling
+    classification: CONTEXTUAL
 
   - id: TERM-007
     tier: 1
@@ -133,6 +139,7 @@ rules:
     risk_dimension:
       - cross_module_linkage_risk
       - exception_handling
+    classification: LOGICAL
 
   - id: TERM-008
     tier: 1
@@ -151,6 +158,7 @@ rules:
       - timing_integrity
       - cross_module_linkage_risk
       - governance_monitoring_exposure
+    classification: LOGICAL
 
   - id: TERM-009
     tier: 2
@@ -177,6 +185,7 @@ rules:
       - evidence_traceability
       - cross_module_linkage_risk
       - exception_handling
+    classification: LOGICAL
 
   - id: TERM-010
     tier: 2
@@ -188,7 +197,8 @@ rules:
       references:
         - pay_events
     config:
-      allowed_days_after_term: 7
+      allowed_days_after_term: 14
+      high_severity_cutoff_days: 30
     text:
       finding: "Payroll activity was recorded after the employee termination date beyond the allowed tolerance window."
       why_it_matters: "Payroll events after termination may indicate delayed off-boarding, system configuration issues, or incorrect termination timing."
@@ -196,6 +206,7 @@ rules:
     risk_dimension:
       - timing_integrity
       - governance_exposure
+    classification: LOGICAL
 
   - id: TERM-011
     tier: 2
@@ -211,6 +222,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - data_anomaly_sanity
+    classification: STRUCTURAL
 
   - id: TERM-012
     tier: 1
@@ -228,6 +240,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - cross_module_linkage_risk
+    classification: STRUCTURAL
 
   - id: TERM-013
     tier: 2
@@ -245,6 +258,7 @@ rules:
     risk_dimension:
       - calculation_integrity
       - governance_exposure
+    classification: LOGICAL
 
   - id: TERM-014
     tier: 2
@@ -260,6 +274,7 @@ rules:
     risk_dimension:
       - governance_monitoring
       - evidence_traceability
+    classification: STRUCTURAL
 
   - id: TERM-015
     tier: 2
@@ -277,6 +292,7 @@ rules:
     risk_dimension:
       - timing_integrity
       - governance_exposure
+    classification: LOGICAL
 
   - id: TERM-016
     tier: 2
@@ -294,6 +310,7 @@ rules:
     risk_dimension:
       - exception_handling
       - governance_monitoring
+    classification: CONTEXTUAL
 
   - id: TERM-017
     tier: 2
@@ -311,3 +328,4 @@ rules:
     risk_dimension:
       - timing_integrity
       - data_anomaly_sanity
+    classification: LOGICAL

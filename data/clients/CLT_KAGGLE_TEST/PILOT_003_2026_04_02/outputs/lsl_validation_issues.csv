@@ -1,0 +1,2 @@
+module_name,level,dataset,column,issue_code,message
+LSL,WARNING,LSL,leave_type,NO_LSL_ROWS,No LSL leave types were identified in leave_snapshot or leave_ledger; LSL-specific rules may not be assessable for this pilot.

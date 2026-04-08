@@ -25,6 +25,7 @@ rules:
       substantiated if audited.'
     remediation: 'Ensure all individuals referenced in payroll and leave systems have
       a corresponding employee master record and enforce validation before processing.'
+  classification: STRUCTURAL
 
 - id: RKEG-EMP-002
   tier: 1
@@ -45,6 +46,7 @@ rules:
     - structural_completeness
     - timing_integrity
     - evidence_traceability
+  classification: STRUCTURAL
 
 - id: RKEG-EMP-003
   tier: 1
@@ -63,6 +65,7 @@ rules:
   risk_dimension:
     - data_anomaly_sanity
     - evidence_traceability
+  classification: STRUCTURAL
 
 - id: RKEG-EMP-004
   tier: 1
@@ -86,6 +89,7 @@ rules:
     - evidence_traceability
     - cross_module_linkage_risk
     - data_anomaly_sanity
+  classification: LOGICAL
 
 - id: RKEG-EMP-005
   tier: 2
@@ -109,6 +113,7 @@ rules:
     - structural_completeness
     - evidence_traceability
     - calculation_integrity
+  classification: STRUCTURAL
 
 - id: RKEG-PAY-001
   tier: 1
@@ -128,6 +133,7 @@ rules:
   risk_dimension:
     - timing_integrity
     - structural_completeness
+  classification: STRUCTURAL
 
 - id: RKEG-PAY-002
   tier: 1
@@ -148,6 +154,7 @@ rules:
     - evidence_traceability
     - data_anomaly_sanity
     - structural_completeness
+  classification: STRUCTURAL
 
 - id: RKEG-PAY-003
   tier: 1
@@ -167,6 +174,7 @@ rules:
   risk_dimension:
     - evidence_traceability
     - structural_completeness
+  classification: STRUCTURAL
 
 - id: RKEG-PAY-004
   tier: 1
@@ -189,6 +197,7 @@ rules:
     - evidence_traceability
     - data_anomaly_sanity
     - cross_module_linkage_risk
+  classification: STRUCTURAL
 
 - id: RKEG-PAY-005
   tier: 1
@@ -206,6 +215,7 @@ rules:
     - calculation_integrity
     - governance_exposure
     - cross_module_linkage_risk
+  classification: LOGICAL
 
 - id: RKEG-PAY-006
   tier: 1
@@ -227,6 +237,7 @@ rules:
     - structural_completeness
     - calculation_integrity
     - evidence_traceability
+  classification: STRUCTURAL
 
 - id: RKEG-PAY-007
   tier: 2
@@ -248,6 +259,7 @@ rules:
     - data_anomaly_sanity
     - exception_handling
     - evidence_traceability
+  classification: CONTEXTUAL
 
 - id: RKEG-PAY-008
   tier: 2
@@ -271,6 +283,7 @@ rules:
     - evidence_traceability
     - data_anomaly_sanity
     - calculation_integrity
+  classification: LOGICAL
 
 - id: RKEG-PAY-009
   tier: 2
@@ -292,6 +305,7 @@ rules:
   risk_dimension:
     - data_anomaly_sanity
     - timing_integrity
+  classification: CONTEXTUAL
 
 - id: RKEG-PAY-010
   tier: 2
@@ -303,6 +317,9 @@ rules:
     references:
       - employee_master
       - terminations
+  config:
+    allowed_days_after_term: 14
+    high_severity_cutoff_days: 30
   text:
     finding: "Pay events were identified that fall outside the employee's recorded employment period."
     why_it_matters: "Payments before commencement or after termination may indicate configuration errors, delayed offboarding updates or manual payroll overrides."
@@ -311,6 +328,7 @@ rules:
     - timing_integrity
     - cross_module_linkage_risk
     - governance_exposure
+  classification: LOGICAL
 
 - id: RKEG-PAY-011
   tier: 2
@@ -328,6 +346,7 @@ rules:
   risk_dimension:
     - structural_completeness
     - evidence_traceability
+  classification: STRUCTURAL
 
 - id: RKEG-TERM-001
   tier: 1
@@ -351,6 +370,7 @@ rules:
   risk_dimension:
     - timing_integrity
     - governance_exposure
+  classification: LOGICAL
 
 - id: RKEG-SUP-001
   tier: 1
@@ -375,6 +395,7 @@ rules:
     - calculation_integrity
     - governance_exposure
     - evidence_traceability
+  classification: LOGICAL
 
 - id: RKEG-SUP-002
   tier: 2
@@ -398,6 +419,7 @@ rules:
     - calculation_integrity
     - evidence_traceability
     - governance_exposure
+  classification: LOGICAL
 
 - id: RKEG-SUP-003
   tier: 2
@@ -424,6 +446,7 @@ rules:
   risk_dimension:
     - timing_integrity
     - governance_exposure
+  classification: LOGICAL
 
 - id: RKEG-SUP-004
   tier: 2
@@ -447,6 +470,7 @@ rules:
     - evidence_traceability
     - structural_completeness
     - governance_exposure
+  classification: STRUCTURAL
 
 - id: RKEG-SUP-005
   tier: 2
@@ -463,6 +487,7 @@ rules:
   risk_dimension:
     - structural_completeness
     - evidence_traceability
+  classification: STRUCTURAL
 
 - id: RKEG-SUP-006
   tier: 2
@@ -480,6 +505,7 @@ rules:
   risk_dimension:
     - data_anomaly_sanity
     - governance_exposure
+  classification: CONTEXTUAL
 
 - id: RKEG-LEAVE-001
   tier: 1
@@ -501,6 +527,7 @@ rules:
   risk_dimension:
     - evidence_traceability
     - cross_module_linkage_risk
+  classification: LOGICAL
 
 - id: RKEG-LEAVE-002
   tier: 2
@@ -525,6 +552,7 @@ rules:
     remediation: 'Reconcile leave snapshots to the transactional leave ledger, investigate
       discrepancies above the tolerance threshold and address configuration or processing
       gaps that prevent balances from being reconstructed from system movements.'
+    classification: LOGICAL
 
 - id: RKEG-LEAVE-003
   tier: 2
@@ -550,6 +578,7 @@ rules:
   risk_dimension:
     - evidence_traceability
     - data_anomaly_sanity
+  classification: STRUCTURAL
 
 - id: RKEG-LEAVE-004
   tier: 2
@@ -568,6 +597,7 @@ rules:
     - structural_completeness
     - timing_integrity
     - evidence_traceability
+  classification: STRUCTURAL
 
 - id: RKEG-GOV-001
   tier: 1
@@ -590,6 +620,7 @@ rules:
   risk_dimension:
     - evidence_traceability
     - governance_exposure
+  classification: STRUCTURAL
 
 - id: RKEG-GOV-002
   tier: 2
@@ -610,6 +641,7 @@ rules:
   risk_dimension:
     - governance_exposure
     - evidence_traceability
+  classification: STRUCTURAL
 
 - id: RKEG-GOV-003
   tier: 2
@@ -633,6 +665,7 @@ rules:
   risk_dimension:
     - governance_exposure
     - exception_handling
+  classification: CONTEXTUAL
 
 - id: RKEG-GOV-004
   tier: 2
@@ -649,3 +682,4 @@ rules:
   risk_dimension:
     - evidence_traceability
     - governance_exposure
+  classification: STRUCTURAL

@@ -19,6 +19,7 @@ rules:
       - data_anomaly_sanity
       - evidence_traceability
       - calculation_integrity
+    classification: LOGICAL
 
   - id: LEAVE-002
     tier: 2
@@ -36,6 +37,7 @@ rules:
       - data_anomaly_sanity
       - structural_completeness
       - evidence_traceability
+    classification: CONTEXTUAL
 
   - id: LEAVE-003
     tier: 1
@@ -54,6 +56,7 @@ rules:
       - timing_integrity
       - cross_module_linkage_risk
       - evidence_traceability
+    classification: LOGICAL
 
   - id: LEAVE-004
     tier: 1
@@ -72,6 +75,7 @@ rules:
       - calculation_integrity
       - cross_module_linkage_risk
       - governance_exposure
+    classification: LOGICAL
 
   - id: LEAVE-005
     tier: 2
@@ -92,6 +96,7 @@ rules:
       - calculation_integrity
       - evidence_traceability
       - data_anomaly_sanity
+    classification: LOGICAL
 
   - id: LEAVE-006
     tier: 1
@@ -109,6 +114,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - evidence_traceability
+    classification: STRUCTURAL
 
   - id: LEAVE-007
     tier: 1
@@ -126,6 +132,7 @@ rules:
     risk_dimension:
       - timing_integrity
       - cross_module_linkage_risk
+    classification: LOGICAL
 
   - id: LEAVE-008
     tier: 2
@@ -141,6 +148,7 @@ rules:
     risk_dimension:
       - data_anomaly_sanity
       - calculation_integrity
+    classification: CONTEXTUAL
 
   - id: LEAVE-009
     tier: 2
@@ -155,6 +163,7 @@ rules:
       remediation: Validate accrual rules and confirm leave units are recorded correctly.
     risk_dimension:
       - data_anomaly_sanity
+    classification: CONTEXTUAL
 
   - id: LEAVE-010
     tier: 1
@@ -170,6 +179,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - evidence_traceability
+    classification: STRUCTURAL
 
   - id: LEAVE-011
     tier: 1
@@ -184,6 +194,7 @@ rules:
       remediation: Review payroll export configuration to ensure timestamps are retained.
     risk_dimension:
       - evidence_traceability
+    classification: STRUCTURAL
 
   - id: LEAVE-012
     tier: 2
@@ -199,11 +210,12 @@ rules:
     risk_dimension:
       - governance_exposure
       - exception_handling
+    classification: CONTEXTUAL
 
   - id: LEAVE-013
     tier: 1
     domain: LEAVE
-    severity: HIGH
+    severity: MEDIUM
     title: Leave accrual recorded after termination
     datasets:
       primary: leave_ledger
@@ -216,6 +228,7 @@ rules:
     risk_dimension:
       - timing_integrity
       - cross_module_linkage_risk
+    classification: LOGICAL
 
   - id: LEAVE-014
     tier: 2
@@ -233,6 +246,7 @@ rules:
     risk_dimension:
       - calculation_integrity
       - governance_exposure
+    classification: CONTEXTUAL
 
   - id: LEAVE-015
     tier: 2
@@ -248,6 +262,7 @@ rules:
     risk_dimension:
       - data_anomaly_sanity
       - evidence_traceability
+    classification: CONTEXTUAL
 
   - id: LEAVE-016
     tier: 1
@@ -265,6 +280,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - evidence_traceability
+    classification: STRUCTURAL
 
   - id: LEAVE-017
     tier: 1
@@ -282,6 +298,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - cross_module_linkage_risk
+    classification: STRUCTURAL
 
   - id: LEAVE-018
     tier: 1
@@ -299,6 +316,7 @@ rules:
     risk_dimension:
       - structural_completeness
       - cross_module_linkage_risk
+    classification: STRUCTURAL
 
   - id: LEAVE-019
     tier: 2
@@ -314,6 +332,7 @@ rules:
     risk_dimension:
       - data_anomaly_sanity
       - evidence_traceability
+    classification: STRUCTURAL
 
   - id: LEAVE-020
     tier: 1
@@ -332,6 +351,7 @@ rules:
       - governance_exposure
       - evidence_traceability
       - structural_completeness
+    classification: STRUCTURAL
 
   - id: LEAVE-021
     tier: 2
@@ -350,6 +370,7 @@ rules:
       - timing_integrity
       - governance_exposure
       - evidence_traceability
+    classification: CONTEXTUAL
 
   - id: LEAVE-022
     tier: 2
@@ -368,6 +389,7 @@ rules:
       - data_anomaly_sanity
       - cross_module_linkage_risk
       - governance_exposure
+    classification: CONTEXTUAL
 
   - id: LEAVE-023
     tier: 2
@@ -388,3 +410,4 @@ rules:
       - data_anomaly_sanity
       - calculation_integrity
       - governance_exposure
+    classification: CONTEXTUAL

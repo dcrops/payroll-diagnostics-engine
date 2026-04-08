@@ -1,0 +1,3 @@
+rule_code,severity,finding_count
+LEAVE-007,HIGH,6
+LEAVE-013,MEDIUM,6
