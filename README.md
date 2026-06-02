@@ -114,7 +114,7 @@ CRC follows a layered architecture:
 4. Findings Generation
 5. Executive Reporting
 
-The modular design allows new diagnostic domains to be added independently while maintaining consistent reporting and governance outputs.
+The modular design allows new diagnostic domains to be added independently while maintaining consistent reporting and governance outputs. Diagnostic runs are organised into isolated client review workspaces containing inputs, findings, outputs, and executive reports.
 
 ---
 
@@ -202,13 +202,36 @@ src/
 ├── findings/
 └── reporting/
 
-scripts/
-tests/
-templates/
-docs/
-outputs/
 data/
+└── clients/
+    └── <client_name>/
+        └── <review_name>/
+            ├── inputs/
+            ├── findings/
+            ├── outputs/
+            └── reports/
+
+docs/
+├── images/
+└── sample_reports/
+
+scripts/
+templates/
+tests/
 ```
+
+## Client Review Structure
+
+CRC is designed around isolated client review workspaces.
+
+Each review contains its own:
+
+- Input datasets
+- Diagnostic findings
+- Generated outputs
+- Executive reports
+
+This structure supports repeatable analysis, auditability, and separation of client review artefacts.
 
 ---
 
