@@ -1,4 +1,6 @@
-# Chase Risk & Compliance (CRC)
+# Payroll Diagnostics Engine
+
+Developed as part of the Chase Risk & Compliance (CRC) platform.
 
 A modular operational diagnostics and governance platform designed to analyse business datasets, identify risk indicators, surface evidence gaps, detect operational inconsistencies, and generate executive-ready reporting.
 
